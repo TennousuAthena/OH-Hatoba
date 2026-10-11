@@ -14,6 +14,7 @@ import type {
   AiFileRevert,
   AiFinish,
   AiSearchHit,
+  AiSideQuestionInput,
   AiToolCall,
   AiToolResultInput,
   AiToolStatus,
@@ -45,6 +46,8 @@ type AiApi = Pick<
   | "ai_session_server"
   | "ai_stop"
   | "ai_compact"
+  | "ai_side_question"
+  | "ai_side_stop"
   | "ai_search"
   | "ai_edit_resend"
   | "ai_read_dropped_files"
@@ -162,6 +165,8 @@ const MAINTENANCE = "/srv/app/public/maintenance.html";
  *   showcase   in a connected tab, any message gets the scripted nginx 502 fix that the README
  *              screenshots and demo video show: two commands, a fix, `curl` typed into the shell, a summary
  *   noprovider (Settings → AI mock) no provider is configured
+ * A side question (AI-42) gets a short scripted answer, streamed slowly enough to stop: about the call whose
+ * approval card waits, or else about the conversation. It stores nothing, and the turn goes on.
  * History search (AI-24) matches titles and the text of user, assistant and summary entries.
  * A fork (AI-43) copies a conversation into a new one, like Rust: Fork from Here on a message or under a
  * reply, or Fork in History.
@@ -175,7 +180,7 @@ export function createAiMock(deps: AiMockDeps): AiApi {
   const zh = detectLocale() === "zh-CN";
   const convs = new Map<string, Conv>();
   const turns = new Map<string, Turn>();
-  /** Conversations a Compact (AI-21) runs for. */
+  /** Conversations being compacted (AI-21, AI-22), which refuse a fork (AI-43) and a side question (AI-42). */
   const compacting = new Set<string>();
   /** By reply entry id: whether its request offered the terminal tools (AI-09). */
   const replyTerminal = new Map<string, boolean>();
@@ -183,6 +188,8 @@ export function createAiMock(deps: AiMockDeps): AiApi {
   const cameFrom = new Map<string, Recorded>();
   /** Like Rust's `AssistantEntry.interrupted`, which the view does not carry: replies the user stopped (§13.1). */
   const interrupted = new Set<string>();
+  /** AI-42: the side question on its way in each conversation, by the panel's number, and what stops it. */
+  const sides = new Map<string, { question: number; stop: () => void }>();
   let errorShown = false;
   let lastMs = 0;
   let seq = 0;
@@ -302,6 +309,30 @@ export function createAiMock(deps: AiMockDeps): AiApi {
   const call = (name: string, args: Record<string, unknown>): AiToolCall => ({ id: `call_${(++seq).toString(36)}`, name, arguments: JSON.stringify(args) });
 
   // ───────────── the fake model ─────────────
+
+  /** AI-42: the fake model's answer to a side question, about the call whose approval card waits or the conversation. */
+  function sideAnswer(c: Conv, input: AiSideQuestionInput): string {
+    const running = turns.has(c.view.id);
+    const call = running && input.approval_call_id ? c.entries.flatMap((e) => (e.role === "assistant" ? e.tool_calls : [])).find((x) => x.id === input.approval_call_id) : undefined;
+    if (call) {
+      let args: Record<string, unknown> = {};
+      try {
+        args = JSON.parse(call.arguments) as Record<string, unknown>;
+      } catch {
+        // cut-off arguments name nothing
+      }
+      const named = [args.command, args.path, args.url, args.text].find((x) => typeof x === "string") as string | undefined;
+      const what = named ? `\`${named.split("\n")[0]}\`` : `\`${call.name}\``;
+      return zh
+        ? `这个 **${call.name}** 调用会处理 ${what}。它还在等你批准，所以目前什么都没有运行。\n\n- **运行**：让它继续，任务会接着用它的结果往下走。\n- **拒绝**：不运行它，可以顺便告诉助手原因。\n\n这条回答不会保存到对话里。`
+        : `This **${call.name}** call works on ${what}. It is still waiting for your approval, so nothing has run yet.\n\n- **Run** lets it go ahead, and the task continues from its result.\n- **Reject** skips it, and you can tell the assistant why.\n\nThis answer is not saved in the conversation.`;
+    }
+    const typed = parseMessage(input.text).typed.trim() || input.text.trim();
+    const replies = c.entries.filter((e) => e.role === "assistant").length;
+    return zh
+      ? `简单回答“${typed}”：从目前的 ${replies} 条回复看，这段对话在处理这台主机的状态，${running ? "当前任务仍在继续" : "现在没有任务在运行"}。\n\n这条回答不会保存到对话里。`
+      : `A quick answer to “${typed}”: going by the ${replies} replies so far, this conversation is about the host’s state, and ${running ? "the task in progress keeps going" : "nothing is running right now"}.\n\nThis answer is not saved in the conversation.`;
+  }
 
   interface Plan {
     reasoning: string;
@@ -613,7 +644,10 @@ export function createAiMock(deps: AiMockDeps): AiApi {
 
   async function compactNow(c: Conv, turn: Turn): Promise<boolean> {
     turn.compacted = true;
-    if (!(await sleep(turn, 1400))) return false;
+    compacting.add(c.view.id);
+    const slept = await sleep(turn, 1400);
+    compacting.delete(c.view.id);
+    if (!slept) return false;
     const entry: AiEntryView = {
       role: "summary",
       entry_id: newId(),
@@ -1506,6 +1540,52 @@ export function createAiMock(deps: AiMockDeps): AiApi {
       c.entries.push(entry);
       c.view = { ...c.view, context_start: entry.entry_id, updated_at: Date.now() };
       return entry;
+    },
+    ai_side_question: async (input, onEvent) => {
+      const id = input.conversation_id;
+      const c = need(id);
+      // Like Rust: a newer side question of the conversation stops the one before it, even one that is refused.
+      sides.get(id)?.stop();
+      let stopped = false;
+      const wakers = new Set<() => void>();
+      const stop = () => {
+        stopped = true;
+        wakers.forEach((wake) => wake());
+      };
+      const mine = { question: input.question_id, stop };
+      sides.set(id, mine);
+      const pause = (ms: number) =>
+        new Promise<boolean>((resolve) => {
+          const wake = () => resolve(false);
+          wakers.add(wake);
+          window.setTimeout(() => {
+            wakers.delete(wake);
+            resolve(!stopped);
+          }, ms);
+        });
+      const gone = () => fail("cancelled", "the side question was stopped");
+      try {
+        if (!parseMessage(input.text).typed.trim()) fail("invalid_input", "The question is empty.", { field: "text" });
+        if (compacting.has(id)) fail("invalid_input", "the conversation is being compacted", { field: "conversation_id" });
+        await checkModel(input.context);
+        if (!(await pause(500))) gone();
+        for (const piece of chunks(zh ? "先看看对话里已有的内容……" : "Looking at what the conversation shows so far…")) {
+          if (!(await pause(20))) gone();
+          onEvent({ kind: "reasoning", delta: piece });
+        }
+        const text = sideAnswer(c, input);
+        for (const piece of chunks(text)) {
+          if (!(await pause(28))) gone();
+          onEvent({ kind: "text", delta: piece });
+        }
+        return { text, finish: "stop" };
+      } finally {
+        if (sides.get(id) === mine) sides.delete(id);
+      }
+    },
+    ai_side_stop: async (id, question) => {
+      const side = sides.get(id);
+      if (side?.question === question) side.stop();
     },
     ai_search: async (query) => {
       await delay(200);

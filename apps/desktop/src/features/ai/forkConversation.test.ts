@@ -1,16 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiConversationDetail, AiConversationView, AiEntryView } from "@/ipc/types";
+import { newSideQuestion } from "./side";
 import { newTurn } from "./turn";
 
 const fork = vi.fn<(id: string, entryId: string | null, title: string) => Promise<AiConversationView>>();
 const get = vi.fn<(id: string) => Promise<AiConversationDetail>>();
 const list = vi.fn<() => Promise<AiConversationView[]>>();
+const sideStop = vi.fn<(id: string, questionId: number) => Promise<void>>();
 vi.mock("@/ipc/api", async (importActual) => ({
   ...(await importActual<typeof import("@/ipc/api")>()),
   api: {
     ai_conversation_fork: (id: string, entryId: string | null, title: string) => fork(id, entryId, title),
     ai_conversation_get: (id: string) => get(id),
     ai_conversations_list: () => list(),
+    ai_side_stop: (id: string, questionId: number) => sideStop(id, questionId),
   },
 }));
 const toast = vi.fn();
@@ -50,6 +53,7 @@ beforeEach(() => {
   get.mockReset();
   list.mockReset();
   toast.mockReset();
+  sideStop.mockReset().mockResolvedValue(undefined);
   get.mockResolvedValue({ conversation: copy, entries: [entry], running: false, file_changes: [] });
   list.mockResolvedValue([original]);
   useAi.setState({ history: null, forking: [], slots: { [HOME_SLOT]: { ...blankSlot("manual"), conversationId: original.id, conversation: original, entries: [entry] } } });
@@ -143,6 +147,14 @@ describe("forkConversation (AI-43)", () => {
     await forkConversation(HOME_SLOT, copy.id, null);
     expect(useAi.getState().forking).toEqual([]);
     expect(toast).toHaveBeenLastCalledWith(expect.any(String), "error");
+  });
+
+  it("discards the slot's side question when the fork opens, stopping its answer first (AI-42)", async () => {
+    patchSlot(HOME_SLOT, { side: newSideQuestion(7, original.id, "why?", "why?") });
+    fork.mockResolvedValue(copy);
+    await forkConversation(HOME_SLOT, original.id, null);
+    expect(sideStop).toHaveBeenCalledWith(original.id, 7);
+    expect(getSlot(HOME_SLOT)).toMatchObject({ conversationId: copy.id, side: null });
   });
 
   it("does nothing while the conversation is busy", async () => {
