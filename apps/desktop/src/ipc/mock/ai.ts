@@ -1,8 +1,9 @@
 import type { TabSource } from "@/app/tabs";
 import { fileRevertNote, noteBlock, parseMessage, type Note } from "@/features/ai/attachments";
 import { effectiveEffort, modelEfforts } from "@/features/ai/effort";
+import { forkCopies } from "@/features/ai/fork";
 import { movedFrom, moves, recordedTarget } from "@/features/ai/place";
-import { formatTarget, sameTarget } from "@/features/hosts/quickConnect";
+import { formatTarget, parseQuickConnect, sameTarget } from "@/features/hosts/quickConnect";
 import { detectLocale } from "@/i18n";
 import type { HatobaApi } from "../api";
 import type {
@@ -32,6 +33,7 @@ type AiApi = Pick<
   | "ai_conversation_rename"
   | "ai_conversation_pin"
   | "ai_conversation_delete"
+  | "ai_conversation_fork"
   | "ai_send"
   | "ai_retry"
   | "ai_tool_result"
@@ -74,6 +76,14 @@ interface Conv {
   /** `?ai=running`: a turn "runs in Rust" until then, started by an earlier page. */
   runningUntil: number;
 }
+
+/**
+ * Like Rust's `EntryPlace` (AI-43), which a user entry records and the view does not carry: where the conversation
+ * was when the message was stored, before its move.
+ */
+type Recorded = Pick<AiConversationView, "host_id" | "quick_target" | "origin">;
+
+const placeOf = (c: Recorded): Recorded => ({ host_id: c.host_id, quick_target: c.quick_target, origin: c.origin });
 
 /** Like Rust's `Place` (AI-09): where a message moves its conversation, and where from (`moveOf`). */
 interface Move {
@@ -153,6 +163,8 @@ const MAINTENANCE = "/srv/app/public/maintenance.html";
  *              screenshots and demo video show: two commands, a fix, `curl` typed into the shell, a summary
  *   noprovider (Settings → AI mock) no provider is configured
  * History search (AI-24) matches titles and the text of user, assistant and summary entries.
+ * A fork (AI-43) copies a conversation into a new one, like Rust: Fork from Here on a message or under a
+ * reply, or Fork in History.
  * Like Rust, a message that moves the conversation to another host (AI-09) or goes to another model
  * than the last reply (AI-05) is stored with Hatoba's note before it, which the panel shows as a
  * divider: open a conversation from history in a tab on another host, or pick another model.
@@ -163,8 +175,12 @@ export function createAiMock(deps: AiMockDeps): AiApi {
   const zh = detectLocale() === "zh-CN";
   const convs = new Map<string, Conv>();
   const turns = new Map<string, Turn>();
+  /** Conversations a Compact (AI-21) runs for. */
+  const compacting = new Set<string>();
   /** By reply entry id: whether its request offered the terminal tools (AI-09). */
   const replyTerminal = new Map<string, boolean>();
+  /** By user entry id: where the entries before it came from (`Recorded`). */
+  const cameFrom = new Map<string, Recorded>();
   /** Like Rust's `AssistantEntry.interrupted`, which the view does not carry: replies the user stopped (§13.1). */
   const interrupted = new Set<string>();
   let errorShown = false;
@@ -703,9 +719,9 @@ export function createAiMock(deps: AiMockDeps): AiApi {
 
   /**
    * The user's message after a compaction it waited for, unless the turn was stopped meanwhile, with the thinking
-   * level and the move its note tells of (like Rust).
+   * level, the move its note tells of, and where the entries before it came from, `recorded` (like Rust).
    */
-  async function storeMessage(c: Conv, turn: Turn, text: string, context: AiTurnContext, move: Move | null): Promise<AiEntryView> {
+  async function storeMessage(c: Conv, turn: Turn, text: string, context: AiTurnContext, move: Move | null, recorded: Recorded | null): Promise<AiEntryView> {
     if (!(await compactBefore(c, turn, text))) {
       if (turns.get(c.view.id) === turn) turns.delete(c.view.id);
       fail("cancelled", "the message was stopped before it was sent");
@@ -713,9 +729,10 @@ export function createAiMock(deps: AiMockDeps): AiApi {
     // AI-05: the conversation keeps the level of its last message.
     if (c.view.effort !== context.effort) c.view = { ...c.view, effort: context.effort, updated_at: Date.now() };
     if (move) {
-      c.view = { ...c.view, host_id: move.host_id, quick_target: move.quick_target, updated_at: Date.now() };
+      c.view = { ...c.view, host_id: move.host_id, quick_target: move.quick_target, origin: null, updated_at: Date.now() };
     }
     const user_entry: AiEntryView = { role: "user", entry_id: newId(), created_at: Date.now(), text };
+    if (recorded) cameFrom.set(user_entry.entry_id, recorded);
     c.entries.push(user_entry);
     begin(turn);
     return user_entry;
@@ -1099,7 +1116,7 @@ export function createAiMock(deps: AiMockDeps): AiApi {
       const at = (offset: number) => created + offset;
       const c: Conv = {
         // The pinned one was last sent at High (AI-05).
-        view: { id, title, host_id: host, quick_target: null, pinned, context_start: null, effort: pinned ? "high" : null, created_at: created, updated_at: created },
+        view: { id, title, host_id: host, quick_target: null, origin: null, pinned, context_start: null, effort: pinned ? "high" : null, created_at: created, updated_at: created },
         entries: build(at),
         runningUntil: 0,
       };
@@ -1268,6 +1285,64 @@ export function createAiMock(deps: AiMockDeps): AiApi {
       convs.delete(id);
       snapshots.delete(id);
     },
+    ai_conversation_fork: async (id, entryId, title) => {
+      await delay(120);
+      const c = need(id);
+      if (turns.has(id) || compacting.has(id) || c.runningUntil > Date.now())
+        fail("invalid_input", "The conversation can be forked once its turn or compaction has ended.", { field: "conversation_id" });
+      const name = [...title.trim()].slice(0, 200).join("");
+      if (!name) fail("invalid_input", "the title is empty", { field: "title" });
+      const at = entryId === null ? c.entries.length - 1 : c.entries.findIndex((e) => e.entry_id === entryId);
+      if (entryId !== null && at < 0) fail("not_found", "message not found");
+      if (at < 0) fail("invalid_input", "the conversation has no messages", { field: "conversation_id" });
+      const copies = entryId === null ? [...c.entries.keys()] : forkCopies(c.entries, at);
+      if (!copies) return fail("invalid_input", "A conversation can be forked from one of your messages or from a finished reply.", { field: "entry_id" });
+      // New, increasing ids; what Rust keeps in an entry's JSON goes with the copy.
+      const copied = copies.map((i) => {
+        const e = c.entries[i];
+        const entry_id = newId();
+        const terminal = replyTerminal.get(e.entry_id);
+        if (terminal !== undefined) replyTerminal.set(entry_id, terminal);
+        if (interrupted.has(e.entry_id)) interrupted.add(entry_id);
+        const recorded = cameFrom.get(e.entry_id);
+        if (recorded) cameFrom.set(entry_id, recorded);
+        return { ...e, entry_id };
+      });
+      // The copy of the entry the original's context starts at, or the newest copied summary.
+      let start = -1;
+      const origin = c.view.context_start;
+      if (origin) {
+        const from = c.entries.findIndex((e) => e.entry_id >= origin);
+        start = from >= 0 && from <= at ? from : c.entries.slice(0, at + 1).findLastIndex((e) => e.role === "summary");
+      }
+      // Like Rust's `fork_place`: what the first later message recorded, or the name its move's note gives, or the
+      // original's place.
+      let place = placeOf(c.view);
+      for (const e of c.entries.slice(at + 1)) {
+        if (e.role !== "user") continue;
+        const recorded = cameFrom.get(e.entry_id);
+        if (recorded) {
+          place = recorded;
+          break;
+        }
+        const moved = parseMessage(e.text).notes.find((n) => n.kind === "host_change");
+        if (moved?.kind !== "host_change") continue;
+        const target = /\s/.test(moved.from) ? null : parseQuickConnect(moved.from);
+        const named = ((await deps.hosts?.()) ?? []).filter((h) => moved.from && h.name === moved.from);
+        const host_id = named.length === 1 ? named[0].id : null;
+        const quick_target = !host_id && target?.ok && target.target.username ? recordedTarget({ ...target.target, username: target.target.username }) : null;
+        place = { host_id, quick_target, origin: host_id || quick_target ? null : moved.from };
+        break;
+      }
+      const now = Date.now();
+      const fork: Conv = {
+        view: { id: newId(), title: name, ...place, pinned: false, context_start: copied[start]?.entry_id ?? null, effort: c.view.effort, created_at: now, updated_at: now },
+        entries: copied,
+        runningUntil: 0,
+      };
+      convs.set(fork.view.id, fork);
+      return view(fork);
+    },
     ai_send: async (input, onEvent) => {
       await delay(120);
       if (!input.text.trim()) fail("invalid_input", "the message is empty", { field: "text" });
@@ -1283,6 +1358,7 @@ export function createAiMock(deps: AiMockDeps): AiApi {
             title: titleOf(input.text),
             host_id: input.context.host_id,
             quick_target: !input.context.host_id && input.context.target ? recordedTarget(input.context.target) : null,
+            origin: null,
             pinned: false,
             context_start: null,
             effort: input.context.effort,
@@ -1298,7 +1374,8 @@ export function createAiMock(deps: AiMockDeps): AiApi {
       const earlier = [...c.entries];
       const move = await moveOf(c, input.context);
       const notes = input.conversation_id ? await notesBefore(c, earlier, move, move?.from ?? null, input.context) : "";
-      const user_entry = await storeMessage(c, turn, notes + input.text, input.context, move);
+      const recorded = input.conversation_id ? placeOf(c.view) : { host_id: null, quick_target: null, origin: null };
+      const user_entry = await storeMessage(c, turn, notes + input.text, input.context, move, recorded);
       return { conversation: view(c), user_entry };
     },
     ai_retry: async (id, context, onEvent) => {
@@ -1413,7 +1490,9 @@ export function createAiMock(deps: AiMockDeps): AiApi {
     ai_compact: async (id) => {
       const c = need(id);
       if (turns.has(id)) fail("invalid_input", "a turn is running");
+      compacting.add(id);
       await delay(1500);
+      compacting.delete(id);
       // The summary no longer holds the files the model read (AI-38…40).
       forgetSeen(id);
       const entry: AiEntryView = {
@@ -1457,7 +1536,9 @@ export function createAiMock(deps: AiMockDeps): AiApi {
         .slice(i)
         .flatMap((e) => (e.role === "user" ? parseMessage(e.text).notes : []))
         .find((n) => n.kind === "host_change");
-      let cameFrom: string | null = moved?.kind === "host_change" ? moved.from : null;
+      let noted: string | null = moved?.kind === "host_change" ? moved.from : null;
+      // Like Rust: the message records what the edited one did.
+      const recorded = cameFrom.get(entryId) ?? null;
       c.entries = c.entries.slice(0, i);
       // Like Rust: the snapshots of the calls the deleted responses made go with them (AI-41).
       snapshots.set(id, (snapshots.get(id) ?? []).filter((s) => c.entries.some((e) => e.entry_id === s.change.response_id)));
@@ -1469,10 +1550,10 @@ export function createAiMock(deps: AiMockDeps): AiApi {
       const turn = startTurn(c, context, onEvent, false);
       const move = await moveOf(c, context);
       // Like Rust: the kept move is dropped when its note names the server the message goes from under another name.
-      if (cameFrom !== null && (await namesServer(c, move, cameFrom))) cameFrom = null;
-      else if (cameFrom === null) cameFrom = move?.from ?? null;
-      const notes = await notesBefore(c, [...c.entries], move, cameFrom, context);
-      const user_entry = await storeMessage(c, turn, notes + text, context, move);
+      if (noted !== null && (await namesServer(c, move, noted))) noted = null;
+      else if (noted === null) noted = move?.from ?? null;
+      const notes = await notesBefore(c, [...c.entries], move, noted, context);
+      const user_entry = await storeMessage(c, turn, notes + text, context, move, recorded);
       return { conversation: view(c), user_entry };
     },
     // The browser reads dropped files itself (File API); there are no paths to read here.
