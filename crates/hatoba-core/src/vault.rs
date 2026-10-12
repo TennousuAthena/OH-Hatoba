@@ -418,7 +418,8 @@ impl Vault {
         self.unlocked.is_some()
     }
 
-    /// This device's id (empty before the vault exists).
+    /// This device's id (empty before the vault exists, unless a restore from the cloud was
+    /// attempted).
     #[must_use]
     pub fn device_id(&self) -> String {
         self.store
@@ -426,6 +427,18 @@ impl Vault {
             .ok()
             .flatten()
             .unwrap_or_default()
+    }
+
+    /// The device id a restore from the cloud (flow B) signs in with, stored by the first attempt.
+    /// An attempt that fails after signing in leaves a session on the server; a retry signs in as
+    /// the same device, which replaces that session instead of listing another device.
+    pub(crate) fn restore_device_id(&mut self) -> Result<String> {
+        if let Some(id) = self.store.get_meta(meta::DEVICE_ID)? {
+            return Ok(id);
+        }
+        let id = new_id();
+        self.store.set_meta(meta::DEVICE_ID, &id)?;
+        Ok(id)
     }
 
     // ---- creation ----
@@ -1305,14 +1318,18 @@ impl Vault {
 
     /// Installs the metadata of a remote vault into an empty local database and unlocks with
     /// the already-unwrapped vault key (flow B). A sync backend is recorded in the same
-    /// transaction, so the vault never exists without the config to resume syncing.
-    /// Existing items are not touched.
+    /// transaction, so the vault never exists without the config to resume syncing, and so is
+    /// `cloud_settings`, the remote's settings item as read just before, stored as the first pull
+    /// would store it. An edit made before that pull then builds on the remote's settings
+    /// instead of the defaults, which would replace them everywhere (§6.4).
+    /// Other existing items are not touched.
     pub(crate) fn install_remote_vault(
         &mut self,
         remote: &VaultMeta,
         vault_key: Key32,
         device_id: &str,
         config: Option<&SyncConfig>,
+        cloud_settings: Option<&RemoteItem>,
     ) -> Result<()> {
         if self.is_initialized() {
             return Err(Error::VaultAlreadyInitialized);
@@ -1334,6 +1351,9 @@ impl Vault {
             tx.set_meta(meta::DEVICE_ID, device_id)?;
             if let Some(config) = &config {
                 tx.set_meta(meta::SYNC_BACKEND, config)?;
+            }
+            if let Some(remote) = cloud_settings {
+                tx.upsert_item_row(&remote_row(remote))?;
             }
             tx.delete_meta(meta::SYNC_CURSOR)
         })?;
