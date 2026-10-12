@@ -650,6 +650,8 @@ async fn a_tool_call_waits_for_its_result_and_the_next_request_carries_it() {
             "read_file",
             "edit_file",
             "write_file",
+            "grep",
+            "glob",
             "fetch_url",
             "read_skill"
         ]
@@ -1892,7 +1894,10 @@ async fn file_tools_need_a_live_session() {
         .as_str()
         .unwrap()
         .to_owned();
-    assert!(system.contains("not with cat, sed or heredocs"), "{system}");
+    assert!(
+        system.contains("over the same work with find, grep, cat, sed or heredocs in the shell"),
+        "{system}"
+    );
 
     let preview = |call: &'static str| {
         f.manager
@@ -2025,6 +2030,8 @@ async fn tools_that_run_in_rust_report_failures_as_error_results() {
             "read_file",
             "edit_file",
             "write_file",
+            "grep",
+            "glob",
             "fetch_url",
             "read_skill"
         ]
@@ -2349,6 +2356,8 @@ async fn a_turn_offers_mcp_tools_and_runs_their_calls() {
             "read_file",
             "edit_file",
             "write_file",
+            "grep",
+            "glob",
             "fetch_url",
             "read_skill",
             "mcp__files__echo",

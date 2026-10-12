@@ -24,6 +24,10 @@ pub const READ_FILE: &str = "read_file";
 pub const EDIT_FILE: &str = "edit_file";
 /// `write_file` (AI-40), run in Rust on a new exec channel.
 pub const WRITE_FILE: &str = "write_file";
+/// `grep` (AI-48), run in Rust on a new exec channel.
+pub const GREP: &str = "grep";
+/// `glob` (AI-49), run in Rust on a new exec channel.
+pub const GLOB: &str = "glob";
 /// `web_search` (AI-14).
 pub const WEB_SEARCH: &str = "web_search";
 /// `fetch_url` (AI-15).
@@ -46,7 +50,7 @@ pub const MAX_MCP_RESULT_CHARS: usize = 50_000;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ToolSet {
     /// The terminal tab's tools, when a connected tab is attached: `read_terminal`,
-    /// `run_command`, `send_input` and the file tools.
+    /// `run_command`, `send_input`, the file tools and the search tools.
     pub terminal: bool,
     /// `web_search`, when a search provider is chosen.
     pub web_search: bool,
@@ -63,7 +67,8 @@ fn tool(name: &str, description: String, input_schema: Value) -> ToolDef {
 }
 
 /// The built-in tool definitions, in a fixed order: `read_terminal`, `run_command`,
-/// `send_input`, `read_file`, `edit_file`, `write_file`, `web_search`, `fetch_url`, `read_skill`.
+/// `send_input`, `read_file`, `edit_file`, `write_file`, `grep`, `glob`, `web_search`,
+/// `fetch_url`, `read_skill`.
 ///
 /// Schemas use only `type`, `properties`, `required`, `description` and `enum`, which every
 /// provider accepts; limits are stated in the descriptions and enforced when the tool runs.
@@ -99,8 +104,9 @@ pub fn builtin_tools(set: &ToolSet) -> Vec<ToolDef> {
              and password prompts do not work, and it does not share the terminal shell's \
              working directory, environment variables or sudo session: use absolute paths or \
              `cd dir && command`. Its output does not appear in the terminal. Use send_input \
-             instead when the command must run in the user's shell or needs interaction, and \
-             read_file, edit_file and write_file to read and change files. The command is \
+             instead when the command must run in the user's shell or needs interaction, glob \
+             and grep to find files and search their contents, and read_file, edit_file and \
+             write_file to read and change files. The command is \
              stopped after timeout_seconds (default 120, at most 600). Output longer than 30,000 \
              characters keeps its first 7,500 and last 22,500 characters."
                 .to_owned(),
@@ -244,6 +250,99 @@ pub fn builtin_tools(set: &ToolSet) -> Vec<ToolDef> {
                     }
                 },
                 "required": ["path", "content"]
+            }),
+        ));
+        tools.push(tool(
+            GREP,
+            "Search text files on the tab's host for lines that match a regular expression, with \
+             find and grep on a separate exec channel. `path` is a file, or a directory searched \
+             with its subdirectories; a relative path or `~/` starts at the user's home \
+             directory. `pattern` is a POSIX extended regular expression, as grep -E reads it, \
+             where \\d, \\s and \\w work too. `glob` limits a directory's search to the files glob \
+             would find; a file given as `path` is searched whatever its name, as with rg. \
+             output_mode files_with_matches (the default) returns the paths of the files \
+             with a matching line, count the number of matching lines in each, and content the \
+             lines as path:line:text, with `context` lines around each as path-line-text. \
+             Results are sorted by path, at most `limit` entries (files, or lines for content; \
+             default 250) from `offset` (default 0) and 30,000 characters; lines are cut at 500 \
+             characters. Binary files and .git directories are skipped, and so are /proc, /sys, \
+             /dev and /run when it searches /. It runs without asking, and without sudo. A search \
+             stops after 30 seconds."
+                .to_owned(),
+            json!({
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "The regular expression to search for."
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "The file or directory to search: an absolute path, or a \
+                                        path from the user's home directory (default: the home \
+                                        directory)."
+                    },
+                    "glob": {
+                        "type": "string",
+                        "description": "Search only the files that match this glob, such as \
+                                        *.conf or *.{yml,yaml}."
+                    },
+                    "output_mode": {
+                        "type": "string",
+                        "enum": ["files_with_matches", "count", "content"],
+                        "description": "What to return (default files_with_matches)."
+                    },
+                    "ignore_case": {
+                        "type": "boolean",
+                        "description": "Match regardless of letter case (default false)."
+                    },
+                    "context": {
+                        "type": "integer",
+                        "description": "Lines to show before and after each matching line in \
+                                        content mode (default 0, at most 100)."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "The most entries to return (default 250)."
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Entries to skip, to read on from an earlier result \
+                                        (default 0)."
+                    }
+                },
+                "required": ["pattern"]
+            }),
+        ));
+        tools.push(tool(
+            GLOB,
+            "Find files on the tab's host by a glob pattern, with find on a separate exec \
+             channel. A pattern without / matches file names at any depth below `path`, such as \
+             *.conf; one with / matches paths from `path` on, such as sites-enabled/* or \
+             **/conf.d/*.conf; one that starts with / matches absolute paths whatever `path` is, \
+             such as /etc/nginx/**/*.conf. * and ? match within a name, ** any number of \
+             directories, [abc] one of the characters and {a,b} either alternative. `path` is the \
+             directory to search; a relative path or `~/` starts at the user's home directory. \
+             Returns the paths of the files and links to files that match, sorted by path, at \
+             most 1,000. .git directories are skipped, and so are /proc, /sys, /dev and /run \
+             when it searches /. It runs without asking, and without sudo. A search stops after \
+             30 seconds."
+                .to_owned(),
+            json!({
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "The glob to match, such as **/*.conf."
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "The directory to search: an absolute path, or a path \
+                                        from the user's home directory (default: the home \
+                                        directory)."
+                    }
+                },
+                "required": ["pattern"]
             }),
         ));
     }
@@ -818,8 +917,9 @@ pub fn system_prompt(ctx: &PromptContext<'_>) -> String {
     out.push_str(match ctx.tools {
         PromptTools::Terminal => {
             "You help the user with the remote host of their terminal tab: you can read its \
-             screen, run commands on it, read and edit its files and type into its shell, and \
-             use the other tools this request offers, within the permissions the user grants.\n"
+             screen, run commands on it, search, read and edit its files and type into its \
+             shell, and use the other tools this request offers, within the permissions the user \
+             grants.\n"
         }
         PromptTools::NoTerminal => {
             "No terminal is attached to this conversation, so you cannot read a screen, run \
@@ -913,10 +1013,13 @@ pub fn system_prompt(ctx: &PromptContext<'_>) -> String {
     }
     if terminal {
         out.push_str(
-            "- Read and change files with read_file, edit_file and write_file, not with cat, sed \
-             or heredocs, unless the file needs sudo. Use send_input for anything that needs the \
-             shell's working directory, environment or sudo session, or that is interactive, and \
-             run_command for the rest.\n",
+            "- Prefer glob to find files, grep to search them, and read_file, edit_file and \
+             write_file to read and change them, over the same work with find, grep, cat, sed or \
+             heredocs in the shell: edit_file and write_file show the user the change and can be \
+             reverted. Fall back to the shell when these tools cannot do the job, such as \
+             finding files by size or age, or files that need sudo. Use send_input for anything \
+             that needs the shell's working directory, environment or sudo session, or that is \
+             interactive, and run_command for the rest.\n",
         );
     }
     out.push_str(
@@ -1060,6 +1163,57 @@ pub struct WriteFileArgs {
     pub content: String,
 }
 
+/// `grep` arguments (AI-48).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct GrepArgs {
+    /// The regular expression, as the model wrote it.
+    pub pattern: String,
+    /// The file or directory to search; the home directory by default.
+    #[serde(default)]
+    pub path: Option<String>,
+    /// A glob the files searched must match.
+    #[serde(default)]
+    pub glob: Option<String>,
+    /// What the result lists; [`GrepOutput::FilesWithMatches`] by default.
+    #[serde(default)]
+    pub output_mode: Option<GrepOutput>,
+    /// Match regardless of letter case; `false` by default.
+    #[serde(default)]
+    pub ignore_case: Option<bool>,
+    /// Lines around each matching line in content mode; 0 by default.
+    #[serde(default)]
+    pub context: Option<u64>,
+    /// The most entries to return; 250 by default.
+    #[serde(default)]
+    pub limit: Option<u64>,
+    /// Entries to skip; 0 by default.
+    #[serde(default)]
+    pub offset: Option<u64>,
+}
+
+/// What a `grep` result lists (AI-48).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GrepOutput {
+    /// The paths of the files with a matching line.
+    #[default]
+    FilesWithMatches,
+    /// The number of matching lines in each file.
+    Count,
+    /// The matching lines, with context lines around them.
+    Content,
+}
+
+/// `glob` arguments (AI-49).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct GlobArgs {
+    /// The glob.
+    pub pattern: String,
+    /// The directory to search; the home directory by default.
+    #[serde(default)]
+    pub path: Option<String>,
+}
+
 /// `web_search` arguments.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 pub struct WebSearchArgs {
@@ -1137,6 +1291,8 @@ mod tests {
                 READ_FILE,
                 EDIT_FILE,
                 WRITE_FILE,
+                GREP,
+                GLOB,
                 WEB_SEARCH,
                 FETCH_URL,
                 READ_SKILL
@@ -1156,6 +1312,8 @@ mod tests {
                 READ_FILE,
                 EDIT_FILE,
                 WRITE_FILE,
+                GREP,
+                GLOB,
                 FETCH_URL
             ]
         );
@@ -1246,6 +1404,36 @@ mod tests {
             json!(["path", "old_string", "new_string"])
         );
         assert_eq!(write.input_schema["required"], json!(["path", "content"]));
+        // The search tools (AI-48, AI-49) state their limits too.
+        let [grep, glob] = [&tools[6], &tools[7]];
+        assert_eq!((grep.name.as_str(), glob.name.as_str()), (GREP, GLOB));
+        for t in [grep, glob] {
+            for phrase in [
+                "home directory",
+                "without sudo",
+                "sorted by path",
+                "30 seconds",
+            ] {
+                assert!(t.description.contains(phrase), "{} {phrase}", t.name);
+            }
+            assert_eq!(t.input_schema["required"], json!(["pattern"]));
+        }
+        assert!(grep.description.contains("30,000") && glob.description.contains("1,000"));
+        assert_eq!(
+            grep.input_schema["properties"]["output_mode"]["enum"],
+            json!(["files_with_matches", "count", "content"])
+        );
+        let args: GrepArgs =
+            serde_json::from_str(r#"{"pattern":"x","output_mode":"content","context":2}"#).unwrap();
+        assert_eq!(
+            (args.output_mode, args.context, args.limit),
+            (Some(GrepOutput::Content), Some(2), None)
+        );
+        assert!(
+            serde_json::from_str::<GrepArgs>(r#"{"pattern":"x","output_mode":"all"}"#).is_err()
+        );
+        let args: GlobArgs = serde_json::from_str(r#"{"pattern":"*.conf"}"#).unwrap();
+        assert_eq!(args.path, None);
         let args: EditFileArgs =
             serde_json::from_str(r#"{"path":"a","old_string":"b","new_string":""}"#).unwrap();
         assert_eq!(args.replace_all, None);
@@ -1305,9 +1493,11 @@ mod tests {
             "</attachments>\n\n<skills>\n",
             "read_skill",
             "- alpha: First one\n- zeta: Last one\n</skills>\n",
-            // A file tool that is denied permission sends the model to send_input with sudo,
-            // where cat, sed or a heredoc does the job, so the rule leaves room for that.
-            "not with cat, sed or heredocs, unless the file needs sudo",
+            // The tools cannot filter by size or age, or use sudo (a file tool that is denied
+            // permission sends the model to send_input with sudo), so the rule leaves the shell
+            // for that.
+            "Fall back to the shell when these tools cannot do the job, such as finding files by \
+             size or age, or files that need sudo.",
         ] {
             assert!(prompt.contains(needle), "missing {needle:?}");
         }
@@ -1779,7 +1969,7 @@ mod tests {
         });
         assert_eq!(
             prompt,
-            r#"You are the AI assistant built into Hatoba, an SSH client. You help the user with the remote host of their terminal tab: you can read its screen, run commands on it, read and edit its files and type into its shell, and use the other tools this request offers, within the permissions the user grants.
+            r#"You are the AI assistant built into Hatoba, an SSH client. You help the user with the remote host of their terminal tab: you can read its screen, run commands on it, search, read and edit its files and type into its shell, and use the other tools this request offers, within the permissions the user grants.
 
 <context>
 Today's date is 2026-10-09.
@@ -1797,7 +1987,7 @@ The SSH server identifies itself as "SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.5".
   - Auto: a call that manual approval would show a card for goes to a reviewer first, which runs it without the card when it finds that the call only reads, or is a change the user asked for that deletes nothing, touches no credentials and sends nothing out; otherwise the approval card shows as in manual approval. So call the tool rather than asking for permission in prose first. Before anything that changes or deletes data, restarts services or affects other users, say what it will do.
   - Bypass: your tool calls run as soon as you make them, without the user seeing them first; only the tools of MCP servers the user set to always ask wait for approval. So before anything that deletes data, cannot be undone, restarts services or affects other users, unless the user asked for exactly that, stop and ask in chat, and go on only after the user agrees.
 - After a rejection, do not repeat the same call unchanged: change your approach as the user's reason says, or ask.
-- Read and change files with read_file, edit_file and write_file, not with cat, sed or heredocs, unless the file needs sudo. Use send_input for anything that needs the shell's working directory, environment or sudo session, or that is interactive, and run_command for the rest.
+- Prefer glob to find files, grep to search them, and read_file, edit_file and write_file to read and change them, over the same work with find, grep, cat, sed or heredocs in the shell: edit_file and write_file show the user the change and can be reverted. Fall back to the shell when these tools cannot do the job, such as finding files by size or age, or files that need sudo. Use send_input for anything that needs the shell's working directory, environment or sudo session, or that is interactive, and run_command for the rest.
 - Answer in the user's language. Be concise, use Markdown, and put commands in code blocks.
 - Follow the user's instructions and the host notes below; where they differ from the rules above, follow them instead. Which tool calls need the user's approval is still up to Hatoba.
 </rules>
