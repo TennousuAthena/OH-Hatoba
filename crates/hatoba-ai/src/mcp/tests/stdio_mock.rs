@@ -73,6 +73,8 @@ fn serve() -> ! {
     let _ = writeln!(std::io::stderr(), "mock server starting");
     let mut capabilities = Value::Null;
     let mut cancelled: Vec<Value> = Vec::new();
+    // The tool `fail_lists` makes the next `prompts/list` and the next `resources/list` fail.
+    let (mut fail_prompts, mut fail_resources) = (false, false);
     for line in std::io::stdin().lock().lines() {
         let Ok(line) = line else { break };
         let Ok(message) = serde_json::from_str::<Value>(&line) else {
@@ -95,7 +97,11 @@ fn serve() -> ! {
                     &id,
                     json!({
                         "protocolVersion": "2025-06-18",
-                        "capabilities": {"tools": {"listChanged": true}},
+                        "capabilities": {
+                            "tools": {"listChanged": true},
+                            "prompts": {"listChanged": true},
+                            "resources": {"listChanged": true}
+                        },
                         "serverInfo": {"name": "mock", "version": "1.0.0"}
                     }),
                 );
@@ -143,7 +149,94 @@ fn serve() -> ! {
                 };
                 reply(&out, &id, page);
             }
+            "tools/call" if message["params"]["name"] == "fail_lists" => {
+                (fail_prompts, fail_resources) = (true, true);
+                reply(&out, &id, text("failing"));
+            }
             "tools/call" => call(&out, &id, &message["params"], &capabilities, &cancelled),
+            "prompts/list" | "resources/list"
+                if std::mem::take(if method == "prompts/list" {
+                    &mut fail_prompts
+                } else {
+                    &mut fail_resources
+                }) =>
+            {
+                send(
+                    &out,
+                    &json!({"jsonrpc": "2.0", "id": id,
+                            "error": {"code": -32603, "message": "listing failed"}}),
+                );
+            }
+            "prompts/list" => reply(
+                &out,
+                &id,
+                json!({"prompts": [
+                    {
+                        "name": "review",
+                        "title": "Review",
+                        "description": "Reviews a change",
+                        "arguments": [
+                            {"name": "pr", "description": "The PR number", "required": true},
+                            {"name": "focus"}
+                        ]
+                    },
+                    {"name": "chat"},
+                    {"description": "no name"}
+                ]}),
+            ),
+            "prompts/get" => {
+                let params = &message["params"];
+                let arg = |name: &str| params["arguments"][name].as_str().unwrap_or("-").to_owned();
+                match params["name"].as_str() {
+                    Some("review") => reply(
+                        &out,
+                        &id,
+                        json!({"messages": [{"role": "user", "content": {
+                            "type": "text",
+                            "text": format!("Review PR {} for {}", arg("pr"), arg("focus"))
+                        }}]}),
+                    ),
+                    Some("chat") => reply(
+                        &out,
+                        &id,
+                        json!({"messages": [
+                            {"role": "user", "content": {"type": "text", "text": "hi"}},
+                            {"role": "assistant", "content": {"type": "image", "data": "aGk=",
+                                "mimeType": "image/png"}}
+                        ]}),
+                    ),
+                    _ => send(
+                        &out,
+                        &json!({"jsonrpc": "2.0", "id": id,
+                                "error": {"code": -32602, "message": "Unknown prompt"}}),
+                    ),
+                }
+            }
+            "resources/list" => {
+                let page = match message["params"]["cursor"].as_str() {
+                    None => json!({
+                        "resources": [{"uri": "file:///notes.md", "name": "notes.md",
+                            "description": "Notes", "mimeType": "text/markdown"}],
+                        "nextCursor": "r2"
+                    }),
+                    _ => json!({"resources": [{"uri": "mem://logo", "mimeType": "image/png"}]}),
+                };
+                reply(&out, &id, page);
+            }
+            "resources/read" => match message["params"]["uri"].as_str() {
+                Some(uri @ "file:///notes.md") => reply(
+                    &out,
+                    &id,
+                    json!({"contents": [{"uri": uri, "text": "# Notes"},
+                                        {"uri": uri, "blob": "aGk="}]}),
+                ),
+                Some(uri) => reply(
+                    &out,
+                    &id,
+                    json!({"contents": [{"uri": uri, "blob": "aGk="}]}),
+                ),
+                None => reply(&out, &id, json!({})),
+            },
             _ => send(
                 &out,
                 &json!({"jsonrpc": "2.0", "id": id,
@@ -184,6 +277,15 @@ fn call(out: &Out, id: &Value, params: &Value, capabilities: &Value, cancelled: 
                 out,
                 &json!({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"}),
             );
+            reply(out, id, text("notified"));
+        }
+        "notify_lists" => {
+            for method in [
+                "notifications/prompts/list_changed",
+                "notifications/resources/list_changed",
+            ] {
+                send(out, &json!({"jsonrpc": "2.0", "method": method}));
+            }
             reply(out, id, text("notified"));
         }
         "pid" => reply(out, id, text(std::process::id().to_string())),

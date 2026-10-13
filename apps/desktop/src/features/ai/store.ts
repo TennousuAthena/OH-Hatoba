@@ -47,7 +47,7 @@ export interface Slot {
   extras: PendingAttachment[];
   /** §13.1: what Enter sent while a turn ran, to go when the turn ends. Kept only in memory. */
   queued: QueuedMessage | null;
-  /** AI-30: MCP servers switched off for this conversation in the tools menu. */
+  /** AI-30: MCP servers switched off for this conversation in `/mcp`. */
   mcpOff: string[];
   /** AI-46: whether messages show the terminal's screen, set in the + menu; null follows Settings → AI. */
   screen: boolean | null;
@@ -61,6 +61,8 @@ export interface Slot {
 export interface PendingAttachment {
   id: string;
   attachment: Attachment;
+  /** The `/` command that attached it (AI-50), whose next run replaces it. */
+  command?: string;
 }
 
 /** The tab's diagnostics or selection: a message takes at most one of each (AI-10). */
@@ -192,7 +194,17 @@ export function patchSlot(id: string, patch: Partial<Slot> | ((slot: Slot) => Pa
   });
 }
 
+/** Per slot, how many times `setSlot` has given it another conversation (or none). */
+const generations = new Map<string, number>();
+
+/** Changes each time the slot shows another conversation, so that work begun for one can tell it has left. */
+export function slotGeneration(id: string): number {
+  return generations.get(id) ?? 0;
+}
+
+/** Gives the slot another conversation, or none. */
 export function setSlot(id: string, slot: Slot | null) {
+  generations.set(id, slotGeneration(id) + 1);
   useAi.setState((st) => {
     const slots = { ...st.slots };
     if (slot) slots[id] = slot;

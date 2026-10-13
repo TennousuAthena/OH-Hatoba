@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "@/app/store";
 import { useTabs } from "@/app/tabs";
@@ -8,9 +8,14 @@ import { useT, type MessageKey } from "@/i18n";
 import type { McpServerState } from "@/ipc/types";
 import { cx } from "@/lib/cx";
 import { setMcpServerOff, setSlotScreen } from "./actions";
-import { loadMcp, toolsMenuRows, toolsSummary, transportLabel, useMcp, type ToolsMenuRow } from "./mcp";
+import { loadSkills, useSkills } from "./CommandMenu";
+import { failedServers, loadMcp, toolsMenuRows, transportLabel, useMcp, type ToolsMenuRow } from "./mcp";
 import { sendsScreen, useAi, type Slot } from "./store";
 import s from "./AddMenu.module.css";
+
+/** The lists that take the + menu's place. */
+type List = "skills" | "tools";
+type View = "main" | List;
 
 const STATE_LABEL: Record<Exclude<McpServerState, "running">, MessageKey> = {
   stopped: "ai.tools.stopped",
@@ -18,34 +23,44 @@ const STATE_LABEL: Record<Exclude<McpServerState, "running">, MessageKey> = {
   failed: "ai.tools.failed",
 };
 
-type View = "main" | "tools";
-
 /**
- * The input area's + menu: Add Text Files (AI-35), Send Terminal Screen for this conversation
- * (AI-46) and, in its place when chosen, the tools menu (AI-30). The tools menu lists the MCP
- * servers enabled on this device with their state, and switches each one off for this conversation
- * until the app quits.
+ * The input area's + menu: Add Text Files (AI-35), Slash Commands, which starts the box with `/` and so opens the menu
+ * of AI-50, Send Terminal Screen for this conversation (AI-46), and two lists that take the menu's place when chosen,
+ * each with a first row that goes back: Skills, whose skills start the box with their command (AI-50), and MCP Tools,
+ * the MCP servers that `/mcp` shows too (AI-30). `onCommand`: start the box with `/`, or with a skill's command.
  */
-export function AddButton({ slotId, slot, onAddFiles }: { slotId: string; slot: Slot; onAddFiles: () => void }) {
+export function AddButton({
+  slotId,
+  slot,
+  onAddFiles,
+  onCommand,
+}: {
+  slotId: string;
+  slot: Slot;
+  onAddFiles: () => void;
+  onCommand: (skill: string | null) => void;
+}) {
   const t = useT();
   const ref = useRef<HTMLButtonElement>(null);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  // Without a connected terminal, the screen switch is off and disabled, with a note under it.
+  const terminal = useTabs((st) => st.tabs.some((x) => x.id === slotId && x.status === "connected"));
   const servers = useMcp((st) => st.servers);
   const status = useMcp((st) => st.status);
   const rows = useMemo(() => (servers ? toolsMenuRows(servers, status, slot.mcpOff) : []), [servers, status, slot.mcpOff]);
-  const failed = toolsSummary(rows).failed;
+  // AI-32: a server the conversation uses failed.
+  const failed = failedServers(rows).length > 0;
+  const label = failed ? `${t("ai.add")} · ${t("ai.tools.someFailed")}` : t("ai.add");
 
-  useEffect(() => {
-    if (useMcp.getState().servers === null) void loadMcp();
-  }, []);
   useEffect(() => setAnchor(null), [slotId]);
 
   const toggle = () => {
     if (anchor) return setAnchor(null);
+    // Skills and MCP Tools show the skills and the servers as they are now.
+    loadSkills();
     void loadMcp();
     if (ref.current) setAnchor(ref.current.getBoundingClientRect());
   };
-  const label = failed ? `${t("ai.add")} · ${t("ai.tools.someFailed")}` : t("ai.add");
 
   return (
     <>
@@ -64,43 +79,137 @@ export function AddButton({ slotId, slot, onAddFiles }: { slotId: string; slot: 
         {failed && <span className={s.failedDot} />}
       </button>
       {anchor && (
-        <AddPopover
+        <Popover
           anchor={anchor}
-          slotId={slotId}
-          slot={slot}
-          rows={rows}
-          onAddFiles={onAddFiles}
+          label={t("ai.add")}
+          trigger="[data-add-trigger]"
+          layoutKey={String(terminal)}
           onClose={(restoreFocus) => {
             setAnchor(null);
             if (restoreFocus) ref.current?.focus();
           }}
-        />
+        >
+          {(close) => (
+            <MainView
+              slotId={slotId}
+              slot={slot}
+              rows={rows}
+              terminal={terminal}
+              onAddFiles={() => {
+                close(true);
+                onAddFiles();
+              }}
+              onCommand={(skill) => {
+                close(false);
+                onCommand(skill);
+              }}
+              onClose={close}
+            />
+          )}
+        </Popover>
       )}
     </>
   );
 }
 
-function AddPopover({
+/**
+ * AI-50 `/mcp`: the MCP servers of `McpList`, above the input box.
+ */
+export function McpPopover({ slotId, slot, anchor, onClose }: { slotId: string; slot: Slot; anchor: DOMRect; onClose: (restoreFocus: boolean) => void }) {
+  const t = useT();
+  const servers = useMcp((st) => st.servers);
+  const failed = useMcp((st) => st.failed);
+  return (
+    <Popover anchor={anchor} label={t("ai.tools.title")} layoutKey={`${servers?.length}:${failed}`} onClose={onClose}>
+      {(close) => <McpList slotId={slotId} slot={slot} onManage={() => close(false)} />}
+    </Popover>
+  );
+}
+
+/**
+ * The MCP servers enabled on this device with their state (AI-32) and, for one that failed, its error and the last
+ * lines of its stderr, a switch that turns each off for this conversation until the app quits (AI-30), and the way to
+ * Settings → AI. `/mcp` shows them, and the + menu's tools menu, whose first row (`head`) goes back. `onManage`: the
+ * menu closes for the settings.
+ */
+function McpList({ slotId, slot, head, onManage }: { slotId: string; slot: Slot; head?: ReactNode; onManage: () => void }) {
+  const t = useT();
+  const servers = useMcp((st) => st.servers);
+  const status = useMcp((st) => st.status);
+  const loaded = servers !== null;
+  const failed = useMcp((st) => st.failed);
+  const rows = useMemo(() => (servers ? toolsMenuRows(servers, status, slot.mcpOff) : []), [servers, status, slot.mcpOff]);
+
+  useEffect(() => {
+    void loadMcp();
+  }, []);
+
+  return (
+    <>
+      {head ?? (
+        <div className={cx(s.item, s.itemStatic)} title={t("ai.tools.title")}>
+          <Icon name="plug" className={s.itemIcon} />
+          <span className={cx(s.itemLabel, s.itemTitle)}>{t("ai.tools")}</span>
+        </div>
+      )}
+      <div className={s.separator} />
+      {!loaded && !failed && (
+        <div className={s.note}>
+          <Spinner size={13} />
+        </div>
+      )}
+      {failed && <div className={cx(s.note, s.noteError)}>{t("ai.tools.loadFailed")}</div>}
+      {loaded && !failed && rows.length === 0 && <div className={s.note}>{t("ai.tools.empty")}</div>}
+      {rows.map((row) => (
+        <ServerRow key={row.server.id} row={row} onChange={(on) => setMcpServerOff(slotId, row.server.id, !on)} />
+      ))}
+      {rows.length > 0 && <div className={s.footnote}>{t("ai.tools.note")}</div>}
+      <div className={s.separator} />
+      <ManageItem onManage={onManage} />
+    </>
+  );
+}
+
+/** Settings → AI, where the skills and the MCP servers are managed. */
+function ManageItem({ onManage }: { onManage: () => void }) {
+  const t = useT();
+  return (
+    <button
+      type="button"
+      className={s.item}
+      data-item
+      onClick={() => {
+        onManage();
+        useApp.getState().openSettings(true, "ai");
+      }}
+    >
+      <Icon name="gear-six" className={s.itemIcon} />
+      <span className={s.itemLabel}>{t("ai.tools.manage")}</span>
+    </button>
+  );
+}
+
+/**
+ * A menu of buttons and switches above `anchor`, kept inside the window, whose first item takes the focus. A click
+ * outside it, Esc and the window losing focus close it; ↑/↓ move between its items. `trigger` is a selector for the
+ * button that opened it, which toggles it itself. `layoutKey` changes when its height may have changed.
+ */
+function Popover({
   anchor,
-  slotId,
-  slot,
-  rows,
-  onAddFiles,
+  label,
+  trigger,
+  layoutKey,
   onClose,
+  children,
 }: {
   anchor: DOMRect;
-  slotId: string;
-  slot: Slot;
-  rows: ToolsMenuRow[];
-  onAddFiles: () => void;
+  label: string;
+  trigger?: string;
+  layoutKey?: string;
   onClose: (restoreFocus: boolean) => void;
+  children: (close: (restoreFocus: boolean) => void) => ReactNode;
 }) {
-  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
-  const [view, setView] = useState<View>("main");
-  const loaded = useMcp((st) => st.servers !== null);
-  const failed = useMcp((st) => st.failed);
-  const terminal = useTabs((st) => st.tabs.some((x) => x.id === slotId && x.status === "connected"));
   const [pos, setPos] = useState({ left: anchor.left, top: anchor.top });
   const locked = useOverlaysLocked();
 
@@ -108,33 +217,37 @@ function AddPopover({
     if (locked) onClose(false);
   }, [locked, onClose]);
 
-  // Above the button (the input area is at the bottom of the panel), kept inside the window.
+  // Above the anchor (the input area is at the bottom of the panel), kept inside the window, and placed again
+  // whenever its height changes, as when a server's state or stderr arrives.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const r = el.getBoundingClientRect();
-    const b = windowSurface();
-    const left = Math.max(b.left + 8, Math.min(anchor.left, b.right - r.width - 8));
-    let top = anchor.top - r.height - 6;
-    if (top < b.top + 8) top = Math.min(anchor.bottom + 6, b.bottom - r.height - 8);
-    setPos({ left, top: Math.max(b.top + 8, top) });
-  }, [anchor, rows, loaded, failed, view, terminal]);
+    const place = () => {
+      const r = el.getBoundingClientRect();
+      const b = windowSurface();
+      const left = Math.max(b.left + 8, Math.min(anchor.left, b.right - r.width - 8));
+      let top = anchor.top - r.height - 6;
+      if (top < b.top + 8) top = Math.min(anchor.bottom + 6, b.bottom - r.height - 8);
+      setPos({ left, top: Math.max(b.top + 8, top) });
+    };
+    place();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(place);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [anchor, layoutKey]);
 
-  // The first item has the focus when the menu opens, the back button in the tools menu, and the
-  // tools item after going back.
-  const back = useRef(false);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const target = view === "tools" ? el.querySelector<HTMLElement>("[data-back]") : back.current ? el.querySelector<HTMLElement>("[data-tools]") : items(el)[0];
-    (target ?? el).focus({ preventScroll: true });
-  }, [view]);
+    (items(el)[0] ?? el).focus({ preventScroll: true });
+  }, []);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       const target = e.target as Element;
       // The button toggles the menu itself; closing here would make its click reopen it.
-      if (ref.current && !ref.current.contains(target) && !target.closest?.("[data-add-trigger]")) onClose(false);
+      if (ref.current && !ref.current.contains(target) && !(trigger && target.closest?.(trigger))) onClose(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -152,19 +265,12 @@ function AddPopover({
       window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("blur", close);
     };
-  }, [onClose]);
+  }, [onClose, trigger]);
 
-  // ↑/↓ move between the menu's items, ← goes back from the tools menu.
+  // ↑/↓ move between the menu's items.
   const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     const el = ref.current;
-    if (!el) return;
-    if (e.key === "ArrowLeft" && view === "tools") {
-      e.preventDefault();
-      back.current = true;
-      setView("main");
-      return;
-    }
-    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    if (!el || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
     e.preventDefault();
     const list = items(el);
     const at = list.indexOf(document.activeElement as HTMLElement);
@@ -174,72 +280,8 @@ function AddPopover({
 
   if (locked) return null;
   return createPortal(
-    <div
-      ref={ref}
-      role="dialog"
-      aria-label={view === "main" ? t("ai.add") : t("ai.tools.title")}
-      tabIndex={-1}
-      className={s.popover}
-      style={pos}
-      onKeyDown={onKeyDown}
-    >
-      {view === "main" ? (
-        <MainView
-          slotId={slotId}
-          slot={slot}
-          rows={rows}
-          terminal={terminal}
-          onAddFiles={() => {
-            onClose(true);
-            onAddFiles();
-          }}
-          onTools={() => setView("tools")}
-        />
-      ) : (
-        <>
-          {/* The item that opened it, as a row of the menu, takes it back. */}
-          <button
-            type="button"
-            className={s.item}
-            title={t("btn.back")}
-            aria-label={t("btn.back")}
-            data-item
-            data-back
-            onClick={() => {
-              back.current = true;
-              setView("main");
-            }}
-          >
-            <Icon name="caret-left" className={s.itemIcon} />
-            <span className={cx(s.itemLabel, s.itemTitle)}>{t("ai.tools")}</span>
-          </button>
-          <div className={s.separator} />
-          {!loaded && !failed && (
-            <div className={s.note}>
-              <Spinner size={13} />
-            </div>
-          )}
-          {failed && <div className={cx(s.note, s.noteError)}>{t("ai.tools.loadFailed")}</div>}
-          {loaded && !failed && rows.length === 0 && <div className={s.note}>{t("ai.tools.empty")}</div>}
-          {rows.map((row) => (
-            <ServerRow key={row.server.id} row={row} onChange={(on) => setMcpServerOff(slotId, row.server.id, !on)} />
-          ))}
-          {rows.length > 0 && <div className={s.footnote}>{t("ai.tools.note")}</div>}
-          <div className={s.separator} />
-          <button
-            type="button"
-            className={s.item}
-            data-item
-            onClick={() => {
-              onClose(false);
-              useApp.getState().openSettings(true, "ai");
-            }}
-          >
-            <Icon name="gear-six" className={s.itemIcon} />
-            <span className={s.itemLabel}>{t("ai.tools.manage")}</span>
-          </button>
-        </>
-      )}
+    <div ref={ref} role="dialog" aria-label={label} tabIndex={-1} className={s.popover} style={pos} onKeyDown={onKeyDown}>
+      {children(onClose)}
     </div>,
     document.body,
   );
@@ -256,7 +298,8 @@ function MainView({
   rows,
   terminal,
   onAddFiles,
-  onTools,
+  onCommand,
+  onClose,
 }: {
   slotId: string;
   slot: Slot;
@@ -264,17 +307,90 @@ function MainView({
   /** Whether the tab is connected: without a terminal, the screen switch is off and disabled. */
   terminal: boolean;
   onAddFiles: () => void;
-  onTools: () => void;
+  onCommand: (skill: string | null) => void;
+  onClose: (restoreFocus: boolean) => void;
 }) {
   const t = useT();
   const settings = useAi((st) => st.catalog.settings);
   const on = sendsScreen(slot, settings);
-  const sum = toolsSummary(rows);
+  const [view, setView] = useState<View>("main");
+  const used = rows.filter((r) => r.on).length;
+  const failed = failedServers(rows).length > 0;
+
+  // A list's back row has the focus, and back in the menu, the item that opened the list.
+  const opener = useRef<Record<List, HTMLButtonElement | null>>({ skills: null, tools: null });
+  const backRow = useRef<HTMLButtonElement>(null);
+  const left = useRef<List | null>(null);
+  useEffect(() => {
+    if (view !== "main") backRow.current?.focus({ preventScroll: true });
+    else if (left.current) opener.current[left.current]?.focus({ preventScroll: true });
+  }, [view]);
+  const goBack = () => {
+    if (view !== "main") left.current = view;
+    setView("main");
+  };
+
+  if (view !== "main") {
+    // The item that opened the list, as its first row, takes it back.
+    const head = (
+      <button ref={backRow} type="button" className={s.item} title={t("btn.back")} aria-label={t("btn.back")} data-item onClick={goBack}>
+        <Icon name="caret-left" className={s.itemIcon} />
+        <span className={cx(s.itemLabel, s.itemTitle)}>{view === "skills" ? t("ai.add.skills") : t("ai.tools")}</span>
+      </button>
+    );
+    return (
+      // ← goes back to the menu.
+      <div
+        className={s.view}
+        onKeyDown={(e) => {
+          if (e.key !== "ArrowLeft") return;
+          e.preventDefault();
+          goBack();
+        }}
+      >
+        {view === "skills" ? (
+          <SkillList head={head} onPick={(name) => onCommand(name)} onManage={() => onClose(false)} />
+        ) : (
+          <McpList slotId={slotId} slot={slot} head={head} onManage={() => onClose(false)} />
+        )}
+      </div>
+    );
+  }
+
+  /** An item that opens a list in the menu's place, with → too. */
+  const listItem = (list: List, icon: string, label: string, extra: ReactNode, title?: string) => (
+    <button
+      ref={(el) => {
+        opener.current[list] = el;
+      }}
+      type="button"
+      className={s.item}
+      data-item
+      title={title}
+      onClick={() => setView(list)}
+      onKeyDown={(e) => {
+        if (e.key !== "ArrowRight") return;
+        e.preventDefault();
+        setView(list);
+      }}
+    >
+      <Icon name={icon} className={s.itemIcon} />
+      <span className={s.itemLabel}>{label}</span>
+      {extra}
+      <Icon name="caret-right" size={12} className={s.itemCaret} />
+    </button>
+  );
+
   return (
     <>
       <button type="button" className={s.item} data-item onClick={onAddFiles}>
         <Icon name="paperclip" className={s.itemIcon} />
         <span className={s.itemLabel}>{t("ai.attach")}</span>
+      </button>
+      <button type="button" className={s.item} data-item onClick={() => onCommand(null)}>
+        <Icon name="terminal" className={s.itemIcon} />
+        <span className={s.itemLabel}>{t("ai.add.slash")}</span>
+        <span className={s.itemHint}>/</span>
       </button>
       {/* The row toggles too, a larger target than the switch. */}
       <div className={cx(s.item, !terminal && s.itemDisabled)} onClick={(e) => terminal && !(e.target as Element).closest("button") && setSlotScreen(slotId, !on)}>
@@ -288,24 +404,50 @@ function MainView({
         </span>
       </div>
       <div className={s.separator} />
-      <button
-        type="button"
-        className={s.item}
-        data-item
-        data-tools
-        title={sum.total > 0 ? t("ai.tools.summary", { on: sum.on, total: sum.total }) : undefined}
-        onClick={onTools}
-      >
-        <Icon name="plug" className={s.itemIcon} />
-        <span className={s.itemLabel}>{t("ai.tools")}</span>
-        {sum.failed && <span className={s.itemDot} title={t("ai.tools.someFailed")} />}
-        {sum.total > 0 && (
-          <span className={s.itemHint}>
-            {sum.on}/{sum.total}
+      {listItem("skills", "book-open-text", t("ai.add.skills"), null)}
+      {listItem(
+        "tools",
+        "plug",
+        t("ai.tools"),
+        <>
+          {failed && <span className={s.itemDot} title={t("ai.tools.someFailed")} />}
+          {rows.length > 0 && (
+            <span className={s.itemHint}>
+              {used}/{rows.length}
+            </span>
+          )}
+        </>,
+        rows.length > 0 ? t("ai.tools.summary", { on: used, total: rows.length }) : undefined,
+      )}
+    </>
+  );
+}
+
+/** The + menu's Skills: the enabled skills, each of which starts the box with its command (AI-50). */
+function SkillList({ head, onPick, onManage }: { head: ReactNode; onPick: (name: string) => void; onManage: () => void }) {
+  const t = useT();
+  const skills = useSkills((st) => st.skills);
+  return (
+    <>
+      {head}
+      <div className={s.separator} />
+      {skills === null && (
+        <div className={s.note}>
+          <Spinner size={13} />
+        </div>
+      )}
+      {skills?.length === 0 && <div className={s.note}>{t("ai.add.skillsEmpty")}</div>}
+      {skills?.map((skill) => (
+        <button key={skill.name} type="button" className={s.item} data-item title={skill.description || undefined} onClick={() => onPick(skill.name)}>
+          <Icon name="book-open-text" className={s.itemIcon} />
+          <span className={s.itemText}>
+            <span className={s.itemLabel}>/{skill.name}</span>
+            {skill.description && <span className={cx(s.itemNote, s.itemClamp)}>{skill.description}</span>}
           </span>
-        )}
-        <Icon name="caret-right" size={12} className={s.itemCaret} />
-      </button>
+        </button>
+      ))}
+      <div className={s.separator} />
+      <ManageItem onManage={onManage} />
     </>
   );
 }

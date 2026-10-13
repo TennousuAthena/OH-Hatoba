@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type MutableRefObject, type RefObject } from "react";
 import { useApp } from "@/app/store";
 import { Icon, LinkButton } from "@/components/controls";
 import { confirm, Menu, toast, useMenu, type MenuEntry } from "@/components/overlay";
@@ -8,7 +8,7 @@ import type { AiEffort, AiModelRef, AiPermissionMode } from "@/ipc/types";
 import { cx } from "@/lib/cx";
 import { isImeEvent } from "@/lib/ime";
 import { shortcutLabel } from "@/lib/platform";
-import { AddButton } from "./AddMenu";
+import { AddButton, McpPopover } from "./AddMenu";
 import {
   addPaste,
   askSideQuestion,
@@ -16,6 +16,8 @@ import {
   compactConversation,
   discardQueued,
   editQueued,
+  newConversation,
+  pendingAttachments,
   queueMessage,
   removeExtra,
   removeQueuedAttachment,
@@ -25,14 +27,18 @@ import {
   setSlotModel,
   stopTurn,
 } from "./actions";
+import { attachCommand } from "./commandActions";
+import { useCommandMenu } from "./CommandMenu";
+import { commandDraft, findBuiltin, leadingCommand, type BuiltinCommand } from "./commands";
 import { ComposerAttachments, QueuedAttachments, usePendingAttachments, useTerminalSelection } from "./AttachmentChips";
 import { composeMessage, isLongPaste } from "./attachments";
 import { chosenEffort, effectiveEffort, effortKey, modelEfforts } from "./effort";
 import { AUTO_COMPACT_RATIO, contextUsage, estimateTokens, formatTokens, messageFit, type MeterState } from "./meter";
+import { failedServers, loadMcp, toolsMenuRows, useMcp } from "./mcp";
 import { chats, findModel, judgeChosen, sameModel } from "./models";
 import { messageAttachments, messageText, takenBeside } from "./queue";
 import { canAskSide } from "./side";
-import { getSlot, patchSlot, useAi, type QueuedMessage, type Slot } from "./store";
+import { getSlot, patchSlot, slotGeneration, useAi, type QueuedMessage, type Slot } from "./store";
 import { MODE_ICON } from "./tools";
 import s from "./Composer.module.css";
 
@@ -60,15 +66,23 @@ function isSendNowKey(e: KeyboardEvent): boolean {
 
 const noModifier = (e: KeyboardEvent) => !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey;
 
+/** How the box's text goes: Enter (sent, or queued while a turn runs), Ctrl+Enter (sent at once), Alt+Enter (a side question). */
+type Submit = "enter" | "now" | "side";
+
 /**
- * The input area (§9): the queued message (§13.1), the attachment chips, a multi-line box, and under
- * it the + menu and the permission mode (AI-16) on the left, the context meter, the model selector,
- * Ask a Side Question (AI-42) and Send / Stop on the right.
+ * The input area (§9): the queued message (§13.1), the attachment chips, a multi-line box with its `/` and `@` menu
+ * (AI-50, AI-51), and under it the + menu and the permission mode (AI-16) on the left, the context meter, the model
+ * selector, Ask a Side Question (AI-42) and Send / Stop on the right. Above the box, a line names the MCP servers
+ * the conversation uses that failed, which `/mcp` shows (AI-32).
  */
 export function Composer({ slotId, slot, model, tools }: { slotId: string; slot: Slot; model: AiModelRef | null; tools: boolean }) {
   const t = useT();
   const ref = useRef<HTMLTextAreaElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const openModels = useRef<(() => void) | null>(null);
+  const [mcpAnchor, setMcpAnchor] = useState<DOMRect | null>(null);
+  const [resolving, setResolving] = useState(false);
   const focusTick = useAi((st) => st.focusTick);
   const providers = useAi((st) => st.catalog.providers);
   const platform = useApp((st) => st.info.platform);
@@ -117,34 +131,156 @@ export function Composer({ slotId, slot, model, tools }: { slotId: string; slot:
 
   // §13.1: Enter with no turn running, or Ctrl+Enter: the queued message and the input area go now.
   const canSend = (!!slot.draft.trim() || !!queued) && !!model && !blocked;
-  const send = () => {
-    if (canSend) void sendMessage(slotId, slot.draft);
-  };
-  // Enter while a turn runs: the message waits for the turn to end.
-  const queue = () => {
-    if (slot.draft.trim() && model && !blocked) queueMessage(slotId, slot.draft);
-  };
-
   // AI-42: the turn, if any, goes on; the answer shows at the end of the conversation. While a turn
   // runs, Rust asks with the turn's model, not the one picked here that the fit is measured
   // against, so the provider's own limit decides.
   const canSide = !!model && (busy || !blocked) && canAskSide(slot, slot.draft);
-  const askSide = () => {
-    if (canSide) askSideQuestion(slotId, slot.draft);
-  };
+
+  // AI-32: the MCP servers the conversation uses that failed, which the line above the box names.
+  const mcpServers = useMcp((st) => st.servers);
+  const mcpStatus = useMcp((st) => st.status);
+  const failed = useMemo(() => (mcpServers ? failedServers(toolsMenuRows(mcpServers, mcpStatus, slot.mcpOff)) : []), [mcpServers, mcpStatus, slot.mcpOff]);
+  useEffect(() => {
+    if (useMcp.getState().servers === null) void loadMcp();
+  }, []);
+  useEffect(() => {
+    setMcpAnchor(null);
+    setResolving(false);
+  }, [slotId]);
 
   /** Puts text into the box at the caret, as typing would. */
   const insertText = (text: string) => {
     const el = ref.current;
     const next = insertAtCaret(el, getSlot(slotId).draft, text);
-    patchSlot(slotId, { draft: next.value });
+    setDraft(next.value, next.caret, true);
+  };
+
+  /** Replaces the box's text and, when `focus`, focuses the box with the caret at `caret`. */
+  const setDraft = (text: string, caret: number, focus: boolean) => {
+    const el = ref.current;
+    patchSlot(slotId, { draft: text });
+    if (!focus) return;
     requestAnimationFrame(() => {
       el?.focus();
-      el?.setSelectionRange(next.caret, next.caret);
+      el?.setSelectionRange(caret, caret);
+      menu.onCaret();
     });
   };
 
+  /** `/mcp`, or the line that names a failed server: the MCP servers above the input box (AI-50). */
+  const showMcp = () => {
+    const r = boxRef.current?.getBoundingClientRect();
+    if (r) setMcpAnchor(r);
+  };
+
+  /**
+   * AI-50: runs a built-in command, which takes the box's text. One that takes nothing after its name leaves what
+   * follows it in the box.
+   */
+  const runBuiltin = (command: BuiltinCommand, args: string, raw: string) => {
+    const s = getSlot(slotId);
+    const rest = command.args ? "" : args;
+    switch (command.name) {
+      case "btw":
+        if (!args) return;
+        if (!s.conversationId) {
+          toast(t("ai.cmd.btw.noConversation"), "error");
+          return;
+        }
+        // As Alt+Enter: with no turn running, a question that does not fit the context waits (AI-42).
+        if (!s.turn && !s.remoteRunning && blocked) {
+          toast(t("ai.fit.blocked"), "error");
+          return;
+        }
+        askSideQuestion(slotId, args, true, raw);
+        return;
+      case "clear":
+        patchSlot(slotId, { draft: rest });
+        newConversation(slotId);
+        return;
+      case "compact":
+        if (!s.conversationId || s.entries.length === 0) {
+          toast(t("ai.cmd.compact.nothing"), "error");
+          return;
+        }
+        if (s.turn || s.remoteRunning || s.compacting) {
+          toast(t("ai.cmd.compact.busy"), "error");
+          return;
+        }
+        patchSlot(slotId, { draft: "" });
+        // What was typed comes back when no summary was stored (refused or failed), unless the box holds something new.
+        void compactConversation(slotId, args || null).then((done) => {
+          if (!done && !getSlot(slotId).draft) patchSlot(slotId, { draft: raw });
+        });
+        return;
+      case "mcp":
+        patchSlot(slotId, { draft: rest });
+        showMcp();
+        return;
+      case "model":
+        patchSlot(slotId, { draft: rest });
+        openModels.current?.();
+        return;
+    }
+  };
+
+  /**
+   * Enter, Ctrl+Enter, Alt+Enter and the buttons (§13.1, AI-42). A built-in command runs (AI-50); a skill or MCP
+   * prompt the text starts with is attached first, and the text then goes as typed, its command included.
+   */
+  const submit = async (how: Submit, raw: string = getSlot(slotId).draft) => {
+    // An `@` pick still attaching (AI-51): Send would leave it behind for the next message.
+    if (menu.busy) return;
+    const command = leadingCommand(raw);
+    if (command) {
+      const builtin = findBuiltin(command.name);
+      if (builtin) {
+        runBuiltin(builtin, command.args, raw);
+        return;
+      }
+      if (resolving) return;
+      if (model) {
+        setResolving(true);
+        const generation = slotGeneration(slotId);
+        const outcome = await attachCommand(slotId, command.name, command.args).finally(() => setResolving(false));
+        // Not when it failed, or when the box changed or the tab opened another conversation meanwhile (New and
+        // History keep the box).
+        if (outcome === "failed" || getSlot(slotId).draft !== raw || slotGeneration(slotId) !== generation) return;
+        // AI-35: what the command attached counts toward whether the message fits.
+        if (outcome === "attached" && messageFit(meter, estimateTokens(composeMessage(raw.trim(), pendingAttachments(slotId)))).level === "over") {
+          toast(t("ai.fit.blocked"), "error");
+          return;
+        }
+      }
+    }
+    const now = getSlot(slotId);
+    const running = !!now.turn || now.remoteRunning;
+    if (how === "side") {
+      if (model && (running || !blocked) && canAskSide(now, raw)) askSideQuestion(slotId, raw);
+      return;
+    }
+    if (how === "enter" && running) {
+      if (raw.trim() && model && !blocked) queueMessage(slotId, raw);
+      return;
+    }
+    if ((raw.trim() || now.queued) && model && !blocked) void sendMessage(slotId, raw);
+  };
+
+  const menu = useCommandMenu({
+    slotId,
+    slot,
+    input: ref,
+    box: boxRef,
+    setDraft,
+    run: (text) => {
+      patchSlot(slotId, { draft: text });
+      void submit("enter", text);
+    },
+    onLocalFiles: () => fileRef.current?.click(),
+  });
+
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (menu.onKeyDown(e)) return;
     if (isPlainPasteKey(e)) {
       e.preventDefault();
       readClipboard().then(
@@ -158,13 +294,13 @@ export function Composer({ slotId, slot, model, tools }: { slotId: string; slot:
     if (isSideQuestionKey(e)) {
       if (isImeEvent(e)) return;
       e.preventDefault();
-      askSide();
+      void submit("side");
       return;
     }
     if (isSendNowKey(e)) {
       if (isImeEvent(e)) return;
       e.preventDefault();
-      send();
+      void submit("now");
       return;
     }
     // ↑ in the empty box takes the queued message back to edit it.
@@ -177,8 +313,7 @@ export function Composer({ slotId, slot, model, tools }: { slotId: string; slot:
     if (e.key !== "Enter" || !noModifier(e)) return;
     if (isImeEvent(e)) return;
     e.preventDefault();
-    if (busy) queue();
-    else send();
+    void submit("enter");
   };
 
   // AI-35: a long paste becomes an attachment, and pasted files are attached like picked ones.
@@ -197,7 +332,18 @@ export function Composer({ slotId, slot, model, tools }: { slotId: string; slot:
   return (
     <div className={s.composer}>
       {queued && <QueuedCard slotId={slotId} queued={queued} />}
-      <div className={s.box}>
+      {failed.length > 0 && (
+        <div className={s.mcpFailed} role="status">
+          <Icon name="warning-circle" size={13} className={s.fitIcon} />
+          <span className={s.mcpFailedText}>
+            {failed.length === 1 ? t("ai.mcp.failed", { name: failed[0].server.name }) : t("ai.mcp.failedMany", { n: failed.length })}
+          </span>
+          <LinkButton className={s.mcpFailedLink} onClick={showMcp}>
+            /mcp
+          </LinkButton>
+        </div>
+      )}
+      <div ref={boxRef} className={s.box}>
         <ComposerAttachments
           slotId={slotId}
           onPasteAsText={(id, text) => {
@@ -229,12 +375,28 @@ export function Composer({ slotId, slot, model, tools }: { slotId: string; slot:
           }
           aria-label={t("ai.input.label")}
           spellCheck={false}
-          onChange={(e) => patchSlot(slotId, { draft: e.target.value })}
+          {...menu.inputProps}
+          onChange={(e) => {
+            patchSlot(slotId, { draft: e.target.value });
+            menu.onCaret();
+          }}
+          onSelect={menu.onCaret}
+          onFocus={menu.onCaret}
+          onBlur={menu.onBlur}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
         />
+        {menu.element}
         <div className={s.bar}>
-          <AddButton slotId={slotId} slot={slot} onAddFiles={() => fileRef.current?.click()} />
+          <AddButton
+            slotId={slotId}
+            slot={slot}
+            onAddFiles={() => fileRef.current?.click()}
+            onCommand={(skill) => {
+              const next = commandDraft(getSlot(slotId).draft, skill);
+              setDraft(next.text, next.caret, true);
+            }}
+          />
           <ModeButton slotId={slotId} mode={slot.mode} />
           <input
             ref={fileRef}
@@ -249,15 +411,15 @@ export function Composer({ slotId, slot, model, tools }: { slotId: string; slot:
           />
           <div className={s.grow} data-grow />
           <ContextMeter slotId={slotId} slot={slot} m={meter} />
-          <ModelPicker slotId={slotId} slot={slot} value={model} />
+          <ModelPicker slotId={slotId} slot={slot} value={model} openRef={openModels} />
           {slot.conversationId && (
             <button
               type="button"
               className={s.side}
               title={t("ai.side.askHint", { key: sideKey })}
               aria-label={t("ai.side.ask")}
-              disabled={!canSide}
-              onClick={askSide}
+              disabled={!canSide || resolving || menu.busy}
+              onClick={() => void submit("side")}
             >
               <Icon name="chat-teardrop-dots" size={15} />
             </button>
@@ -278,14 +440,25 @@ export function Composer({ slotId, slot, model, tools }: { slotId: string; slot:
               className={s.send}
               title={blocked ? t("ai.fit.blocked") : t("ai.send")}
               aria-label={t("ai.send")}
-              disabled={!canSend}
-              onClick={send}
+              disabled={!canSend || resolving || menu.busy}
+              onClick={() => void submit("enter")}
             >
               <Icon name="arrow-up" size={14} />
             </button>
           )}
         </div>
       </div>
+      {mcpAnchor && (
+        <McpPopover
+          slotId={slotId}
+          slot={slot}
+          anchor={mcpAnchor}
+          onClose={(restoreFocus) => {
+            setMcpAnchor(null);
+            if (restoreFocus) ref.current?.focus();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -316,7 +489,7 @@ function QueuedCard({ slotId, queued }: { slotId: string; queued: QueuedMessage 
  * under the current model the thinking levels it offers. The selector shows the level the next message is
  * sent at.
  */
-function ModelPicker({ slotId, slot, value }: { slotId: string; slot: Slot; value: AiModelRef | null }) {
+function ModelPicker({ slotId, slot, value, openRef }: { slotId: string; slot: Slot; value: AiModelRef | null; openRef: MutableRefObject<(() => void) | null> }) {
   const t = useT();
   const providers = useAi((st) => st.catalog.providers);
   const settings = useAi((st) => st.catalog.settings);
@@ -355,6 +528,13 @@ function ModelPicker({ slotId, slot, value }: { slotId: string; slot: Slot; valu
     }
     return list;
   }, [providers, value, slotId, offered, effort, t]);
+
+  // `/model` opens the selector (AI-50).
+  useEffect(() => {
+    openRef.current = () => {
+      if (ref.current && entries.length > 0) menu.openBelow(ref.current, true);
+    };
+  }, [openRef, entries, menu]);
 
   const modelName = current ? current.model.name || current.model.id : null;
   const name = modelName ?? value?.model_id ?? t("ai.model.none");

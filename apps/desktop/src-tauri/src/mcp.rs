@@ -8,8 +8,10 @@
 //!   it used `http` does not hold once another device makes it a `stdio` server; a changed
 //!   command line of a `stdio` server keeps the choice.
 //! - [`McpManager`]: one entry per server started since unlock. A server starts when a request
-//!   needs its tools ([`McpManager::offer`]) or when the user starts it, lists its tools once,
-//!   and lists them again before the next request after `tools/list_changed`. Its state
+//!   needs its tools ([`McpManager::offer`]), when the panel's `/` or `@` menu opens
+//!   ([`McpManager::warm`]), or when the user starts it. It lists its tools, prompts and resources
+//!   once, its tools again before the next request after `tools/list_changed`, and its prompts
+//!   and resources again when a menu opens after their `list_changed`. Its state
 //!   (`stopped | starting | running | failed`, the error and the stderr tail) lives in memory
 //!   and goes to the WebView as `ai://mcp-status` on every change. Locking the vault and quitting
 //!   stop every server; a server whose configuration changed restarts.
@@ -33,7 +35,9 @@ use futures::future::join_all;
 use hatoba_ai::chat::ToolDef;
 use hatoba_ai::entry::ToolStatus;
 use hatoba_ai::mcp::deferred::ListedTool;
-use hatoba_ai::mcp::{self, McpConnection, McpError, McpTool, McpTransportConfig, StderrTail};
+use hatoba_ai::mcp::{
+    self, McpConnection, McpError, McpPrompt, McpResource, McpTool, McpTransportConfig, StderrTail,
+};
 use hatoba_ai::provider::Protocol;
 use hatoba_ai::tools;
 use hatoba_core::Vault;
@@ -44,8 +48,8 @@ use serde_json::{Map, Value};
 use tokio_util::sync::CancellationToken;
 
 use crate::dto::{
-    AiTurnContext, McpServerState, McpServerStatus, McpToolAnnotations, McpToolView,
-    McpTransportView,
+    AiTurnContext, McpPromptArgumentView, McpPromptView, McpResourceView, McpServerState,
+    McpServerStatus, McpToolAnnotations, McpToolView, McpTransportView,
 };
 use crate::error::{AppError, AppResult};
 use crate::platform;
@@ -55,6 +59,12 @@ use crate::platform;
 const START_TIMEOUT: Duration = Duration::from_secs(60);
 /// How long one tool call may take.
 const CALL_TIMEOUT: Duration = Duration::from_secs(120);
+/// How long getting a prompt or reading a resource for the panel's menus may take (AI-50, AI-51).
+const FETCH_TIMEOUT: Duration = Duration::from_secs(60);
+/// The most text a prompt or resource attaches: what a whole message may attach (AI-35,
+/// `MESSAGE_MAX_BYTES` in `attachments.ts`). A larger one is refused here rather than sent to the
+/// WebView to be refused there.
+const MAX_FETCH_BYTES: usize = 512 * 1024;
 /// How long stopping every server waits for the starts in flight to end (their children are
 /// killed as soon as they see the stop).
 const START_STOP_WAIT: Duration = Duration::from_secs(5);
@@ -374,7 +384,7 @@ struct Wanted {
 }
 
 impl Wanted {
-    fn read(v: &Vault, context: &AiTurnContext) -> Self {
+    fn read(v: &Vault, disabled: &[String]) -> Self {
         let device = DeviceState::load(v);
         let servers = v.mcp_servers();
         let live: Vec<String> = servers.iter().map(|(id, _)| id.clone()).collect();
@@ -383,7 +393,7 @@ impl Wanted {
         for (id, s) in servers {
             if !device.enabled(&id, &s.transport) {
                 off.push(id);
-            } else if !context.disabled_mcp_servers.contains(&id) {
+            } else if !disabled.contains(&id) {
                 let config = transport_config(&s.transport);
                 wanted.push((id, s.name, config));
             }
@@ -409,6 +419,90 @@ pub fn tool_view(device: &DeviceState, tool: &OfferedTool) -> McpToolView {
         },
         always_allow: device.allows(&tool.server_id, &tool.tool.name),
     }
+}
+
+/// The view of a prompt (AI-50).
+fn prompt_view(prompt: &McpPrompt) -> McpPromptView {
+    McpPromptView {
+        name: prompt.name.clone(),
+        title: prompt.title.clone(),
+        description: prompt.description.clone(),
+        arguments: prompt
+            .arguments
+            .iter()
+            .map(|a| McpPromptArgumentView {
+                name: a.name.clone(),
+                description: a.description.clone(),
+                required: a.required,
+            })
+            .collect(),
+    }
+}
+
+/// The view of a resource (AI-51).
+fn resource_view(resource: &McpResource) -> McpResourceView {
+    McpResourceView {
+        uri: resource.uri.clone(),
+        name: resource.name.clone(),
+        title: resource.title.clone(),
+        description: resource.description.clone(),
+        mime_type: resource.mime_type.clone(),
+    }
+}
+
+/// The prompts and resources of a server, each listed when asked for (AI-50, AI-51). `None` for a
+/// list not asked for, or one whose listing failed: a server whose prompts or resources cannot be
+/// listed still serves its tools, so the failure is only logged, and the next menu opening lists
+/// them again.
+async fn list_extras(
+    id: &str,
+    conn: &McpConnection,
+    prompts: bool,
+    resources: bool,
+) -> (Option<Vec<McpPrompt>>, Option<Vec<McpResource>>) {
+    let prompts = async {
+        if !prompts {
+            return None;
+        }
+        conn.list_prompts()
+            .await
+            .inspect_err(|e| {
+                tracing::warn!(
+                    server_id = id,
+                    kind = error_kind(e),
+                    "MCP prompt listing failed"
+                );
+            })
+            .ok()
+    };
+    let resources = async {
+        if !resources {
+            return None;
+        }
+        conn.list_resources()
+            .await
+            .inspect_err(|e| {
+                tracing::warn!(
+                    server_id = id,
+                    kind = error_kind(e),
+                    "MCP resource listing failed"
+                );
+            })
+            .ok()
+    };
+    futures::join!(prompts, resources)
+}
+
+/// The text of a prompt or resource (`what`) of the server `server`, unless it is over
+/// [`MAX_FETCH_BYTES`], more than a message attaches (AI-35).
+fn fits_message(text: String, server: &str, what: &str) -> Result<String, String> {
+    if text.len() > MAX_FETCH_BYTES {
+        return Err(format!(
+            "the {what} of the MCP server \"{server}\" is over {} KB, more than a message can attach",
+            MAX_FETCH_BYTES / 1024
+        ));
+    }
+    Ok(text)
 }
 
 // ───────────────────────── the manager ─────────────────────────
@@ -471,6 +565,11 @@ struct ServerState {
     stderr: StderrTail,
     /// The tools from the last successful listing.
     tools: Vec<McpTool>,
+    /// The prompts and resources from the last successful listing (AI-50, AI-51).
+    prompts: Vec<McpPrompt>,
+    resources: Vec<McpResource>,
+    /// A listing of the prompts or resources runs ([`McpManager::list_menus`]); one at a time.
+    listing: bool,
 }
 
 impl Default for ServerState {
@@ -485,6 +584,9 @@ impl Default for ServerState {
             error: None,
             stderr: StderrTail::new(),
             tools: Vec::new(),
+            prompts: Vec::new(),
+            resources: Vec::new(),
+            listing: false,
         }
     }
 }
@@ -497,7 +599,7 @@ impl ServerState {
         name.clone_into(&mut self.name);
         self.config = Some(config.clone());
         self.error = None;
-        self.tools.clear();
+        self.clear_lists();
         self.stderr = StderrTail::new();
         if let Some(previous) = self.start.take() {
             previous.cancel.cancel();
@@ -523,7 +625,7 @@ impl ServerState {
         self.phase = McpServerState::Stopped;
         self.config = None;
         self.error = None;
-        self.tools.clear();
+        self.clear_lists();
         self.stderr = StderrTail::new();
         let start_ended = self.start.take().map(|start| {
             start.cancel.cancel();
@@ -540,8 +642,15 @@ impl ServerState {
     fn closed(&mut self) -> Option<McpConnection> {
         self.phase = McpServerState::Failed;
         self.error = Some(McpError::Closed.to_string());
-        self.tools.clear();
+        self.clear_lists();
         self.conn.take()
+    }
+
+    fn clear_lists(&mut self) {
+        self.tools.clear();
+        self.prompts.clear();
+        self.resources.clear();
+        self.listing = false;
     }
 }
 
@@ -632,6 +741,8 @@ impl McpManager {
                 error: None,
                 stderr: Vec::new(),
                 tools: Vec::new(),
+                prompts: Vec::new(),
+                resources: Vec::new(),
             };
         };
         let s = guard(&server.state);
@@ -641,12 +752,25 @@ impl McpManager {
             .filter(|t| t.server_id == server_id)
             .map(|t| tool_view(device, t))
             .collect();
+        let running = s.phase == McpServerState::Running;
+        let prompts = if running {
+            s.prompts.iter().map(prompt_view).collect()
+        } else {
+            Vec::new()
+        };
+        let resources = if running {
+            s.resources.iter().map(resource_view).collect()
+        } else {
+            Vec::new()
+        };
         McpServerStatus {
             server_id: server_id.to_owned(),
             state: s.phase,
             error: s.error.clone(),
             stderr: s.stderr.lines(),
             tools,
+            prompts,
+            resources,
         }
     }
 
@@ -677,7 +801,7 @@ impl McpManager {
             if !v.is_unlocked() {
                 return Offer::default();
             }
-            Wanted::read(&v, context)
+            Wanted::read(&v, &context.disabled_mcp_servers)
         };
         self.prune(vault, &live);
         self.stop_off(vault, &off);
@@ -704,19 +828,20 @@ impl McpManager {
         if !v.is_unlocked() {
             return Offer::default();
         }
-        let servers: Vec<(String, String, Vec<McpTool>)> = Wanted::read(v, context)
-            .wanted
-            .into_iter()
-            .filter_map(|(id, name, config)| {
-                let server = self.existing(&id)?;
-                let s = guard(&server.state);
-                let running = s.phase == McpServerState::Running
-                    && s.config.as_ref() == Some(&config)
-                    && s.conn.as_ref().is_some_and(|conn| !conn.is_closed());
-                let tools = running.then(|| s.tools.clone());
-                tools.map(|tools| (id, name, tools))
-            })
-            .collect();
+        let servers: Vec<(String, String, Vec<McpTool>)> =
+            Wanted::read(v, &context.disabled_mcp_servers)
+                .wanted
+                .into_iter()
+                .filter_map(|(id, name, config)| {
+                    let server = self.existing(&id)?;
+                    let s = guard(&server.state);
+                    let running = s.phase == McpServerState::Running
+                        && s.config.as_ref() == Some(&config)
+                        && s.conn.as_ref().is_some_and(|conn| !conn.is_closed());
+                    let tools = running.then(|| s.tools.clone());
+                    tools.map(|tools| (id, name, tools))
+                })
+                .collect();
         Offer::new(&servers)
     }
 
@@ -879,7 +1004,7 @@ impl McpManager {
             ended,
         } = begun;
         spawn(async move {
-            let _ended = ended.drop_guard();
+            let ended = ended.drop_guard();
             let start = async {
                 if let Some(old) = old {
                     old.shutdown().await;
@@ -952,6 +1077,12 @@ impl McpManager {
                 manager.emit(&vault, &id);
             }
             server.settled.notify_waiters();
+            drop(ended);
+            // The prompts and resources follow (AI-50, AI-51): the tools, which requests wait
+            // for, do not wait for them.
+            if current {
+                manager.list_menus(&vault, &id).await;
+            }
         });
     }
 
@@ -992,6 +1123,192 @@ impl McpManager {
         drop(dead);
         self.emit(vault, id);
         server.settled.notify_waiters();
+    }
+
+    // ---- the panel's menus (AI-50, AI-51) ----
+
+    /// The panel's `/` or `@` menu opened: starts the servers a conversation with `disabled`
+    /// switched off would offer the tools of, as its next message would ([`Self::offer`]), and
+    /// lists the prompts and resources of the running ones that are to be listed
+    /// ([`Self::list_menus`]). Returns at once; `ai://mcp-status` brings what changes.
+    pub fn warm(&self, vault: &SharedVault, disabled: Vec<String>) {
+        let (manager, vault) = (self.clone(), Arc::clone(vault));
+        spawn(async move {
+            let Wanted { wanted, live, off } = {
+                let v = guard(&vault);
+                if !v.is_unlocked() {
+                    return;
+                }
+                Wanted::read(&v, &disabled)
+            };
+            manager.prune(&vault, &live);
+            manager.stop_off(&vault, &off);
+            let cancel = CancellationToken::new();
+            join_all(wanted.iter().map(|(id, name, config)| async {
+                if manager
+                    .ensure_running(&vault, id, name, config, &cancel)
+                    .await
+                    .is_some()
+                {
+                    manager.list_menus(&vault, id).await;
+                }
+            }))
+            .await;
+        });
+    }
+
+    /// Lists a running server's prompts and resources (AI-50, AI-51) that are to be listed: those
+    /// it offers and none listed yet, or whose `list_changed` arrived or whose last listing
+    /// failed. The start and a menu opening that waited for it both call this, and whichever runs
+    /// first lists them. One listing runs at a time per server, so an older list never replaces a
+    /// newer one; a `list_changed` that arrives during a listing leaves its flag set for the next.
+    /// A start or stop meanwhile drops what it listed. Sends the status when it stored a list.
+    async fn list_menus(&self, vault: &SharedVault, id: &str) {
+        let Some(server) = self.existing(id) else {
+            return;
+        };
+        let (conn, generation) = {
+            let mut s = guard(&server.state);
+            let conn = match &s.conn {
+                Some(conn) if s.phase == McpServerState::Running && !s.listing => conn.clone(),
+                _ => return,
+            };
+            s.listing = true;
+            (conn, s.generation)
+        };
+        let (prompts, resources) = (conn.prompts_changed(), conn.resources_changed());
+        let (prompts, resources) = if prompts || resources {
+            list_extras(id, &conn, prompts, resources).await
+        } else {
+            (None, None)
+        };
+        let stored = {
+            let mut s = guard(&server.state);
+            // A start or stop since has cleared the flag and the lists.
+            if s.generation != generation {
+                return;
+            }
+            s.listing = false;
+            if s.phase != McpServerState::Running {
+                return;
+            }
+            if conn.is_closed() {
+                None
+            } else {
+                let stored = prompts.is_some() || resources.is_some();
+                if let Some(prompts) = prompts {
+                    s.prompts = prompts;
+                }
+                if let Some(resources) = resources {
+                    s.resources = resources;
+                }
+                Some(stored)
+            }
+        };
+        let Some(stored) = stored else {
+            // The session ended during the listing: the server fails, as a call that finds it
+            // closed fails it, rather than showing `running` until the next request.
+            self.lost(vault, id, generation);
+            return;
+        };
+        if stored {
+            tracing::info!(server_id = id, "MCP prompts and resources listed");
+            self.emit(vault, id);
+        }
+    }
+
+    /// The server a prompt or resource is fetched from for the panel: it exists, is enabled on
+    /// this device, and its connection is live, waiting while it starts.
+    async fn fetch_connection(
+        &self,
+        vault: &SharedVault,
+        server_id: &str,
+    ) -> Result<(McpConnection, u64, String), String> {
+        let name = {
+            let v = guard(vault);
+            if !v.is_unlocked() {
+                return Err("the vault is locked".into());
+            }
+            let Some(server) = v.get(server_id).and_then(Item::as_mcp_server) else {
+                return Err("the MCP server was deleted".into());
+            };
+            if !DeviceState::load(&v).enabled(server_id, &server.transport) {
+                return Err(format!(
+                    "the MCP server \"{}\" is off on this device",
+                    server.name
+                ));
+            }
+            server.name.clone()
+        };
+        let found = self
+            .connection(vault, server_id, &CancellationToken::new())
+            .await;
+        // Deleted, turned off or locked while it started, as `call` checks right before a call.
+        {
+            let v = guard(vault);
+            if !v.is_unlocked() {
+                return Err("the vault is locked".into());
+            }
+            let enabled = v
+                .get(server_id)
+                .and_then(Item::as_mcp_server)
+                .is_some_and(|server| DeviceState::load(&v).enabled(server_id, &server.transport));
+            if !enabled {
+                return Err(format!(
+                    "the MCP server \"{name}\" was deleted or turned off"
+                ));
+            }
+        }
+        match found {
+            Ok((conn, generation)) => Ok((conn, generation, name)),
+            Err(Unavailable::Failed(error)) => Err(format!(
+                "the MCP server \"{name}\" is not available: {error}"
+            )),
+            Err(Unavailable::Stopped | Unavailable::Cancelled) => {
+                Err(format!("the MCP server \"{name}\" is not running"))
+            }
+        }
+    }
+
+    /// Gets a prompt for the panel's `/` command (AI-50): its messages as text, or why it failed.
+    pub async fn get_prompt(
+        &self,
+        vault: &SharedVault,
+        server_id: &str,
+        prompt: &str,
+        arguments: Map<String, Value>,
+    ) -> Result<String, String> {
+        let (conn, generation, name) = self.fetch_connection(vault, server_id).await?;
+        let result = conn.get_prompt(prompt, arguments, FETCH_TIMEOUT).await;
+        tracing::info!(server_id, ok = result.is_ok(), "MCP prompt fetched");
+        result
+            .map_err(|e| {
+                if e == McpError::Closed {
+                    self.lost(vault, server_id, generation);
+                }
+                format!("the MCP server \"{name}\" could not get the prompt: {e}")
+            })
+            .and_then(|text| fits_message(text, &name, "prompt"))
+    }
+
+    /// Reads a resource for the panel's `@` menu (AI-51): its text, or why it failed.
+    pub async fn read_resource(
+        &self,
+        vault: &SharedVault,
+        server_id: &str,
+        uri: &str,
+    ) -> Result<String, String> {
+        let (conn, generation, name) = self.fetch_connection(vault, server_id).await?;
+        let result = conn.read_resource(uri, FETCH_TIMEOUT).await;
+        tracing::info!(server_id, ok = result.is_ok(), "MCP resource read");
+        result
+            .map_err(|e| {
+                if e == McpError::Closed {
+                    self.lost(vault, server_id, generation);
+                }
+                format!("the MCP server \"{name}\" could not read the resource: {e}")
+            })
+            .and_then(|text| fits_message(text, &name, "resource"))
     }
 
     /// Keeps the offer a conversation's calls map back to: that of its latest request, or, once
