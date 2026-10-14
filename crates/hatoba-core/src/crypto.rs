@@ -55,6 +55,8 @@ pub const AAD_VAULT_CHECK: &str = "hatoba/vault-check/v1";
 pub const AAD_RECENT_TARGETS: &str = "hatoba/recent-targets/v1";
 /// AAD of the local-only `ai_allowances` meta value (the AI approvals saved on this device).
 pub const AAD_AI_ALLOWANCES: &str = "hatoba/ai-allowances/v1";
+/// AAD of the local-only `chatgpt_sessions` meta value (this device's ChatGPT sessions, AI-52).
+pub const AAD_CHATGPT_SESSIONS: &str = "hatoba/chatgpt-sessions/v1";
 /// AAD of the PIN key sealed under the vault key, in the local-only `pin` meta value (SEC-11).
 pub const AAD_PIN_KEY: &str = "hatoba/pin-key/v1";
 /// AAD of the vault key wrapped by the PIN key (SEC-11), held in memory or by the OS.

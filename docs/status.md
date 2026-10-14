@@ -119,6 +119,7 @@ A contributor tried these by hand on an Apple Silicon Mac; the maintainer has no
 | ID | Name | Status | Notes |
 |---|---|---|---|
 | AI-01…06 | Providers, models, Test Connection, model selector and thinking level, reasoning | 🟡 | Adapter tests replay recorded Chat Completions, Anthropic Messages, and Responses streams from a mock server, and check the thinking level's fields for each protocol, model, and level, and the retry without them. Not yet tried against the real providers |
+| AI-52 | Sign in with ChatGPT: **Continue with ChatGPT**, this device's session, sign-out, the ChatGPT route's requests and errors | 🟡 | Tests run the sign-in, the code exchange and the ID token check, refresh rotation with one refresh at a time, ended and revoked sessions, usage limits and the route's other errors, namespaced tool calls, and the streaming judge, Test Connection and model list against a mock of OpenAI's endpoints; the settings were tried with the mock backend. Not yet tried with a real ChatGPT Plus or Pro account |
 | AI-07…09 | One conversation per tab, attaching conversations | ✅ | A conversation with no connected tab is offered every tool but the terminal ones |
 | AI-07 | System notifications when a conversation finishes a turn or waits for approval | 🟡 | Tried on Windows 11: in the tray, minimized, focused, and with the setting off. The banner and a click on it not yet tried (Do Not Disturb was on), nor Linux or macOS |
 | AI-10 | Terminal selection and connection diagnostics as attachments, **Ask AI** | ✅ | |
