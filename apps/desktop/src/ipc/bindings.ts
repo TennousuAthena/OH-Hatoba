@@ -213,13 +213,21 @@ export const commands = {
 	localClose: (sessionId: string) => __TAURI_INVOKE<null>("local_close", { sessionId }),
 	hostkeyRespond: (requestId: string, accept: boolean) => __TAURI_INVOKE<void>("hostkey_respond", { requestId, accept }),
 	authPromptRespond: (requestId: string, answers: string[] | null) => __TAURI_INVOKE<void>("auth_prompt_respond", { requestId, answers }),
-	forwardsList: (hostId: string) => __TAURI_INVOKE<ForwardView[]>("forwards_list", { hostId }),
+	/**  Every host's forwards, by host and then by bind and destination port. */
+	forwardsListAll: () => __TAURI_INVOKE<ForwardView[]>("forwards_list_all"),
 	forwardSave: (input: ForwardInput) => __TAURI_INVOKE<ForwardView>("forward_save", { input }),
+	/**  Deletes the rule, and stops it where it runs. */
 	forwardDelete: (id: string) => __TAURI_INVOKE<null>("forward_delete", { id }),
-	forwardStart: (sessionId: string, forwardId: string) => __TAURI_INVOKE<number>("forward_start", { sessionId, forwardId }),
-	forwardStop: (sessionId: string, forwardId: string) => __TAURI_INVOKE<null>("forward_stop", { sessionId, forwardId }),
-	/**  Forwards currently running on a session: `(forward_id, local_port)`. */
-	forwardsActive: (sessionId: string) => __TAURI_INVOKE<([string, number])[]>("forwards_active", { sessionId }),
+	/**
+	 *  Starts the saved forward on the host's connection (SSH-16), which signs in with `options`
+	 *  when no tab or forward has it open, and returns the port it listens on (on the server for a
+	 *  remote forward).
+	 */
+	forwardStart: (hostId: string, forwardId: string, options: ForwardOptions) => __TAURI_INVOKE<number>("forward_start", { hostId, forwardId, options }),
+	/**  Stops the forward; the host's connection closes when no tab or forward is left on it. */
+	forwardStop: (hostId: string, forwardId: string) => __TAURI_INVOKE<void>("forward_stop", { hostId, forwardId }),
+	/**  Every saved host's open connection, with the forwards on it. */
+	connectionsList: () => __TAURI_INVOKE<ConnectionsEvent>("connections_list"),
 	sftpHome: (sessionId: string) => __TAURI_INVOKE<string>("sftp_home", { sessionId }),
 	sftpList: (sessionId: string, path: string) => __TAURI_INVOKE<FileEntry[]>("sftp_list", { sessionId, path }),
 	/**  SFTP-02 download. `local_path` comes from the native save dialog. */
@@ -571,7 +579,8 @@ export const events = {
 	appNotificationClick: makeEvent<NotificationTarget>("app://notification-click"),
 	cliActivity: makeEvent<CliActivityEvent>("cli://activity"),
 	sshAuthPrompt: makeEvent<AuthPrompt>("ssh://auth-prompt"),
-	sshForward: makeEvent<ForwardStatusEvent>("ssh://forward"),
+	sshConnections: makeEvent<ConnectionsEvent>("ssh://connections"),
+	sshForwardsLost: makeEvent<ForwardsLostEvent>("ssh://forwards-lost"),
 	sshHostkeyPrompt: makeEvent<HostKeyPrompt>("ssh://hostkey-prompt"),
 	sshState: makeEvent<SessionStateEvent>("ssh://state"),
 	syncStatus: makeEvent<SyncStatus>("sync://status"),
@@ -1427,6 +1436,15 @@ export type ConnectOptions = {
 	passphrase: string | null,
 };
 
+/**
+ *  SSH-16: every saved host's open connection, sent whenever one opens or closes or its forwards
+ *  change. `version` grows with each change, so a list read earlier never replaces a newer one.
+ */
+export type ConnectionsEvent = {
+	version: number,
+	connections: HostConnectionView[],
+};
+
 export type CursorChoice = "block" | "bar" | "underline";
 
 export type D1Database = {
@@ -1613,6 +1631,15 @@ export type ErrorCode = "locked" | "not_initialized" | "already_initialized" | "
 /**  A downloaded update does not carry a valid signature from the release key (spec §11). */
 "update_signature" | "cancelled" | "io" | "internal";
 
+/**
+ *  A forward that failed to start on its host's connection, until it starts or stops: a port in
+ *  use, say.
+ */
+export type FailedForwardView = {
+	forward_id: string,
+	error: AppError,
+};
+
 export type FileEntry = {
 	name: string,
 	path: string,
@@ -1626,34 +1653,60 @@ export type FileEntry = {
 export type ForwardInput = {
 	id: string | null,
 	host_id: string,
+	kind: ForwardKind,
 	bind_address: string,
 	bind_port: number,
+	/**  Ignored for a dynamic forward. */
 	dest_host: string,
 	dest_port: number,
 	auto_start: boolean,
 };
 
-export type ForwardState = "running" | "stopped" | "failed";
+/**  Which way a forward goes. */
+export type ForwardKind = 
+/**  `ssh -L`: listens on this computer, and the server connects to the destination. */
+"local" | 
+/**  `ssh -R`: listens on the server, and this computer connects to the destination. */
+"remote" | 
+/**  `ssh -D`: a SOCKS proxy on this computer, whose connections the server opens. */
+"dynamic";
 
-/**  A forward's state on one live session. */
-export type ForwardStatusEvent = {
-	session_id: string,
-	forward_id: string,
-	state: ForwardState,
-	/**  The actually bound local port (differs from `bind_port` when it was 0). */
-	local_port: number | null,
-	error: string | null,
+/**
+ *  One-off credentials for the connection a forward's start opens (SSH-03): used once, never
+ *  stored.
+ */
+export type ForwardOptions = {
+	password: string | null,
+	passphrase: string | null,
 };
 
-/**  A saved local (`-L`) forward. Remote and dynamic forwards are P2. */
+/**
+ *  A saved forward. The bind address and port are on this computer, or on the server for a
+ *  remote forward.
+ */
 export type ForwardView = {
 	id: string,
 	host_id: string,
+	kind: ForwardKind,
 	bind_address: string,
 	bind_port: number,
+	/**
+	 *  As the server reaches it, or as this computer does for a remote forward; empty and 0 for
+	 *  a dynamic one.
+	 */
 	dest_host: string,
 	dest_port: number,
 	auto_start: boolean,
+};
+
+/**
+ *  FWD-05: a host's connection ended on its own with forwards on it, which stopped with it.
+ *  Closing it with nothing left on it, the lock (SEC-03) and quitting send nothing.
+ */
+export type ForwardsLostEvent = {
+	host_id: string,
+	host_name: string,
+	error: AppError,
 };
 
 export type GenerateAlgorithm = "ed25519" | "rsa";
@@ -1675,6 +1728,16 @@ export type GroupView = {
 	 *  until turned off.
 	 */
 	dashboard: boolean,
+};
+
+/**  SSH-16: a saved host's open connection, which its terminal tabs and forwards share. */
+export type HostConnectionView = {
+	host_id: string,
+	/**  The host's name when it connected. */
+	host_name: string,
+	/**  By port. */
+	forwards: RunningForwardView[],
+	failed: FailedForwardView[],
 };
 
 /**  One of a host's environment variables (SSH-14). */
@@ -2103,11 +2166,13 @@ export type NotificationInput = {
 
 /**
  *  What a notification is about, which a click on it shows: a tab, and in it a conversation
- *  (AI-07). The click brings the window back and sends this to the WebView.
+ *  (AI-07), or a saved host whose forwards stopped (FWD-05). The click brings the window back and
+ *  sends this to the WebView.
  */
 export type NotificationTarget = {
 	tab: string | null,
 	conversation_id: string | null,
+	host_id: string | null,
 };
 
 /**  A package manager that installs Hatoba from the GitHub release and updates it itself. */
@@ -2173,6 +2238,28 @@ export type QuickTarget = {
 };
 
 export type RightClick = "copy_paste" | "menu";
+
+/**  A forward running on its host's connection. */
+export type RunningForwardView = {
+	forward_id: string,
+	kind: ForwardKind,
+	/**
+	 *  The port it actually listens on (differs from `bind_port` when that was 0), on the server
+	 *  for a remote forward.
+	 */
+	port: number,
+	/**
+	 *  Where it is reached: from this computer, `localhost:<port>` or the address it listens on
+	 *  when that is one interface's; on the server for a remote forward, the address it listens
+	 *  on there.
+	 */
+	address: string,
+	/**
+	 *  `host:port` it leads to, as the server reaches it, or as this computer does for a remote
+	 *  forward; empty for a dynamic one.
+	 */
+	dest: string,
+};
 
 export type SearchKind = "brave" | "tavily" | "searxng";
 
@@ -2472,6 +2559,14 @@ export type TrayMenuInput = {
 	 */
 	update: string | null,
 	can_update: boolean,
+	/**  FWD-05: the heading over the running forwards, and each one's items. */
+	forwards: string,
+	copy_address: string,
+	stop_forward: string,
+	/**  Where a remote forward listens, with `{addr}` for its address on the server (FWD-03). */
+	on_server: string,
+	/**  What a dynamic forward is (FWD-04). */
+	socks_proxy: string,
 };
 
 /**  WIN-10: the tray menu's **Update to vX.Y.Z** was clicked. */

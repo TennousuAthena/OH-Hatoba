@@ -1211,6 +1211,14 @@ pub struct TrayMenuInput {
     /// such item.
     pub update: Option<String>,
     pub can_update: bool,
+    /// FWD-05: the heading over the running forwards, and each one's items.
+    pub forwards: String,
+    pub copy_address: String,
+    pub stop_forward: String,
+    /// Where a remote forward listens, with `{addr}` for its address on the server (FWD-03).
+    pub on_server: String,
+    /// What a dynamic forward is (FWD-04).
+    pub socks_proxy: String,
 }
 
 /// A system notification (AI-07). The WebView sends one only while the window is not focused.
@@ -1222,12 +1230,14 @@ pub struct NotificationInput {
 }
 
 /// What a notification is about, which a click on it shows: a tab, and in it a conversation
-/// (AI-07). The click brings the window back and sends this to the WebView.
+/// (AI-07), or a saved host whose forwards stopped (FWD-05). The click brings the window back and
+/// sends this to the WebView.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type, tauri_specta::Event)]
 #[tauri_specta(event_name = "app://notification-click")]
 pub struct NotificationTarget {
     pub tab: Option<String>,
     pub conversation_id: Option<String>,
+    pub host_id: Option<String>,
 }
 
 /// A second launch handed its arguments to this window (HOST-13); `launch_take` returns them.
@@ -1335,15 +1345,52 @@ pub enum LockReason {
     Sleep,
 }
 
-// ───────────────────────── Port forwarding (FWD-01/02) ─────────────────────────
+// ───────────────────────── Port forwarding (FWD-01..05) ─────────────────────────
 
-/// A saved local (`-L`) forward. Remote and dynamic forwards are P2.
+/// Which way a forward goes.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ForwardKind {
+    /// `ssh -L`: listens on this computer, and the server connects to the destination.
+    Local,
+    /// `ssh -R`: listens on the server, and this computer connects to the destination.
+    Remote,
+    /// `ssh -D`: a SOCKS proxy on this computer, whose connections the server opens.
+    Dynamic,
+}
+
+impl From<hatoba_core::model::ForwardKind> for ForwardKind {
+    fn from(kind: hatoba_core::model::ForwardKind) -> Self {
+        use hatoba_core::model::ForwardKind as K;
+        match kind {
+            K::Local => Self::Local,
+            K::Remote => Self::Remote,
+            K::Dynamic => Self::Dynamic,
+        }
+    }
+}
+
+impl From<ForwardKind> for hatoba_core::model::ForwardKind {
+    fn from(kind: ForwardKind) -> Self {
+        match kind {
+            ForwardKind::Local => Self::Local,
+            ForwardKind::Remote => Self::Remote,
+            ForwardKind::Dynamic => Self::Dynamic,
+        }
+    }
+}
+
+/// A saved forward. The bind address and port are on this computer, or on the server for a
+/// remote forward.
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct ForwardView {
     pub id: String,
     pub host_id: String,
+    pub kind: ForwardKind,
     pub bind_address: String,
     pub bind_port: u16,
+    /// As the server reaches it, or as this computer does for a remote forward; empty and 0 for
+    /// a dynamic one.
     pub dest_host: String,
     pub dest_port: u16,
     pub auto_start: bool,
@@ -1353,31 +1400,76 @@ pub struct ForwardView {
 pub struct ForwardInput {
     pub id: Option<String>,
     pub host_id: String,
+    pub kind: ForwardKind,
     pub bind_address: String,
     pub bind_port: u16,
+    /// Ignored for a dynamic forward.
     pub dest_host: String,
     pub dest_port: u16,
     pub auto_start: bool,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Type, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum ForwardState {
-    Running,
-    Stopped,
-    Failed,
+/// One-off credentials for the connection a forward's start opens (SSH-03): used once, never
+/// stored.
+#[derive(Clone, Default, Deserialize, Type)]
+pub struct ForwardOptions {
+    pub password: Option<String>,
+    pub passphrase: Option<String>,
 }
 
-/// A forward's state on one live session.
-#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "ssh://forward")]
-pub struct ForwardStatusEvent {
-    pub session_id: String,
+/// A forward running on its host's connection.
+#[derive(Debug, Clone, Serialize, Type)]
+pub struct RunningForwardView {
     pub forward_id: String,
-    pub state: ForwardState,
-    /// The actually bound local port (differs from `bind_port` when it was 0).
-    pub local_port: Option<u16>,
-    pub error: Option<String>,
+    pub kind: ForwardKind,
+    /// The port it actually listens on (differs from `bind_port` when that was 0), on the server
+    /// for a remote forward.
+    pub port: u16,
+    /// Where it is reached: from this computer, `localhost:<port>` or the address it listens on
+    /// when that is one interface's; on the server for a remote forward, the address it listens
+    /// on there.
+    pub address: String,
+    /// `host:port` it leads to, as the server reaches it, or as this computer does for a remote
+    /// forward; empty for a dynamic one.
+    pub dest: String,
+}
+
+/// A forward that failed to start on its host's connection, until it starts or stops: a port in
+/// use, say.
+#[derive(Debug, Clone, Serialize, Type)]
+pub struct FailedForwardView {
+    pub forward_id: String,
+    pub error: crate::error::AppError,
+}
+
+/// SSH-16: a saved host's open connection, which its terminal tabs and forwards share.
+#[derive(Debug, Clone, Serialize, Type)]
+pub struct HostConnectionView {
+    pub host_id: String,
+    /// The host's name when it connected.
+    pub host_name: String,
+    /// By port.
+    pub forwards: Vec<RunningForwardView>,
+    pub failed: Vec<FailedForwardView>,
+}
+
+/// SSH-16: every saved host's open connection, sent whenever one opens or closes or its forwards
+/// change. `version` grows with each change, so a list read earlier never replaces a newer one.
+#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
+#[tauri_specta(event_name = "ssh://connections")]
+pub struct ConnectionsEvent {
+    pub version: u64,
+    pub connections: Vec<HostConnectionView>,
+}
+
+/// FWD-05: a host's connection ended on its own with forwards on it, which stopped with it.
+/// Closing it with nothing left on it, the lock (SEC-03) and quitting send nothing.
+#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
+#[tauri_specta(event_name = "ssh://forwards-lost")]
+pub struct ForwardsLostEvent {
+    pub host_id: String,
+    pub host_name: String,
+    pub error: crate::error::AppError,
 }
 
 // ───────────────────────── AI assistant (§13) ─────────────────────────

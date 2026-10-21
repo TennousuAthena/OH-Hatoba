@@ -224,6 +224,8 @@ pub fn host_delete(app: AppHandle, state: State<'_, AppState>, id: String) -> Ap
         Ok(())
     })?;
     sync::local_change(&app);
+    // FWD-05: and stop where they run.
+    crate::connection::forget_host(&app, &id);
     Ok(())
 }
 

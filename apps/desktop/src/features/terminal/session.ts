@@ -25,10 +25,9 @@ import {
 } from "@/ipc/types";
 import { isMac } from "@/lib/platform";
 import { openExternal, readClipboard, writeClipboard } from "./clipboard";
-import { dropSessionForwards, syncActiveForwards } from "./forwards";
 import { clearInfo, getInfo, patchInfo } from "./info";
 import { confirmMultilinePaste } from "./paste";
-import { askSecret, cancelSessionPrompts } from "./prompts";
+import { askPassword, askSecret, cancelSessionPrompts } from "./prompts";
 import { searchColors } from "./schemes";
 import { resolveScheme, terminalOptions, useTermSettings } from "./theme";
 
@@ -68,6 +67,11 @@ export function ensureSession(tabId: string): LiveSession | null {
   return session;
 }
 
+/** The backend sessions of the tabs connected to a saved host. */
+export function hostSessionIds(hostId: string): string[] {
+  return [...byTab.values()].flatMap((x) => (x.hostId === hostId && x.sessionId ? [x.sessionId] : []));
+}
+
 /** Route an `ssh://state` event to the tab that owns the session. */
 export function routeStateEvent(ev: SessionStateEvent) {
   const session = bySession.get(ev.session_id);
@@ -105,8 +109,13 @@ const LOCAL_IO: SessionIo = {
   close: (sid) => api.local_close(sid),
 };
 
-function needsPassphrase(err: AppError): boolean {
+export function needsPassphrase(err: AppError): boolean {
   return err.code === "key_parse" && (err.key_kind === "passphrase_required" || err.key_kind === "wrong_passphrase");
+}
+
+/** An "ask every time" host connected without its password (SSH-03). */
+export function needsPassword(err: AppError): boolean {
+  return err.code === "invalid_input" && err.field === "password";
 }
 
 /**
@@ -319,7 +328,7 @@ export class LiveSession {
     }
 
     let passphrase = creds?.passphrase ?? null;
-    const password = creds?.password ?? null;
+    let password = creds?.password ?? null;
     for (let round = 0; ; round++) {
       const sentSize = { cols: this.term.cols, rows: this.term.rows };
       const options = { cols: sentSize.cols, rows: sentSize.rows, password, passphrase };
@@ -340,9 +349,18 @@ export class LiveSession {
       } catch (e) {
         if (gen !== this.gen || this.disposed) return;
         const err = toAppError(e);
+        const host = hostById(this.hostId);
+        if (needsPassword(err) && password === null && host?.auth_kind === "ask" && round < 3) {
+          // SSH-16: the host's connection closed after the tab skipped asking for its password.
+          const answer = await askPassword(host);
+          if (gen !== this.gen || this.disposed) return;
+          if (answer !== null) {
+            password = answer;
+            continue;
+          }
+        }
         if (needsPassphrase(err) && round < 3) {
           // The backend has no (or a wrong) saved passphrase: ask once, use it, forget it.
-          const host = hostById(this.hostId);
           const answer = await askSecret({
             kind: "passphrase",
             hostName: host?.name ?? "",
@@ -388,7 +406,6 @@ export class LiveSession {
       // A saved host's last connected time and server OS; a quick connection's recent targets.
       if (this.target) void useRecentTargets.getState().load();
       else void useVaultData.getState().reloadHosts().catch(() => {});
-      void syncActiveForwards(sid); // auto-start forwards (FWD-02) may be running already
     }
     this.sendResize(); // the view may have been resized while connecting
     const early = earlyEvents.get(sid);
@@ -414,10 +431,7 @@ export class LiveSession {
     if (this.status !== "connected") return;
     const sid = this.sessionId;
     this.sessionId = null;
-    if (sid) {
-      useTransfers.getState().purge(sid);
-      dropSessionForwards(sid);
-    }
+    if (sid) useTransfers.getState().purge(sid);
     patchInfo(this.tabId, { reason });
     this.term.write("\x1b[?25l");
     this.setStatus("disconnected");
@@ -494,7 +508,6 @@ export class LiveSession {
     if (old) {
       this.sessionId = null;
       useTransfers.getState().purge(old);
-      dropSessionForwards(old);
       void this.io.close(old).catch(() => {});
     }
     this.releaseSession();
@@ -523,10 +536,7 @@ export class LiveSession {
     const sid = this.sessionId;
     this.sessionId = null;
     const closing = sid ? this.io.close(sid).catch(() => {}) : null;
-    if (sid) {
-      useTransfers.getState().purge(sid);
-      dropSessionForwards(sid);
-    }
+    if (sid) useTransfers.getState().purge(sid);
     this.releaseSession();
     window.clearTimeout(this.fitTimer);
     this.observer?.disconnect();

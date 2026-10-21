@@ -162,30 +162,51 @@ The labels that these files name in English, as the interface shows them in Japa
 | en | ja |
 |---|---|
 | Port Forwarding | ポートフォワーディング |
+| No port forwards yet | ポートフォワーディングがまだありません |
 | Add Forward… | 転送を追加… |
 | Add Port Forward | ポートフォワーディングを追加 |
+| Host | ホスト |
+| Choose a host. | ホストを選択してください。 |
 | Edit Port Forward | ポートフォワーディングを編集 |
 | Add | 追加 |
+| Type | 種類 |
+| Local | ローカル |
+| Remote | リモート |
+| Dynamic (SOCKS) | ダイナミック（SOCKS） |
 | Local address | ローカルアドレス |
+| Server address | サーバーのアドレス |
 | Port | ポート |
 | Destination | 転送先 |
 | Start when this host connects | このホストに接続したときに開始 |
 | Auto-start | 自動起動 |
 | auto | 自動 |
+| {addr} on the server | サーバーの {addr} |
+| SOCKS proxy | SOCKS プロキシ |
 | Edit | 編集 |
 | Delete | 削除 |
 | Save | 保存 |
 
-### Start and stop in a session
+### Start and stop
 
 | en | ja |
 |---|---|
 | Start | 開始 |
+| Port Forwarding | ポートフォワーディング |
 | Stop | 停止 |
 | Retry | 再試行 |
 | Manage Port Forwarding… | ポートフォワーディングを管理… |
-| This host has no port forwards yet. | このホストにはポートフォワーディングがまだありません。 |
 | Can’t read the port forwards. | ポートフォワーディングを読み込めません。 |
+
+### Keep running in the background
+
+| en | ja |
+|---|---|
+| Close Button | ウィンドウを閉じるとき |
+| Disconnect all sessions when locked | ロック時にすべてのセッションを切断 |
+| Port Forwarding | ポートフォワーディング |
+| Copy Address | アドレスをコピー |
+| Stop | 停止 |
+| Port forwarding stopped. {reason} | ポートフォワーディングが停止しました。{reason} |
 
 ## `references/troubleshooting-connections.md`
 

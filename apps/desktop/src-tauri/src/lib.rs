@@ -4,6 +4,7 @@
 mod ai;
 mod cli_access;
 mod commands;
+mod connection;
 mod convert;
 mod dashboard;
 mod deploy;
@@ -129,12 +130,12 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             local_cmd::local_close,
             ssh_cmd::hostkey_respond,
             ssh_cmd::auth_prompt_respond,
-            forwards::forwards_list,
+            forwards::forwards_list_all,
             forwards::forward_save,
             forwards::forward_delete,
             forwards::forward_start,
             forwards::forward_stop,
-            forwards::forwards_active,
+            forwards::connections_list,
             sftp::sftp_home,
             sftp::sftp_list,
             sftp::sftp_download,
@@ -256,7 +257,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             dto::AuthPrompt,
             dto::SessionStateEvent,
             dto::TransferProgressEvent,
-            dto::ForwardStatusEvent,
+            dto::ConnectionsEvent,
+            dto::ForwardsLostEvent,
             dto::McpServerStatus,
             dto::WindowChromeEvent,
             dto::LaunchEvent,

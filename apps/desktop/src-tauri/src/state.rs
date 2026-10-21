@@ -9,6 +9,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::ai::AiManager;
 use crate::cli_access::CliAccess;
+use crate::connection::Connections;
 use crate::dashboard::Dashboard;
 use crate::deploy::Deployments;
 use crate::dropped::DroppedPaths;
@@ -27,6 +28,8 @@ pub struct AppState {
     pub vault: SharedVault,
     pub secrets: Arc<KeyringStore>,
     pub ssh: SshManager,
+    /// Each saved host's connection, which its terminal tabs and forwards share (SSH-16).
+    pub connections: Connections,
     /// Local terminal tabs (§7.5).
     pub local: LocalManager,
     /// The dashboard's background connections and readers (HOST-14).
@@ -59,6 +62,7 @@ impl AppState {
             vault,
             secrets: Arc::new(KeyringStore),
             ssh: SshManager::default(),
+            connections: Connections::default(),
             local: LocalManager::default(),
             dashboard: Dashboard::default(),
             sync: SyncController::default(),

@@ -61,7 +61,7 @@ Other labels: **Username**, **Organization & Network**.
 - **Test Connection** connects with the current form values (saved or not), authenticates, checks the host key (you may be asked to trust it), shows the latency, and disconnects. It does not save the host.
 - **Delete Host** is at the bottom of the editor for an existing host.
 - **Notes** are for you only. **AI Notes** go to the AI assistant in every request of a conversation on the host; see `references/ai-instructions.md`.
-- **Port Forwarding** in the editor lists the host's forwards; see `references/port-forwarding.md`. A new host must be saved before forwards can be added.
+- A host's port forwards are on the **Port Forwarding** page in the sidebar, not in the editor; see `references/port-forwarding.md`.
 - **Environment Variables** are sent to the server when a terminal opens; see Environment variables below.
 
 ## Authentication methods
@@ -104,7 +104,7 @@ A connection opens a new terminal tab (orange dot while connecting). The connect
 
 - First connection to a server: compare the shown fingerprint with the administrator's, then **Trust and Connect** (saved to the vault and synced) or **Cancel**.
 - **New host key for …** appears when a hop offers none of the key types saved for it, and **Host key has changed** blocks a saved type's changed key (**Disconnect** is the default). See `references/troubleshooting-connections.md` for both.
-- **Ask Each Time** hosts show a password prompt; **Connect** continues. A wrong key passphrase asks again.
+- **Ask Each Time** hosts show a password prompt when a connection opens; its tabs and forwards share it. **Connect** continues. A wrong key passphrase asks again.
 
 Other labels: **Fingerprint**, **Trusted fingerprint**, **Fingerprint received now**, **Update Fingerprint and Connect**, **Key passphrase**.
 

@@ -37,6 +37,7 @@ import type {
   CliActivity,
   CliCommandView,
   ConflictView,
+  ConnectionsEvent,
   ConnectOptions,
   DashboardEvent,
   DeployOutcome,
@@ -49,6 +50,7 @@ import type {
   EventMap,
   FileEntry,
   ForwardInput,
+  ForwardOptions,
   ForwardView,
   GroupInput,
   GroupView,
@@ -242,15 +244,19 @@ export interface HatobaApi {
   /** Ends the shell and the console programs it started. */
   local_close(session_id: string): Promise<void>;
 
-  // port forwarding (FWD-01/02)
-  forwards_list(host_id: string): Promise<ForwardView[]>;
+  // port forwarding (FWD-01..05)
+  /** Every host's forwards, by host. */
+  forwards_list_all(): Promise<ForwardView[]>;
   forward_save(input: ForwardInput): Promise<ForwardView>;
   forward_delete(id: string): Promise<void>;
-  /** Starts a saved forward on a live session; resolves to the bound local port. */
-  forward_start(session_id: string, forward_id: string): Promise<number>;
-  forward_stop(session_id: string, forward_id: string): Promise<void>;
-  /** `[forward_id, local_port]` pairs running on a session. */
-  forwards_active(session_id: string): Promise<[string, number][]>;
+  /**
+   * Starts a saved forward on the host's connection (SSH-16), which signs in with `options` when no tab or forward
+   * has it open; resolves to the port it listens on (on the server for a remote forward).
+   */
+  forward_start(host_id: string, forward_id: string, options: ForwardOptions): Promise<number>;
+  /** The host's connection closes when no tab or forward is left on it. */
+  forward_stop(host_id: string, forward_id: string): Promise<void>;
+  connections_list(): Promise<ConnectionsEvent>;
 
   // sftp
   sftp_home(session_id: string): Promise<string>;

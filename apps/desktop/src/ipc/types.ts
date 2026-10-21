@@ -510,24 +510,30 @@ export const FRAME_ERROR = 2;
 /** The backend session id, sent before connecting, so a tab can answer its prompts if it closes. */
 export const FRAME_SESSION = 3;
 
-// ───────────────────────── Port forwarding (FWD-01/02) ─────────────────────────
+// ───────────────────────── Port forwarding (FWD-01..05) ─────────────────────────
 
-/** A saved local (`-L`) forward. Remote / dynamic forwards are P2. */
+/** `-L` listens here (FWD-01), `-R` on the server (FWD-03), `-D` is a SOCKS proxy here (FWD-04). */
+export type ForwardKind = "local" | "remote" | "dynamic";
+
+/** A saved forward. The bind address and port are on this computer, or on the server for a remote forward. */
 export interface ForwardView {
   id: string;
   host_id: string;
+  kind: ForwardKind;
   bind_address: string;
-  /** 0 = pick a free port. */
+  /** 0 = pick a free port (the server picks for a remote forward). */
   bind_port: number;
+  /** Empty and 0 for a dynamic forward. */
   dest_host: string;
   dest_port: number;
-  /** FWD-02: start whenever the host connects. */
+  /** FWD-02: start whenever Hatoba connects to the host. */
   auto_start: boolean;
 }
 
 export interface ForwardInput {
   id: string | null;
   host_id: string;
+  kind: ForwardKind;
   bind_address: string;
   bind_port: number;
   dest_host: string;
@@ -535,14 +541,54 @@ export interface ForwardInput {
   auto_start: boolean;
 }
 
-export type ForwardState = "running" | "stopped" | "failed";
+/** One-off credentials for the connection a forward's start opens (SSH-03). */
+export interface ForwardOptions {
+  password: string | null;
+  passphrase: string | null;
+}
 
-export interface ForwardStatusEvent {
-  session_id: string;
+/** A forward running on its host's connection. */
+export interface RunningForwardView {
   forward_id: string;
-  state: ForwardState;
-  local_port: number | null;
-  error: string | null;
+  kind: ForwardKind;
+  /** Where it listens: on the server for a remote forward. */
+  port: number;
+  /**
+   * Where it is reached: from this computer, `localhost:<port>` or the address it listens on when that is one
+   * interface's; for a remote forward, the address it listens on at the server.
+   */
+  address: string;
+  /** `host:port` it leads to; empty for a dynamic forward. */
+  dest: string;
+}
+
+/** A forward that failed to start on its host's connection, until it starts or stops. */
+export interface FailedForwardView {
+  forward_id: string;
+  error: AppError;
+}
+
+/** SSH-16: a saved host's open connection, which its terminal tabs and forwards share. */
+export interface HostConnectionView {
+  host_id: string;
+  /** The host's name when it connected. */
+  host_name: string;
+  /** By port. */
+  forwards: RunningForwardView[];
+  failed: FailedForwardView[];
+}
+
+/** SSH-16: every saved host's open connection; `version` grows with each change. */
+export interface ConnectionsEvent {
+  version: number;
+  connections: HostConnectionView[];
+}
+
+/** FWD-05: a host's connection ended on its own with forwards on it, which stopped with it. */
+export interface ForwardsLostEvent {
+  host_id: string;
+  host_name: string;
+  error: AppError;
 }
 
 // ───────────────────────── SFTP ─────────────────────────
@@ -867,6 +913,14 @@ export interface TrayMenuInput {
   /** **Update to vX.Y.Z** while a check has found a newer release; null leaves the item out. */
   update: string | null;
   can_update: boolean;
+  /** FWD-05: the heading over the running forwards, and each one's items. */
+  forwards: string;
+  copy_address: string;
+  stop_forward: string;
+  /** FWD-03: where a remote forward listens, with `{addr}` for its address on the server. */
+  on_server: string;
+  /** FWD-04: what a dynamic forward is. */
+  socks_proxy: string;
 }
 
 /** AI-07: a system notification, sent only while the window is not focused. */
@@ -876,10 +930,14 @@ export interface NotificationInput {
   target: NotificationTarget;
 }
 
-/** AI-07: what a notification is about, which a click on it shows: a tab, and in it a conversation. */
+/**
+ * What a notification is about, which a click on it shows: a tab, and in it a conversation (AI-07), or a saved
+ * host whose forwards stopped (FWD-05).
+ */
 export interface NotificationTarget {
   tab: string | null;
   conversation_id: string | null;
+  host_id: string | null;
 }
 
 /** Device-local state of the sidebar's GitHub star prompt (spec §9). */
@@ -1690,7 +1748,9 @@ export interface EventMap {
   "ssh://auth-prompt": AuthPrompt;
   "ssh://state": SessionStateEvent;
   "transfer://progress": TransferProgressEvent;
-  "ssh://forward": ForwardStatusEvent;
+  /** SSH-16: a host's connection opened or closed, or its forwards changed. */
+  "ssh://connections": ConnectionsEvent;
+  "ssh://forwards-lost": ForwardsLostEvent;
   /** An MCP server started, stopped, failed or relisted its tools (AI-32). */
   "ai://mcp-status": McpServerStatus;
   "window://chrome": WindowChromeEvent;

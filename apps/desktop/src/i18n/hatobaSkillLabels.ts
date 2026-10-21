@@ -33,7 +33,7 @@ export const AREAS: Area[] = [
           "sidebar.sync", "tray.lock", "tabs.newMenu", "terminal.local.thisComputer", "tabs.newTab", "tabs.close",
           "ai.show", "ai.hide", "window.minimize", "window.maximize", "window.restore", "btn.close", "tray.open",
           "close.tray", "close.quit", "terminal.status.connected", "dashboard.state.connecting",
-          "terminal.status.failed", "terminal.status.disconnected", "terminal.find", "hosts.edit.sec.fwd",
+          "terminal.status.failed", "terminal.status.disconnected", "terminal.find", "sidebar.forwards",
           "terminal.sftp", "terminal.more", "settings.tab.general", "settings.tab.appearance", "settings.tab.terminal",
           "settings.tab.proxies", "settings.tab.security", "aiSettings.tab", "settings.tab.about",
         ],
@@ -62,7 +62,7 @@ export const AREAS: Area[] = [
         "The host editor": [
           "hosts.editHost", "hosts.edit.sec.basic", "hosts.f.port", "hosts.f.user", "hosts.edit.sec.auth",
           "hosts.f.method", "hosts.edit.sec.org", "hosts.f.group", "hosts.f.jump", "hosts.f.proxy",
-          "hosts.edit.sec.fwd", "hosts.edit.sec.env", "hosts.edit.sec.note", "hosts.edit.sec.ai", "hosts.test",
+          "hosts.edit.sec.env", "hosts.edit.sec.note", "hosts.edit.sec.ai", "hosts.test", "sidebar.forwards",
           "hosts.delete", "btn.save", "btn.cancel",
         ],
         "Authentication methods": [
@@ -176,13 +176,20 @@ export const AREAS: Area[] = [
       },
       "references/port-forwarding.md": {
         "Create or edit a rule": [
-          "hosts.edit.sec.fwd", "hosts.fwd.add", "hosts.fwd.dialog.addTitle", "hosts.fwd.dialog.editTitle",
-          "hosts.fwd.dialog.add", "hosts.fwd.f.local", "hosts.f.port", "hosts.fwd.f.dest", "hosts.fwd.f.autoStart",
-          "hosts.fwd.autoStart", "hosts.fwd.autoPort", "btn.edit", "btn.delete", "btn.save",
+          "sidebar.forwards", "hosts.fwd.empty", "hosts.fwd.add", "hosts.fwd.dialog.addTitle", "hosts.fwd.f.host",
+          "hosts.fwd.err.hostRequired", "hosts.fwd.dialog.editTitle",
+          "hosts.fwd.dialog.add", "hosts.fwd.f.kind", "hosts.fwd.kind.local", "hosts.fwd.kind.remote",
+          "hosts.fwd.kind.dynamic", "hosts.fwd.f.local", "hosts.fwd.f.server", "hosts.f.port", "hosts.fwd.f.dest",
+          "hosts.fwd.f.autoStart", "hosts.fwd.autoStart", "hosts.fwd.autoPort", "terminal.fwd.onServer",
+          "terminal.fwd.socks", "btn.edit", "btn.delete", "btn.save",
         ],
-        "Start and stop in a session": [
-          "terminal.fwd.start", "terminal.fwd.stop", "btn.retry", "terminal.fwd.manage", "terminal.fwd.none",
+        "Start and stop": [
+          "terminal.fwd.start", "sidebar.forwards", "terminal.fwd.stop", "btn.retry", "terminal.fwd.manage",
           "hosts.fwd.loadFailed",
+        ],
+        "Keep running in the background": [
+          "settings.closeAction", "settings.sec.disconnect", "sidebar.forwards", "hosts.menu.copyAddress",
+          "terminal.fwd.stop", "hosts.fwd.lost",
         ],
       },
       "references/troubleshooting-connections.md": {
@@ -292,7 +299,7 @@ export const AREAS: Area[] = [
         ],
         "Files, forwards and other messages": [
           "err.sftp", "err.io", "err.internal", "err.not_found", "err.cancelled", "terminal.clipboardDenied",
-          "sftp.loadFailed", "sftp.invalidName", "hosts.edit.sec.fwd",
+          "sftp.loadFailed", "sftp.invalidName", "sidebar.forwards",
         ],
         "Updates": [
           "settings.about.offline", "settings.about.failed", "settings.about.installFailed", "err.update_signature",

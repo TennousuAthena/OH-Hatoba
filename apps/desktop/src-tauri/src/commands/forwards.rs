@@ -1,20 +1,21 @@
-//! Local port forwarding (FWD-01) and auto-start with the connection (FWD-02).
+//! Port forwarding rules: local (FWD-01), remote (FWD-03) and dynamic SOCKS (FWD-04), with
+//! auto-start (FWD-02), which run on the host's connection ([`crate::connection`], FWD-05).
 
 use hatoba_core::model::{ForwardKind, Item, PortForward};
-use hatoba_ssh::LocalForward;
 use tauri::{AppHandle, State};
-use tauri_specta::Event;
+use zeroize::Zeroizing;
 
-use crate::dto::{ForwardInput, ForwardState, ForwardStatusEvent, ForwardView};
+use crate::dto::{ConnectionsEvent, ForwardInput, ForwardOptions, ForwardView};
 use crate::error::{AppError, AppResult};
-use crate::ssh::LiveSession;
-use crate::state::{AppState, state as app_state};
-use crate::sync;
+use crate::ssh::Overrides;
+use crate::state::AppState;
+use crate::{connection, sync};
 
 fn view(id: &str, f: &PortForward) -> ForwardView {
     ForwardView {
         id: id.to_owned(),
         host_id: f.host_id.clone(),
+        kind: f.kind.into(),
         bind_address: f.bind_address.clone(),
         bind_port: f.bind_port,
         dest_host: f.dest_host.clone().unwrap_or_default(),
@@ -23,19 +24,28 @@ fn view(id: &str, f: &PortForward) -> ForwardView {
     }
 }
 
+/// Every host's forwards, by host and then by bind and destination port.
 #[tauri::command]
 #[specta::specta]
-pub fn forwards_list(state: State<'_, AppState>, host_id: String) -> AppResult<Vec<ForwardView>> {
+pub fn forwards_list_all(state: State<'_, AppState>) -> AppResult<Vec<ForwardView>> {
     state.with_unlocked(|v| {
-        let mut list: Vec<ForwardView> = v
-            .forwards()
-            .iter()
-            .filter(|(_, f)| f.host_id == host_id && f.kind == ForwardKind::Local)
-            .map(|(id, f)| view(id, f))
-            .collect();
-        list.sort_by_key(|f| (f.bind_port, f.dest_port));
+        let mut list: Vec<ForwardView> = v.forwards().iter().map(|(id, f)| view(id, f)).collect();
+        list.sort_by(|a, b| {
+            (&a.host_id, a.bind_port, a.dest_port).cmp(&(&b.host_id, b.bind_port, b.dest_port))
+        });
         Ok(list)
     })
+}
+
+/// An address as it is listened on or connected to: an IPv6 literal typed as ssh writes it, in
+/// brackets, loses them.
+fn unbracketed(address: &str) -> &str {
+    let address = address.trim();
+    address
+        .strip_prefix('[')
+        .and_then(|a| a.strip_suffix(']'))
+        .filter(|a| a.contains(':'))
+        .unwrap_or(address)
 }
 
 #[tauri::command]
@@ -45,37 +55,47 @@ pub fn forward_save(
     state: State<'_, AppState>,
     input: ForwardInput,
 ) -> AppResult<ForwardView> {
-    let bind_address = match input.bind_address.trim() {
-        "" => "127.0.0.1".to_owned(),
-        a => a.to_owned(),
+    let kind = ForwardKind::from(input.kind);
+    // A remote forward listens where `ssh -R` does by default.
+    let bind_address = match (unbracketed(&input.bind_address), kind) {
+        ("", ForwardKind::Remote) => "localhost".to_owned(),
+        ("", _) => "127.0.0.1".to_owned(),
+        (a, _) => a.to_owned(),
     };
     if bind_address.chars().any(char::is_whitespace) {
         return Err(AppError::invalid("bind_address", "invalid bind address"));
     }
-    let dest_host = input.dest_host.trim().to_owned();
-    if dest_host.is_empty() || dest_host.chars().any(char::is_whitespace) {
-        return Err(AppError::invalid(
-            "dest_host",
-            "destination host is required",
-        ));
-    }
-    if input.dest_port == 0 {
-        return Err(AppError::invalid(
-            "dest_port",
-            "port must be between 1 and 65535",
-        ));
-    }
+    let dest = match kind {
+        ForwardKind::Dynamic => None,
+        ForwardKind::Local | ForwardKind::Remote => {
+            let dest_host = unbracketed(&input.dest_host).to_owned();
+            if dest_host.is_empty() || dest_host.chars().any(char::is_whitespace) {
+                return Err(AppError::invalid(
+                    "dest_host",
+                    "destination host is required",
+                ));
+            }
+            if input.dest_port == 0 {
+                return Err(AppError::invalid(
+                    "dest_port",
+                    "port must be between 1 and 65535",
+                ));
+            }
+            Some((dest_host, input.dest_port))
+        }
+    };
     let saved = state.with_unlocked(|v| {
         v.get(&input.host_id)
             .and_then(Item::as_host)
             .ok_or_else(|| AppError::not_found("host"))?;
+        let (dest_host, dest_port) = dest.unzip();
         let forward = PortForward {
             host_id: input.host_id.clone(),
-            kind: ForwardKind::Local,
+            kind,
             bind_address,
             bind_port: input.bind_port,
-            dest_host: Some(dest_host),
-            dest_port: Some(input.dest_port),
+            dest_host,
+            dest_port,
             auto_start: input.auto_start,
             updated_at: 0,
         };
@@ -91,147 +111,72 @@ pub fn forward_save(
     Ok(saved)
 }
 
+/// Deletes the rule, and stops it where it runs.
 #[tauri::command]
 #[specta::specta]
 pub fn forward_delete(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
-    state.with_unlocked(|v| {
-        v.get(&id)
+    let host_id = state.with_unlocked(|v| {
+        let host_id = v
+            .get(&id)
             .and_then(Item::as_forward)
+            .map(|f| f.host_id.clone())
             .ok_or_else(|| AppError::not_found("forward"))?;
         v.delete(&id)?;
-        Ok(())
+        Ok(host_id)
     })?;
     sync::local_change(&app);
+    connection::stop(&app, &host_id, &id);
     Ok(())
 }
 
-fn emit(
-    app: &AppHandle,
-    session_id: &str,
-    forward_id: &str,
-    state: ForwardState,
-    local_port: Option<u16>,
-    error: Option<String>,
-) {
-    let _ = ForwardStatusEvent {
-        session_id: session_id.to_owned(),
-        forward_id: forward_id.to_owned(),
-        state,
-        local_port,
-        error,
-    }
-    .emit(app);
-}
-
-/// Starts one saved forward on a live session and reports its state.
-pub async fn start(
-    app: &AppHandle,
-    session_id: &str,
-    live: &LiveSession,
-    forward_id: &str,
-    f: &PortForward,
-) -> AppResult<u16> {
-    let spec = LocalForward {
-        bind_address: f.bind_address.clone(),
-        bind_port: f.bind_port,
-        dest_host: f.dest_host.clone().unwrap_or_default(),
-        dest_port: f.dest_port.unwrap_or_default(),
-    };
-    match live.session.local_forward(spec).await {
-        Ok(handle) => {
-            let port = handle.local_port();
-            live.add_forward(forward_id, handle);
-            emit(
-                app,
-                session_id,
-                forward_id,
-                ForwardState::Running,
-                Some(port),
-                None,
-            );
-            Ok(port)
-        }
-        Err(e) => {
-            emit(
-                app,
-                session_id,
-                forward_id,
-                ForwardState::Failed,
-                None,
-                Some(e.message.clone()),
-            );
-            Err(e.into())
-        }
-    }
-}
-
-/// FWD-02: called after a session connects.
-pub async fn start_auto(app: &AppHandle, session_id: &str, live: &LiveSession, host_id: &str) {
-    let auto: Vec<(String, PortForward)> = app_state(app)
-        .with_unlocked(|v| {
-            Ok(v.forwards()
-                .into_iter()
-                .filter(|(_, f)| {
-                    f.host_id == host_id && f.auto_start && f.kind == ForwardKind::Local
-                })
-                .collect())
-        })
-        .unwrap_or_default();
-    for (id, f) in auto {
-        if let Err(e) = start(app, session_id, live, &id, &f).await {
-            tracing::warn!(forward_id = %id, "auto-start forward failed: {}", e.detail);
-        }
-    }
-}
-
+/// Starts the saved forward on the host's connection (SSH-16), which signs in with `options`
+/// when no tab or forward has it open, and returns the port it listens on (on the server for a
+/// remote forward).
 #[tauri::command]
 #[specta::specta]
 pub async fn forward_start(
     app: AppHandle,
-    state: State<'_, AppState>,
-    session_id: String,
+    host_id: String,
     forward_id: String,
+    options: ForwardOptions,
 ) -> AppResult<u16> {
-    let live = state.ssh.get(&session_id)?;
-    let f = state.with_unlocked(|v| {
-        v.get(&forward_id)
-            .and_then(Item::as_forward)
-            .cloned()
-            .ok_or_else(|| AppError::not_found("forward"))
-    })?;
-    if let Some(port) = live.forward_port(&forward_id) {
-        return Ok(port);
+    let overrides = Overrides {
+        password: options
+            .password
+            .filter(|p| !p.is_empty())
+            .map(Zeroizing::new),
+        passphrase: options
+            .passphrase
+            .filter(|p| !p.is_empty())
+            .map(Zeroizing::new),
+        ask_password: false,
+    };
+    connection::start(&app, &host_id, &forward_id, &overrides).await
+}
+
+/// Stops the forward; the host's connection closes when no tab or forward is left on it.
+#[tauri::command]
+#[specta::specta]
+pub fn forward_stop(app: AppHandle, host_id: String, forward_id: String) {
+    connection::stop(&app, &host_id, &forward_id);
+}
+
+/// Every saved host's open connection, with the forwards on it.
+#[tauri::command]
+#[specta::specta]
+pub fn connections_list(state: State<'_, AppState>) -> ConnectionsEvent {
+    connection::list(&state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unbracketed;
+
+    #[test]
+    fn an_ipv6_address_in_brackets_loses_them() {
+        assert_eq!(unbracketed(" [::1] "), "::1");
+        assert_eq!(unbracketed("[fd00::5]"), "fd00::5");
+        assert_eq!(unbracketed("127.0.0.1"), "127.0.0.1");
+        assert_eq!(unbracketed("[db.internal]"), "[db.internal]");
     }
-    start(&app, &session_id, &live, &forward_id, &f).await
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn forward_stop(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    session_id: String,
-    forward_id: String,
-) -> AppResult<()> {
-    let live = state.ssh.get(&session_id)?;
-    live.stop_forward(&forward_id);
-    emit(
-        &app,
-        &session_id,
-        &forward_id,
-        ForwardState::Stopped,
-        None,
-        None,
-    );
-    Ok(())
-}
-
-/// Forwards currently running on a session: `(forward_id, local_port)`.
-#[tauri::command]
-#[specta::specta]
-pub fn forwards_active(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> AppResult<Vec<(String, u16)>> {
-    Ok(state.ssh.get(&session_id)?.active_forwards())
 }

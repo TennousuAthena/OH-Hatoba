@@ -6,8 +6,10 @@ import { EditFilesHost } from "@/features/ai/EditFiles";
 import { useAiLifecycle } from "@/features/ai/lifecycle";
 import { DashboardPage } from "@/features/dashboard/DashboardPage";
 import { clearReadouts } from "@/features/dashboard/readings";
+import { ForwardsPage } from "@/features/hosts/ForwardsPage";
 import { HostEditPage } from "@/features/hosts/HostEditPage";
 import { HostsPage } from "@/features/hosts/HostsPage";
+import { startForwardListeners } from "@/features/hosts/forwards";
 import { KeysPage } from "@/features/keys/KeysPage";
 import { Onboarding } from "@/features/onboarding/Onboarding";
 import { SettingsWindow } from "@/features/settings/SettingsWindow";
@@ -48,6 +50,10 @@ export function App() {
   useAutoUpdateCheck(phase === "unlocked");
   useLaunches(phase === "unlocked");
   useTrayMenu();
+  // FWD-05: wired once unlocked, and kept, so a connection lost behind the lock screen still notifies.
+  useEffect(() => {
+    if (phase === "unlocked") startForwardListeners();
+  }, [phase]);
 
   if (phase === "boot") return null;
   if (phase === "onboarding")
@@ -183,6 +189,8 @@ function HomePage({ page }: { page: Page }) {
       return <KeysPage />;
     case "sync":
       return <SyncPage />;
+    case "forwards":
+      return <ForwardsPage hostId={page.hostId} />;
     case "dashboard":
       return <DashboardPage filter={page.filter} />;
   }
@@ -213,6 +221,8 @@ function homeTab(page: Page, t: (k: MessageKey) => string, groupName: (id: strin
       return { label: t("sidebar.keys"), icon: "key" };
     case "sync":
       return { label: t("sidebar.sync"), icon: "cloud" };
+    case "forwards":
+      return { label: t("sidebar.forwards"), icon: "arrows-left-right" };
     case "dashboard":
       return { label: t("dashboard.title"), icon: "gauge" };
   }

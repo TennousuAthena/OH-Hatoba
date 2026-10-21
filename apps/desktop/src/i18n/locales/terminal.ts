@@ -18,13 +18,14 @@ export default defineMessages({
     "terminal.fwd": "端口转发",
     "terminal.fwd.running": "{n} 个转发运行中",
     "terminal.fwd.none": "这台主机还没有端口转发。",
-    "terminal.fwd.loadFailed": "无法读取端口转发。",
     "terminal.fwd.start": "启动",
     "terminal.fwd.stop": "停止",
     "terminal.fwd.autoPort": "自动",
     "terminal.fwd.copy": "复制 {addr}",
     "terminal.fwd.copied": "已复制 {addr}",
     "terminal.fwd.manage": "管理端口转发…",
+    "terminal.fwd.onServer": "服务器上的 {addr}",
+    "terminal.fwd.socks": "SOCKS 代理",
 
     // resource usage (TERM-12)
     "terminal.stats": "资源占用",
@@ -205,13 +206,14 @@ export default defineMessages({
     "terminal.fwd.running": "{n} forwards running",
     "terminal.fwd.running_one": "{n} forward running",
     "terminal.fwd.none": "This host has no port forwards yet.",
-    "terminal.fwd.loadFailed": "Can’t read the port forwards.",
     "terminal.fwd.start": "Start",
     "terminal.fwd.stop": "Stop",
     "terminal.fwd.autoPort": "auto",
     "terminal.fwd.copy": "Copy {addr}",
     "terminal.fwd.copied": "Copied {addr}",
     "terminal.fwd.manage": "Manage Port Forwarding…",
+    "terminal.fwd.onServer": "{addr} on the server",
+    "terminal.fwd.socks": "SOCKS proxy",
 
     // resource usage (TERM-12)
     "terminal.stats": "Resource Usage",
@@ -387,13 +389,14 @@ export default defineMessages({
     "terminal.fwd": "ポートフォワーディング",
     "terminal.fwd.running": "{n} 件の転送が実行中",
     "terminal.fwd.none": "このホストにはポートフォワーディングがまだありません。",
-    "terminal.fwd.loadFailed": "ポートフォワーディングを読み込めません。",
     "terminal.fwd.start": "開始",
     "terminal.fwd.stop": "停止",
     "terminal.fwd.autoPort": "自動",
     "terminal.fwd.copy": "{addr} をコピー",
     "terminal.fwd.copied": "{addr} をコピーしました",
     "terminal.fwd.manage": "ポートフォワーディングを管理…",
+    "terminal.fwd.onServer": "サーバーの {addr}",
+    "terminal.fwd.socks": "SOCKS プロキシ",
 
     // resource usage (TERM-12)
     "terminal.stats": "リソース使用状況",

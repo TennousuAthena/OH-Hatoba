@@ -162,30 +162,51 @@ The labels that these files name in English, as the interface shows them in Simp
 | en | zh-CN |
 |---|---|
 | Port Forwarding | 端口转发 |
+| No port forwards yet | 还没有端口转发 |
 | Add Forward… | 添加转发… |
 | Add Port Forward | 添加端口转发 |
+| Host | 主机 |
+| Choose a host. | 请选择主机。 |
 | Edit Port Forward | 编辑端口转发 |
 | Add | 添加 |
+| Type | 类型 |
+| Local | 本地 |
+| Remote | 远程 |
+| Dynamic (SOCKS) | 动态（SOCKS） |
 | Local address | 本地地址 |
+| Server address | 服务器地址 |
 | Port | 端口 |
 | Destination | 目标地址 |
 | Start when this host connects | 连接此主机时自动启动 |
 | Auto-start | 自动启动 |
 | auto | 自动 |
+| {addr} on the server | 服务器上的 {addr} |
+| SOCKS proxy | SOCKS 代理 |
 | Edit | 编辑 |
 | Delete | 删除 |
 | Save | 保存 |
 
-### Start and stop in a session
+### Start and stop
 
 | en | zh-CN |
 |---|---|
 | Start | 启动 |
+| Port Forwarding | 端口转发 |
 | Stop | 停止 |
 | Retry | 重试 |
 | Manage Port Forwarding… | 管理端口转发… |
-| This host has no port forwards yet. | 这台主机还没有端口转发。 |
 | Can’t read the port forwards. | 无法读取端口转发。 |
+
+### Keep running in the background
+
+| en | zh-CN |
+|---|---|
+| Close Button | 关闭窗口时 |
+| Disconnect all sessions when locked | 锁定时断开所有会话 |
+| Port Forwarding | 端口转发 |
+| Copy Address | 复制地址 |
+| Stop | 停止 |
+| Port forwarding stopped. {reason} | 端口转发已停止。{reason} |
 
 ## `references/troubleshooting-connections.md`
 
