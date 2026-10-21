@@ -90,6 +90,9 @@ pub struct JumpHop {
     pub username: String,
     /// Credentials for the jump host.
     pub auth: AuthMethod,
+    /// The ssh-agent sockets agent authentication tries on this hop, in order (SSH-09). Empty
+    /// uses the platform's agent: `SSH_AUTH_SOCK`, or the OpenSSH pipe on Windows.
+    pub agent_sockets: Vec<String>,
 }
 
 /// Everything needed to open a session.
@@ -117,6 +120,9 @@ pub struct ConnectConfig {
     pub keepalive_max: u32,
     /// Answers keyboard-interactive prompts (2FA / OTP).
     pub keyboard_interactive: Option<Arc<dyn KeyboardInteractive>>,
+    /// The ssh-agent sockets agent authentication tries on the target, as
+    /// [`JumpHop::agent_sockets`] does on a jump host (SSH-09).
+    pub agent_sockets: Vec<String>,
 }
 
 impl ConnectConfig {
@@ -138,6 +144,7 @@ impl ConnectConfig {
             keepalive_interval: Duration::from_secs(30),
             keepalive_max: 3,
             keyboard_interactive: None,
+            agent_sockets: Vec::new(),
         }
     }
 }
@@ -154,6 +161,7 @@ impl fmt::Debug for ConnectConfig {
             .field("connect_timeout", &self.connect_timeout)
             .field("keepalive_interval", &self.keepalive_interval)
             .field("keepalive_max", &self.keepalive_max)
+            .field("agent_sockets", &self.agent_sockets)
             .finish_non_exhaustive()
     }
 }
@@ -198,6 +206,7 @@ struct HopSpec<'a> {
     port: u16,
     username: &'a str,
     auth: &'a AuthMethod,
+    agent_sockets: &'a [String],
 }
 
 async fn connect_hop(
@@ -274,6 +283,7 @@ async fn connect_hop(
             interactive,
             clock: &clock,
             shared: &shared,
+            agent_sockets: spec.agent_sockets,
         };
         auth::authenticate(&mut handle, &ctx, spec.auth).await?;
         Ok::<_, SshError>((handle, rtt))
@@ -307,6 +317,7 @@ pub async fn connect(
             port: j.port,
             username: &j.username,
             auth: &j.auth,
+            agent_sockets: &j.agent_sockets,
         })
         .collect();
     specs.push(HopSpec {
@@ -314,6 +325,7 @@ pub async fn connect(
         port: cfg.port,
         username: &cfg.username,
         auth: &cfg.auth,
+        agent_sockets: &cfg.agent_sockets,
     });
     let total = specs.len();
 

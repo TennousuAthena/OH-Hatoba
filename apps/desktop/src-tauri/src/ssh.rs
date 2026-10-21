@@ -352,6 +352,7 @@ pub fn build_config(
             port: p,
             username: u,
             auth: auth_method(vault, jump, None, true)?,
+            agent_sockets: Vec::new(),
         });
         next = jump.jump_host_id.clone();
     }
@@ -681,6 +682,7 @@ pub async fn connect_unattended(
         saved_password,
         ..Unattended::default()
     });
+    crate::ssh_agent::resolve(&mut cfg).await;
     let attempt = Attempt::of(&cfg);
     attempt.log_start();
     cfg.keyboard_interactive = Some(Arc::new(UnattendedPrompts(Arc::clone(&outcome))));
@@ -738,6 +740,7 @@ pub async fn connect_asking(
     session_id: Option<String>,
     on_ask: Option<OnAsk>,
 ) -> AppResult<SshSession> {
+    crate::ssh_agent::resolve(&mut cfg).await;
     let attempt = Attempt::of(&cfg);
     attempt.log_start();
     cfg.keyboard_interactive = Some(Arc::new(Interactive {

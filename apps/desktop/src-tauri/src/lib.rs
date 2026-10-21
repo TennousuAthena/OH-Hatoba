@@ -19,6 +19,7 @@ mod mcp;
 mod notification;
 mod platform;
 mod ssh;
+mod ssh_agent;
 mod state;
 mod sync;
 mod tray;

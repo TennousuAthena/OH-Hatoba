@@ -29,6 +29,8 @@ pub(crate) struct AuthContext<'a> {
     pub interactive: Option<&'a Arc<dyn KeyboardInteractive>>,
     pub clock: &'a Arc<ConnectClock>,
     pub shared: &'a Arc<SessionShared>,
+    /// The ssh-agent sockets this hop tries (SSH-09); empty uses the platform's agent.
+    pub agent_sockets: &'a [String],
 }
 
 /// Authenticates `handle` as `ctx.username`. On failure the error is
@@ -341,11 +343,7 @@ async fn agent_auth(
     handle: &mut Handle<ClientHandler>,
     ctx: &AuthContext<'_>,
 ) -> Result<(), SshError> {
-    let mut agent = agent::connect().await?;
-    let identities = agent
-        .request_identities()
-        .await
-        .map_err(|e| SshError::other(format!("ssh-agent request failed: {e}")))?;
+    let (mut agent, identities) = agent::connect(ctx.agent_sockets).await?;
     if identities.is_empty() {
         return Err(SshError::new(
             SshErrorKind::AuthFailed,
