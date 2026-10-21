@@ -9,8 +9,14 @@
 //!   key in `x-api-key` or `Authorization: Bearer`, `max_tokens` from the model (16,000 when
 //!   unknown, at most 128,000) and top-level `cache_control`. A chosen thinking level adds
 //!   `output_config.effort` and, where the model supports it, adaptive thinking with summarized
-//!   display (see `request` for the rule at Default). No `temperature`, beta headers or
-//!   `eager_input_streaming`, so any Anthropic-compatible vendor accepts the request. When a
+//!   display (see `request` for the rule at Default). A model that writes progress updates
+//!   between tool calls gets `display: "updates"` instead, with its beta header, and its
+//!   progress updates stream as answer text. A 4xx that may refuse them (not one about the key,
+//!   the URL, the size or the rate) sends the request once more with summarized display. When
+//!   that happens twice in a row for a base URL and model, each time with the summarized answer
+//!   arriving whole, their requests keep the summarized display until the app restarts. No
+//!   `temperature`, other beta headers or `eager_input_streaming`, so any Anthropic-compatible
+//!   vendor accepts the request. When a
 //!   request that replayed `raw` is refused with a 400 about thinking, signatures or blocks
 //!   (newer Claude models bind signed thinking to the exact prefix), it is sent once more with
 //!   every assistant entry rebuilt from its fields.
@@ -62,8 +68,11 @@ pub(crate) mod tests_support {
     }
 }
 
+use std::collections::HashMap;
+use std::sync::{LazyLock, Mutex, PoisonError};
+
 use futures::StreamExt;
-use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
+use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 
@@ -131,6 +140,9 @@ pub enum StreamEvent {
     Text(String),
     /// Reasoning text to append (AI-06).
     Reasoning(String),
+    /// The model started thinking. Sent for each thinking block, also one whose text never
+    /// shows as reasoning (an empty block, or a progress update), so the panel can say so.
+    Thinking,
     /// A tool call whose arguments are complete.
     ToolCall(ToolCall),
     /// The response's token usage, sent once at the end.
@@ -223,11 +235,23 @@ pub async fn stream_chat(
             let url = net::endpoint(&base, "/v1/messages");
             let mut allow_raw = true;
             let mut with_effort = true;
+            let updates_key = (provider.base_url.clone(), req.model.id.clone());
+            let mut with_updates = !refuses_updates(&updates_key);
+            // This request is the retry without progress updates, so a complete answer to it
+            // says they were what the provider refused. A failure says nothing either way, and
+            // they stay off for the rest of this call.
+            let mut confirming = false;
             loop {
-                let built = request::anthropic(req, allow_raw, with_effort);
+                let built = request::anthropic(req, allow_raw, with_effort, with_updates);
                 let (response, request_chars) = post(http, provider, &url, &built, cancel).await?;
                 if !response.status().is_success() {
                     let err = provider.error(response, cancel).await;
+                    confirming = false;
+                    if built.beta.is_some() && may_refuse_updates(&err) {
+                        with_updates = false;
+                        confirming = true;
+                        continue;
+                    }
                     if built.sent_effort && rejects_effort(&err) {
                         with_effort = false;
                         if built.effort.is_some() {
@@ -241,7 +265,13 @@ pub async fn stream_chat(
                     }
                     return Err(err);
                 }
-                let assembled = consume(response, AnthropicStream::new(), cancel, on_event).await?;
+                let stream = AnthropicStream::new(built.beta.is_some());
+                let assembled = consume(response, stream, cancel, on_event).await?;
+                if confirming {
+                    note_updates_refused(&updates_key);
+                } else if built.beta.is_some() {
+                    note_updates_accepted(&updates_key);
+                }
                 return Ok(into_entry(req, assembled, request_chars, on_event));
             }
         }
@@ -350,6 +380,51 @@ pub(crate) fn rejects_summary(err: &AiError) -> bool {
     }
 }
 
+/// Whether an Anthropic error may be a refusal of `display: "updates"` or its beta header: any
+/// 4xx but those about the key, the URL, the size or the rate. Vendors and gateways word that
+/// refusal in many ways, so the request is sent once more with summarized display at the same
+/// level, and a refusal counts towards [`UPDATES_STRIKES`] only when that one succeeds.
+pub(crate) fn may_refuse_updates(err: &AiError) -> bool {
+    matches!(
+        err,
+        AiError::Http { status, .. }
+            if (400..500).contains(status) && !matches!(status, 401 | 404 | 408 | 413 | 429)
+    )
+}
+
+/// A base URL and a model ID, which a gateway may route to different upstreams.
+type UpdatesKey = (String, String);
+
+/// How many calls in a row must find `display: "updates"` refused, each time confirmed by the
+/// summarized retry, before a base URL and model get the summarized display straight away: one
+/// could be a passing error.
+const UPDATES_STRIKES: u8 = 2;
+
+/// Confirmed refusals of `display: "updates"` in a row since the app started.
+static REFUSED_UPDATES: LazyLock<Mutex<HashMap<UpdatesKey, u8>>> = LazyLock::new(Mutex::default);
+
+fn refused_updates() -> std::sync::MutexGuard<'static, HashMap<UpdatesKey, u8>> {
+    REFUSED_UPDATES
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+}
+
+fn refuses_updates(key: &UpdatesKey) -> bool {
+    refused_updates()
+        .get(key)
+        .is_some_and(|strikes| *strikes >= UPDATES_STRIKES)
+}
+
+fn note_updates_refused(key: &UpdatesKey) {
+    let mut refused = refused_updates();
+    let strikes = refused.entry(key.clone()).or_default();
+    *strikes = strikes.saturating_add(1);
+}
+
+fn note_updates_accepted(key: &UpdatesKey) {
+    refused_updates().remove(key);
+}
+
 /// Whether an Anthropic error is the 400 that newer Claude models return when replayed thinking
 /// blocks no longer match the request's prefix (or any other complaint about replayed blocks):
 /// the request is then retried once without `raw`.
@@ -379,7 +454,13 @@ async fn post(
         .map_err(|_| AiError::Protocol("the request could not be encoded".into()))?;
     let request_chars = body.chars().count();
     let response = provider
-        .send(cancel, |headers| {
+        .send(cancel, |mut headers| {
+            if let Some(beta) = built.beta {
+                headers.insert(
+                    HeaderName::from_static("anthropic-beta"),
+                    HeaderValue::from_static(beta),
+                );
+            }
             json_post(http, url, headers, body.clone())
         })
         .await?;

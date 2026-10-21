@@ -4,6 +4,11 @@
 //! takes its deltas (`text_delta`, `thinking_delta`, `signature_delta`, `input_json_delta`,
 //! `citations_delta`; unknown deltas are merged field by field), so thinking signatures,
 //! redacted thinking and block types Hatoba does not know come back unchanged on replay.
+//!
+//! Under `display: "updates"` reasoning blocks come back empty, and a `thinking` block with text
+//! right before a tool call is a progress update the model wrote for the user: its text is
+//! answer text, not reasoning. Thinking text anywhere else (from a provider that ignored the
+//! display) stays reasoning, so the text is held until the next block starts and shows which.
 
 use std::collections::BTreeMap;
 
@@ -102,11 +107,64 @@ pub(crate) struct AnthropicStream {
     stop_reason: Option<String>,
     usage: UsageCounts,
     done: bool,
+    /// The request asked for `display: "updates"`, so thinking text right before a tool call is
+    /// a progress update.
+    updates: bool,
+    /// Under `display: "updates"`, the text of the latest `thinking` block, until the next block
+    /// starts.
+    held: Option<(u64, String)>,
 }
 
 impl AnthropicStream {
-    pub(crate) fn new() -> Self {
-        Self::default()
+    pub(crate) fn new(updates: bool) -> Self {
+        Self {
+            updates,
+            ..Self::default()
+        }
+    }
+
+    /// Appends the text of a `thinking` block: reasoning, or under `display: "updates"` held
+    /// until the next block shows whether it is a progress update.
+    fn push_thinking(
+        &mut self,
+        index: u64,
+        text: &str,
+        emit: &mut (dyn FnMut(StreamEvent) + Send),
+    ) {
+        if !self.updates {
+            self.push_reasoning(index, text, emit);
+            return;
+        }
+        if text.is_empty() {
+            return;
+        }
+        match &mut self.held {
+            Some((at, held)) if *at == index => held.push_str(text),
+            _ => {
+                self.release(false, emit);
+                self.held = Some((index, text.to_owned()));
+            }
+        }
+    }
+
+    /// Emits the held thinking text: answer text when a tool call follows it, reasoning
+    /// otherwise.
+    fn release(&mut self, before_tool: bool, emit: &mut (dyn FnMut(StreamEvent) + Send)) {
+        if let Some((index, text)) = self.held.take() {
+            if before_tool {
+                // A paragraph of its own, also right after a text block, which `push_text`
+                // would join directly.
+                if !self.text.is_empty()
+                    && self.last_text_block.is_some_and(|last| last + 1 == index)
+                {
+                    self.text.push_str("\n\n");
+                    emit(StreamEvent::Text("\n\n".into()));
+                }
+                self.push_text(index, &text, emit);
+            } else {
+                self.push_reasoning(index, &text, emit);
+            }
+        }
     }
 
     /// Appends answer text. Adjacent text blocks (as citations produce) join directly; text
@@ -150,6 +208,11 @@ impl AnthropicStream {
         emit: &mut (dyn FnMut(StreamEvent) + Send),
     ) {
         let kind = block.get("type").and_then(Value::as_str).unwrap_or("");
+        // `tool_use`, `server_tool_use` and `mcp_tool_use`.
+        self.release(kind.ends_with("tool_use"), emit);
+        if matches!(kind, "thinking" | "redacted_thinking") {
+            emit(StreamEvent::Thinking);
+        }
         let initial = match kind {
             "text" => block.get("text"),
             "thinking" => block.get("thinking"),
@@ -169,7 +232,7 @@ impl AnthropicStream {
             if is_text {
                 self.push_text(index, &initial, emit);
             } else {
-                self.push_reasoning(index, &initial, emit);
+                self.push_thinking(index, &initial, emit);
             }
         }
     }
@@ -197,7 +260,7 @@ impl AnthropicStream {
             "thinking_delta" => {
                 let thinking = str_of("thinking");
                 merge_field(&mut block.value, "thinking", &json!(thinking));
-                self.push_reasoning(index, &thinking, emit);
+                self.push_thinking(index, &thinking, emit);
             }
             "signature_delta" => {
                 merge_field(&mut block.value, "signature", &json!(str_of("signature")));
@@ -376,6 +439,7 @@ impl Assembler for AnthropicStream {
                 "the stream ended before the response was complete".into(),
             ));
         }
+        self.release(false, emit);
         let open: Vec<u64> = self
             .blocks
             .iter()

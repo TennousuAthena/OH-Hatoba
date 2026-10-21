@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
-use wiremock::matchers::{body_partial_json, method, path};
+use wiremock::matchers::{body_partial_json, body_string_contains, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 use zeroize::Zeroizing;
 
@@ -32,6 +32,7 @@ const OPENAI_ERROR: &str = include_str!("../../tests/fixtures/openai_midstream_e
 const DEEPSEEK: &str = include_str!("../../tests/fixtures/deepseek_reasoning_tools.sse");
 const GEMINI: &str = include_str!("../../tests/fixtures/gemini_tool_call.sse");
 const ANTHROPIC_TOOL: &str = include_str!("../../tests/fixtures/anthropic_thinking_tool.sse");
+const ANTHROPIC_PROGRESS: &str = include_str!("../../tests/fixtures/anthropic_progress_update.sse");
 const ANTHROPIC_UNKNOWN: &str = include_str!("../../tests/fixtures/anthropic_redacted_unknown.sse");
 const ANTHROPIC_MAX: &str = include_str!("../../tests/fixtures/anthropic_max_tokens.sse");
 const ANTHROPIC_REFUSAL: &str = include_str!("../../tests/fixtures/anthropic_refusal.sse");
@@ -593,7 +594,7 @@ async fn chat_completions_accepts_a_non_streamed_reply() {
 // ---------------------------------------------------------------------------------------------
 
 fn thinking_entry() -> AssistantEntry {
-    let (assembled, _) = assemble(AnthropicStream::new(), ANTHROPIC_TOOL, 4096);
+    let (assembled, _) = assemble(AnthropicStream::new(false), ANTHROPIC_TOOL, 4096);
     let a = assembled.unwrap();
     AssistantEntry {
         provider_id: PROVIDER_ID.into(),
@@ -639,6 +640,7 @@ async fn anthropic_streams_thinking_text_and_tool_use() {
     assert_eq!(
         events,
         vec![
+            StreamEvent::Thinking,
             reasoning("The user asks about disk"),
             reasoning(" space; df answers it."),
             text("I'll check the disk"),
@@ -908,6 +910,8 @@ async fn anthropic_keeps_redacted_thinking_and_unknown_blocks() {
     assert_eq!(
         events,
         vec![
+            // Redacted thinking has no text, but the model thought.
+            StreamEvent::Thinking,
             text("Nginx reloads its configuration"),
             text(" with nginx -s reload."),
             StreamEvent::Usage(usage(10, 40))
@@ -1092,10 +1096,21 @@ async fn complete_returns_the_entry_and_bad_urls_are_refused() {
 #[test]
 fn any_chunking_assembles_the_same_response() {
     for stream in [ANTHROPIC_TOOL, ANTHROPIC_UNKNOWN, ANTHROPIC_MAX] {
-        let whole = assemble(AnthropicStream::new(), stream, stream.len());
+        let whole = assemble(AnthropicStream::new(false), stream, stream.len());
         for size in [1, 2, 7, 64] {
-            assert_eq!(assemble(AnthropicStream::new(), stream, size), whole);
+            assert_eq!(assemble(AnthropicStream::new(false), stream, size), whole);
         }
+    }
+    let whole = assemble(
+        AnthropicStream::new(true),
+        ANTHROPIC_PROGRESS,
+        ANTHROPIC_PROGRESS.len(),
+    );
+    for size in [1, 2, 7, 64] {
+        assert_eq!(
+            assemble(AnthropicStream::new(true), ANTHROPIC_PROGRESS, size),
+            whole
+        );
     }
     for stream in [OPENAI_TEXT, DEEPSEEK, GEMINI, OPENAI_NO_USAGE] {
         let whole = assemble(ChatCompletionsStream::new(), stream, stream.len());
@@ -1169,7 +1184,7 @@ fn consecutive_results_share_one_user_message_with_status_wording() {
     ];
     let model = ModelSpec::new("claude-x");
     let tools = terminal_tools();
-    let body = request::anthropic(&request(&model, &entries, &tools), true, true).body;
+    let body = request::anthropic(&request(&model, &entries, &tools), true, true, true).body;
     assert_eq!(
         body["messages"],
         json!([
@@ -1222,7 +1237,7 @@ fn missing_late_orphaned_and_reused_results_still_make_a_valid_request() {
     assert_eq!(request::orphan_results(&entries), vec![0]);
     let model = ModelSpec::new("claude-x");
     let tools = terminal_tools();
-    let body = request::anthropic(&request(&model, &entries, &tools), true, true).body;
+    let body = request::anthropic(&request(&model, &entries, &tools), true, true, true).body;
     let roles: Vec<&str> = body["messages"]
         .as_array()
         .unwrap()
@@ -1289,12 +1304,12 @@ fn request_bodies_are_deterministic() {
         ..ToolSet::default()
     });
     let req = request(&model, &entries, &tools);
-    let a = serde_json::to_string(&request::anthropic(&req, true, true).body).unwrap();
-    let b = serde_json::to_string(&request::anthropic(&req, true, true).body).unwrap();
+    let a = serde_json::to_string(&request::anthropic(&req, true, true, true).body).unwrap();
+    let b = serde_json::to_string(&request::anthropic(&req, true, true, true).body).unwrap();
     assert_eq!(a, b);
-    let built = request::anthropic(&req, true, true);
+    let built = request::anthropic(&req, true, true, true);
     assert!(built.used_raw);
-    assert!(!request::anthropic(&req, false, true).used_raw);
+    assert!(!request::anthropic(&req, false, true, true).used_raw);
     let EntryBody::Assistant(ref replayed) = entries[1].body else {
         unreachable!()
     };
@@ -1332,8 +1347,9 @@ fn the_verdict_of_auto_mode_never_reaches_the_model() {
             request(&model, &plain, offered),
             request(&model, &judged, offered),
         );
-        let anthropic =
-            |r: &ChatRequest<'_>| serde_json::to_string(&request::anthropic(r, true, true).body);
+        let anthropic = |r: &ChatRequest<'_>| {
+            serde_json::to_string(&request::anthropic(r, true, true, true).body)
+        };
         let chat = |r: &ChatRequest<'_>| {
             serde_json::to_string(&request::chat_completions(r, true, true).body)
         };
@@ -1496,7 +1512,7 @@ fn a_compact_request_keeps_the_next_requests_prefix() {
             let render = |entries: &[AiEntry]| {
                 let req = with_effort(request(&model, entries, &tools), Some(High));
                 match protocol {
-                    Protocol::Anthropic => request::anthropic(&req, true, true),
+                    Protocol::Anthropic => request::anthropic(&req, true, true, true),
                     Protocol::ChatCompletions => request::chat_completions(&req, true, true),
                     Protocol::Responses => request::responses(&req, true, true, None),
                     Protocol::SystemOne => unreachable!("System One does not chat"),
@@ -1792,7 +1808,7 @@ fn flattened_texts_name_the_call_and_keep_the_result_wording() {
 fn anthropic_without_tools_sends_calls_and_results_as_text() {
     let model = ModelSpec::new("claude-opus-4-8");
     let entries = tool_history(Protocol::Anthropic, &model.id);
-    let built = request::anthropic(&request(&model, &entries, &[]), true, true);
+    let built = request::anthropic(&request(&model, &entries, &[]), true, true, true);
     let body = &built.body;
     let text = |s: &str| json!({"type": "text", "text": s});
     assert_eq!(
@@ -1820,9 +1836,9 @@ fn anthropic_without_tools_sends_calls_and_results_as_text() {
     assert_eq!(body["system"], "SYS");
 
     // Deterministic, and the thinking-binding retry (no raw at all) keeps the same text.
-    let again = request::anthropic(&request(&model, &entries, &[]), true, true);
+    let again = request::anthropic(&request(&model, &entries, &[]), true, true, true);
     assert_eq!(body.to_string(), again.body.to_string());
-    let rebuilt = request::anthropic(&request(&model, &entries, &[]), false, true);
+    let rebuilt = request::anthropic(&request(&model, &entries, &[]), false, true, true);
     assert!(!rebuilt.used_raw);
     assert_eq!(
         rebuilt.body["messages"][5],
@@ -1876,7 +1892,7 @@ fn requests_with_tools_keep_structured_tool_blocks() {
     let tools = terminal_tools();
     let model = ModelSpec::new("claude-opus-4-8");
     let entries = tool_history(Protocol::Anthropic, &model.id);
-    let built = request::anthropic(&request(&model, &entries, &tools), true, true);
+    let built = request::anthropic(&request(&model, &entries, &tools), true, true, true);
     assert_eq!(
         built.body["messages"],
         json!([
@@ -1906,7 +1922,7 @@ fn requests_with_tools_keep_structured_tool_blocks() {
     assert!(built.used_raw);
     // Rebuilt from fields (another model, or the retry): `tool_use` blocks, not text.
     let other = ModelSpec::new("claude-sonnet-4-6");
-    let rebuilt = request::anthropic(&request(&other, &entries, &tools), true, true);
+    let rebuilt = request::anthropic(&request(&other, &entries, &tools), true, true, true);
     assert!(!rebuilt.used_raw);
     assert_eq!(
         rebuilt.body["messages"][1],
@@ -2164,7 +2180,7 @@ fn a_stopped_response_is_rebuilt_from_its_text() {
 
     let anthropic = ModelSpec::new("claude-opus-4-8");
     let entries = vec![AiEntry::user(1, "df?"), stopped(&anthropic.id), next];
-    let built = request::anthropic(&request(&anthropic, &entries, &tools), true, true);
+    let built = request::anthropic(&request(&anthropic, &entries, &tools), true, true, true);
     assert!(!built.used_raw);
     assert_eq!(
         built.body["messages"][1],
@@ -2194,7 +2210,7 @@ fn raw_holding_tool_blocks_is_not_replayed_without_tools() {
             assistant_entry(&anthropic.id, "Searched.", vec![], raw.clone()),
             AiEntry::user(2, "and?"),
         ];
-        let built = request::anthropic(&request(&anthropic, &entries, &[]), true, true);
+        let built = request::anthropic(&request(&anthropic, &entries, &[]), true, true, true);
         assert!(!built.used_raw, "{kind}");
         assert_eq!(
             built.body["messages"][1],
@@ -2203,7 +2219,7 @@ fn raw_holding_tool_blocks_is_not_replayed_without_tools() {
         );
         assert_no_anthropic_tool_blocks(&built.body);
         // With tools offered nothing changes: raw goes back as it is.
-        let built = request::anthropic(&request(&anthropic, &entries, &tools), true, true);
+        let built = request::anthropic(&request(&anthropic, &entries, &tools), true, true, true);
         assert!(built.used_raw, "{kind}");
         assert_eq!(built.body["messages"][1]["content"], raw, "{kind}");
     }
@@ -2217,7 +2233,7 @@ fn raw_holding_tool_blocks_is_not_replayed_without_tools() {
         AiEntry::user(1, "hi"),
         assistant_entry(&anthropic.id, "Hi.", vec![], raw.clone()),
     ];
-    let built = request::anthropic(&request(&anthropic, &entries, &[]), true, true);
+    let built = request::anthropic(&request(&anthropic, &entries, &[]), true, true, true);
     assert!(built.used_raw);
     assert_eq!(built.body["messages"][1]["content"], raw);
 
@@ -2532,6 +2548,31 @@ fn claude_generations_and_who_thinks_by_default() {
 }
 
 #[test]
+fn who_writes_progress_updates() {
+    for (id, writes) in [
+        ("claude-opus-5-5", true),
+        ("claude-sonnet-5-5", true),
+        ("claude-fable-5", true),
+        ("claude-fable-5-1", true),
+        ("claude-mythos-5-1", true),
+        ("us.anthropic.claude-opus-5-5-v1:0", true),
+        ("claude-opus-5-5@20260801", true),
+        ("anthropic/claude-sonnet-5.5", true),
+        ("Claude-Opus-6", true),
+        ("claude-opus-5", false),
+        ("claude-opus-5-20260101", false),
+        ("claude-sonnet-5", false),
+        ("claude-mythos-5", false),
+        ("claude-haiku-5-5", false),
+        ("claude-opus-4-8", false),
+        ("claude-3-5-sonnet-20241022", false),
+        ("gpt-5.5", false),
+    ] {
+        assert_eq!(request::writes_progress_updates(id), writes, "{id}");
+    }
+}
+
+#[test]
 fn chat_completions_sends_reasoning_effort_within_the_models_levels() {
     let entries = vec![AiEntry::user(1, "hi")];
     let sent = |model: &ModelSpec, effort: Option<Effort>, with: bool| {
@@ -2584,7 +2625,9 @@ fn chat_completions_sends_reasoning_effort_within_the_models_levels() {
 fn anthropic_request_shapes_per_model_and_level() {
     let entries = vec![AiEntry::user(1, "hi")];
     let adaptive = json!({"type": "adaptive", "display": "summarized"});
+    let updates = json!({"type": "adaptive", "display": "updates"});
     let opus_5_5 = listed("claude-opus-5-5", &Effort::ALL, true, Some(128_000));
+    let opus_5 = listed("claude-opus-5", &Effort::ALL, true, Some(128_000));
     let opus_4_8 = listed("claude-opus-4-8", &Effort::ALL, true, Some(128_000));
     let opus_4_6 = listed("claude-opus-4-6", &[Low, Medium, High, Max], true, None);
     let haiku_4_5 = listed("claude-haiku-4-5", &[], false, Some(64_000));
@@ -2593,10 +2636,13 @@ fn anthropic_request_shapes_per_model_and_level() {
     let vendor = ModelSpec::new("deepseek-chat");
     // (model, chosen level, `thinking`, effort sent)
     let cases = [
-        // Thinks by default: Default only asks for the summarized display.
-        (&opus_5_5, None, Some(&adaptive), None),
-        (&opus_5_5, Some(Low), Some(&adaptive), Some("low")),
-        (&opus_5_5, Some(Max), Some(&adaptive), Some("max")),
+        // Thinks by default: Default only asks for the display, which is progress updates for a
+        // model that writes them.
+        (&opus_5_5, None, Some(&updates), None),
+        (&opus_5_5, Some(Low), Some(&updates), Some("low")),
+        (&opus_5_5, Some(Max), Some(&updates), Some("max")),
+        (&opus_5, None, Some(&adaptive), None),
+        (&opus_5, Some(High), Some(&adaptive), Some("high")),
         // Opus 4.8 does not think unless asked: unchanged at Default, thinking at a level.
         (&opus_4_8, None, None, None),
         (&opus_4_8, Some(Medium), Some(&adaptive), Some("medium")),
@@ -2606,8 +2652,8 @@ fn anthropic_request_shapes_per_model_and_level() {
         (&haiku_4_5, None, None, None),
         (&haiku_4_5, Some(High), None, None),
         // Typed in without capabilities: a 5-generation id still gets adaptive thinking.
-        (&typed_sonnet, None, Some(&adaptive), None),
-        (&typed_sonnet, Some(Max), Some(&adaptive), Some("high")),
+        (&typed_sonnet, None, Some(&updates), None),
+        (&typed_sonnet, Some(Max), Some(&updates), Some("high")),
         // An older or unknown model gets the effort alone.
         (&typed_opus, None, None, None),
         (&typed_opus, Some(Low), None, Some("low")),
@@ -2616,7 +2662,7 @@ fn anthropic_request_shapes_per_model_and_level() {
     ];
     for (model, effort, thinking, sent) in cases {
         let req = with_effort(request(model, &entries, &[]), effort);
-        let built = request::anthropic(&req, true, true);
+        let built = request::anthropic(&req, true, true, true);
         let body = &built.body;
         let label = format!("{} at {effort:?}", model.id);
         assert_eq!(body.get("thinking"), thinking, "{label}");
@@ -2632,14 +2678,30 @@ fn anthropic_request_shapes_per_model_and_level() {
             "{label}"
         );
         assert_eq!(built.effort.map(Effort::as_str), sent, "{label}");
+        assert_eq!(
+            built.beta,
+            (thinking == Some(&updates)).then_some(request::UPDATES_BETA),
+            "{label}"
+        );
         let text = body.to_string();
         assert!(
             !text.contains("budget_tokens") && !text.contains("disabled"),
             "{label}"
         );
 
+        // The retry after a refusal of progress updates: summarized, at the same level.
+        let summarized = request::anthropic(&req, true, true, false);
+        let expected = thinking.map(|_| &adaptive);
+        assert_eq!(summarized.body.get("thinking"), expected, "{label}");
+        assert_eq!(
+            summarized.body.get("output_config"),
+            body.get("output_config"),
+            "{label}"
+        );
+        assert_eq!(summarized.beta, None, "{label}");
+
         // The retry without these fields.
-        let plain = request::anthropic(&req, true, false);
+        let plain = request::anthropic(&req, true, false, true);
         assert!(plain.body.get("thinking").is_none(), "{label}");
         assert!(plain.body.get("output_config").is_none(), "{label}");
         assert!(!plain.sent_effort && plain.effort.is_none(), "{label}");
@@ -2654,7 +2716,7 @@ fn a_gateway_model_thinks_with_what_models_dev_says() {
     let mut opus = ModelSpec::new("claude-opus-4-8");
     opus.fill_known(Protocol::Anthropic);
     let req = with_effort(request(&opus, &entries, &[]), Some(Max));
-    let body = request::anthropic(&req, true, true).body;
+    let body = request::anthropic(&req, true, true, true).body;
     assert_eq!(
         body["thinking"],
         json!({"type": "adaptive", "display": "summarized"})
@@ -2664,7 +2726,7 @@ fn a_gateway_model_thinks_with_what_models_dev_says() {
     // At Default it still decides for itself whether to think.
     let req = with_effort(request(&opus, &entries, &[]), None);
     assert!(
-        request::anthropic(&req, true, true)
+        request::anthropic(&req, true, true, true)
             .body
             .get("thinking")
             .is_none()
@@ -2702,7 +2764,7 @@ fn anthropic_max_tokens_is_the_output_limit_up_to_a_cap() {
             ..ModelSpec::new("claude-opus-5-5")
         };
         let req = with_effort(request(&model, &entries, &[]), effort);
-        let built = request::anthropic(&req, true, true);
+        let built = request::anthropic(&req, true, true, true);
         assert_eq!(
             built.body["max_tokens"], expected,
             "{limit:?} at {effort:?}"
@@ -2818,7 +2880,7 @@ async fn anthropic_retries_without_thinking_fields_and_says_so() {
         .mount(&server)
         .await;
     let p = provider(&server, Protocol::Anthropic);
-    let model = ModelSpec::new("claude-sonnet-5-5");
+    let model = ModelSpec::new("claude-sonnet-5");
     let entries = vec![AiEntry::user(1, "hi")];
     let req = with_effort(request(&model, &entries, &[]), Some(Low));
     let (result, events) = run(&p, &req).await;
@@ -2873,4 +2935,507 @@ async fn anthropic_retries_without_thinking_fields_and_says_so() {
     let (result, _) = run(&p, &req).await;
     assert_eq!(result.unwrap_err().status(), Some(400));
     assert_eq!(server.received_requests().await.unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn anthropic_progress_updates_stream_as_answer_text() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(sse(ANTHROPIC_PROGRESS))
+        .mount(&server)
+        .await;
+    let model = ModelSpec::new("claude-opus-5-5");
+    let tools = builtin_tools(&ToolSet {
+        terminal: true,
+        ..ToolSet::default()
+    });
+    let entries = vec![AiEntry::user(1, "Why is the disk full?")];
+    let (result, events) = run(
+        &provider(&server, Protocol::Anthropic),
+        &request(&model, &entries, &tools),
+    )
+    .await;
+    let entry = result.unwrap();
+    let du = call(
+        "toolu_01VaRdU",
+        "run_command",
+        "{\"command\": \"du -sh /var/*\"}",
+    );
+    // The update shows once the tool call that follows it starts.
+    assert_eq!(
+        events[..4],
+        [
+            StreamEvent::Thinking,
+            StreamEvent::Thinking,
+            text("The root filesystem is at 97%. Checking what fills /var next."),
+            StreamEvent::ToolCall(du.clone()),
+        ]
+    );
+    // The empty reasoning block shows nothing; the progress update is the answer so far.
+    assert_eq!(
+        entry.text,
+        "The root filesystem is at 97%. Checking what fills /var next."
+    );
+    assert_eq!(entry.reasoning, None);
+    assert_eq!(entry.tool_calls, vec![du]);
+    // Both blocks go back unchanged, the progress update with its full text in the signature.
+    assert_eq!(
+        entry.raw,
+        json!([
+            {"type": "thinking", "thinking": "", "signature": "EqMBCkYICxIMreasoning=="},
+            {"type": "thinking",
+             "thinking": "The root filesystem is at 97%. Checking what fills /var next.",
+             "signature": "Es8CCkYICxIMprogress=="},
+            {"type": "tool_use", "id": "toolu_01VaRdU", "name": "run_command",
+             "input": {"command": "du -sh /var/*"}}
+        ])
+    );
+
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(
+        requests[0]
+            .headers
+            .get("anthropic-beta")
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        request::UPDATES_BETA
+    );
+    assert_eq!(
+        bodies(&server).await[0]["thinking"],
+        json!({"type": "adaptive", "display": "updates"})
+    );
+}
+
+#[tokio::test]
+async fn anthropic_falls_back_to_summarized_when_updates_are_refused() {
+    let server = MockServer::start().await;
+    // A gateway that drops the beta header: Anthropic then refuses the display value.
+    Mock::given(method("POST"))
+        .and(body_partial_json(
+            json!({"thinking": {"display": "updates"}}),
+        ))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+            "type": "error",
+            "error": {"type": "invalid_request_error",
+                      "message": "thinking.display: Input should be 'summarized' or 'omitted'"}
+        })))
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .respond_with(sse(ANTHROPIC_TOOL))
+        .mount(&server)
+        .await;
+    let p = provider(&server, Protocol::Anthropic);
+    let model = ModelSpec::new("claude-opus-5-5");
+    let tools = builtin_tools(&ToolSet {
+        terminal: true,
+        ..ToolSet::default()
+    });
+    let entries = vec![AiEntry::user(1, "hi")];
+    let req = with_effort(request(&model, &entries, &tools), Some(High));
+    let (result, events) = run(&p, &req).await;
+    let entry = result.unwrap();
+    // The level stays, and the thinking comes back summarized.
+    assert!(!events.contains(&StreamEvent::EffortIgnored));
+    assert_eq!(entry.text, "I'll check the disk usage.");
+    assert!(entry.reasoning.is_some());
+    let sent = bodies(&server).await;
+    assert_eq!(sent.len(), 2);
+    assert_eq!(
+        sent[1]["thinking"],
+        json!({"type": "adaptive", "display": "summarized"})
+    );
+    assert_eq!(sent[1]["output_config"], json!({"effort": "high"}));
+    let requests = server.received_requests().await.unwrap();
+    assert!(requests[0].headers.get("anthropic-beta").is_some());
+    assert!(requests[1].headers.get("anthropic-beta").is_none());
+
+    // One refusal could be a passing error: the next call tries progress updates again.
+    let (result, _) = run(&p, &req).await;
+    result.unwrap();
+    assert_eq!(server.received_requests().await.unwrap().len(), 4);
+    assert!(sent_beta(&server, 2).await);
+    // After a second refusal in a row, that base URL and model get the summarized display
+    // straight away.
+    let (result, _) = run(&p, &req).await;
+    result.unwrap();
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 5);
+    assert!(!sent_beta(&server, 4).await);
+    // Another model behind the same gateway may reach another upstream, so it still tries.
+    let sonnet = ModelSpec::new("claude-sonnet-5-5");
+    let (result, _) = run(
+        &p,
+        &with_effort(request(&sonnet, &entries, &tools), Some(High)),
+    )
+    .await;
+    result.unwrap();
+    assert!(sent_beta(&server, 5).await);
+}
+
+#[tokio::test]
+async fn an_accepted_request_clears_earlier_refusals_of_progress_updates() {
+    let server = MockServer::start().await;
+    let refuse = Mock::given(method("POST"))
+        .and(body_string_contains(r#""display":"updates""#))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+            "type": "error",
+            "error": {"type": "invalid_request_error", "message": "upstream hiccup"}
+        })))
+        .with_priority(1)
+        .up_to_n_times(1)
+        .mount_as_scoped(&server)
+        .await;
+    Mock::given(method("POST"))
+        .respond_with(sse(ANTHROPIC_PROGRESS))
+        .mount(&server)
+        .await;
+    let p = provider(&server, Protocol::Anthropic);
+    let model = ModelSpec::new("claude-opus-5-5");
+    let entries = vec![AiEntry::user(1, "hi")];
+    let req = request(&model, &entries, &[]);
+    // A passing refusal, confirmed by the summarized retry: one strike.
+    run(&p, &req).await.0.unwrap();
+    drop(refuse);
+    // Accepted next time, which clears it.
+    run(&p, &req).await.0.unwrap();
+    assert!(sent_beta(&server, 2).await);
+    // So a later passing refusal is one strike again, not the second.
+    Mock::given(method("POST"))
+        .and(body_string_contains(r#""display":"updates""#))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+            "type": "error",
+            "error": {"type": "invalid_request_error", "message": "upstream hiccup"}
+        })))
+        .with_priority(1)
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+    run(&p, &req).await.0.unwrap();
+    run(&p, &req).await.0.unwrap();
+    assert!(sent_beta(&server, 5).await);
+}
+
+#[test]
+fn updates_retry_conditions() {
+    let http = |status, message: &str| AiError::Http {
+        status,
+        message: message.into(),
+    };
+    // Vendors word the refusal in many ways, so the status decides whether to try once more.
+    for (status, message) in [
+        (
+            400,
+            "thinking.display: Input should be 'summarized' or 'omitted'",
+        ),
+        (400, "thinking updates are unsupported"),
+        (403, "beta access denied"),
+        (422, "invalid beta flag"),
+    ] {
+        assert!(may_refuse_updates(&http(status, message)), "{message}");
+    }
+    for (status, message) in [
+        (401, "invalid x-api-key"),
+        (404, "model claude-opus-5-5-beta not found"),
+        (408, "request timeout"),
+        (413, "request too large"),
+        (429, "Rate limit reached for the beta"),
+        (500, "thinking.display failed"),
+    ] {
+        assert!(!may_refuse_updates(&http(status, message)), "{message}");
+    }
+    assert!(!may_refuse_updates(&AiError::Network("reset".into())));
+}
+
+#[tokio::test]
+async fn an_unrelated_refusal_keeps_progress_updates() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+            "type": "error",
+            "error": {"type": "invalid_request_error",
+                      "message": "messages.0.content: text content blocks must be non-empty"}
+        })))
+        .mount(&server)
+        .await;
+    let p = provider(&server, Protocol::Anthropic);
+    let model = ModelSpec::new("claude-opus-5-5");
+    let tools = builtin_tools(&ToolSet {
+        terminal: true,
+        ..ToolSet::default()
+    });
+    let entries = vec![AiEntry::user(1, "hi")];
+    let req = request(&model, &entries, &tools);
+    // Refused without progress updates too: the error is the provider's, after one retry.
+    let (result, _) = run(&p, &req).await;
+    assert_eq!(result.unwrap_err().status(), Some(400));
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 2);
+    assert!(requests[0].headers.get("anthropic-beta").is_some());
+    assert!(requests[1].headers.get("anthropic-beta").is_none());
+    // So the base URL still gets progress updates.
+    let (result, _) = run(&p, &req).await;
+    result.unwrap_err();
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 4);
+    assert!(requests[2].headers.get("anthropic-beta").is_some());
+}
+
+/// Whether request `i` of `server` carried the progress-updates beta header.
+async fn sent_beta(server: &MockServer, i: usize) -> bool {
+    server.received_requests().await.unwrap()[i]
+        .headers
+        .get("anthropic-beta")
+        .is_some()
+}
+
+#[tokio::test]
+async fn an_effort_refusal_is_not_a_refusal_of_progress_updates() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(body_partial_json(
+            json!({"output_config": {"effort": "high"}}),
+        ))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+            "type": "error",
+            "error": {"type": "invalid_request_error",
+                      "message": "This model does not support the effort parameter."}
+        })))
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .respond_with(sse(ANTHROPIC_TOOL))
+        .mount(&server)
+        .await;
+    let p = provider(&server, Protocol::Anthropic);
+    let model = ModelSpec::new("claude-opus-5-5");
+    let entries = vec![AiEntry::user(1, "hi")];
+    let req = with_effort(request(&model, &entries, &[]), Some(High));
+    // Progress updates, then the summarized display, then neither with the effort dropped.
+    let (result, events) = run(&p, &req).await;
+    result.unwrap();
+    assert_eq!(events[0], StreamEvent::EffortIgnored);
+    assert_eq!(server.received_requests().await.unwrap().len(), 3);
+    // The summarized retry failed too, so the base URL still gets progress updates.
+    let (result, _) = run(&p, &req).await;
+    result.unwrap();
+    assert!(sent_beta(&server, 3).await);
+}
+
+#[tokio::test]
+async fn a_failed_stream_is_not_a_refusal_of_progress_updates() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(body_string_contains(r#""display":"updates""#))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+            "type": "error",
+            "error": {"type": "invalid_request_error", "message": "messages: bad request"}
+        })))
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    // The summarized retry gets a 200 whose stream ends in an error event.
+    Mock::given(method("POST"))
+        .respond_with(sse(ANTHROPIC_ERROR))
+        .mount(&server)
+        .await;
+    let p = provider(&server, Protocol::Anthropic);
+    let model = ModelSpec::new("claude-opus-5-5");
+    let entries = vec![AiEntry::user(1, "hi")];
+    let req = request(&model, &entries, &[]);
+    let (result, _) = run(&p, &req).await;
+    assert_eq!(result.unwrap_err().status(), Some(529));
+    assert_eq!(server.received_requests().await.unwrap().len(), 2);
+    let (result, _) = run(&p, &req).await;
+    result.unwrap_err();
+    assert!(sent_beta(&server, 2).await);
+}
+
+#[tokio::test]
+async fn a_refused_beta_and_a_replay_refusal_still_get_an_answer() {
+    let server = MockServer::start().await;
+    // A gateway that refuses the beta header, and a replayed signature it no longer accepts.
+    Mock::given(method("POST"))
+        .and(body_string_contains(r#""display":"updates""#))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+            "type": "error",
+            "error": {"type": "invalid_request_error", "message": "unknown beta"}
+        })))
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(body_string_contains(r#""signature""#))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+            "type": "error",
+            "error": {"type": "invalid_request_error",
+                      "message": "messages.1.content.0: Invalid `signature` in `thinking` block"}
+        })))
+        .with_priority(2)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .respond_with(sse(ANTHROPIC_TOOL))
+        .mount(&server)
+        .await;
+    let p = provider(&server, Protocol::Anthropic);
+    let model = ModelSpec::new("claude-opus-5-5");
+    let earlier = AssistantEntry {
+        provider_id: PROVIDER_ID.into(),
+        model_id: model.id.clone(),
+        text: "Hello.".into(),
+        reasoning: None,
+        tool_calls: vec![],
+        finish: Finish::Stop,
+        usage: None,
+        raw: json!([
+            {"type": "thinking", "thinking": "", "signature": "EqMBreasoning=="},
+            {"type": "text", "text": "Hello."}
+        ]),
+        terminal: None,
+        interrupted: false,
+    };
+    let entries = vec![
+        AiEntry::user(1, "hi"),
+        AiEntry::assistant(2, earlier),
+        AiEntry::user(3, "and now?"),
+    ];
+    let (result, _) = run(&p, &request(&model, &entries, &[])).await;
+    result.unwrap();
+    // Progress updates with `raw`, summarized with `raw`, then summarized and rebuilt.
+    assert_eq!(server.received_requests().await.unwrap().len(), 3);
+    assert!(!sent_beta(&server, 2).await);
+}
+
+/// An Anthropic stream of `blocks`: `thinking` and `text` blocks with their text, and
+/// `tool_use` blocks with their text as the tool's name.
+fn anthropic_stream(blocks: &[(&str, &str)], stop_reason: &str) -> String {
+    let mut out = String::new();
+    let mut event = |value: Value| {
+        out.push_str(&format!(
+            "event: {}\ndata: {value}\n\n",
+            value["type"].as_str().unwrap()
+        ));
+    };
+    event(json!({"type": "message_start",
+                 "message": {"usage": {"input_tokens": 1, "output_tokens": 1}}}));
+    for (index, (kind, text)) in (0u64..).zip(blocks) {
+        let (block, delta) = match *kind {
+            "thinking" => (
+                json!({"type": "thinking", "thinking": "", "signature": ""}),
+                json!({"type": "thinking_delta", "thinking": text}),
+            ),
+            "text" => (
+                json!({"type": "text", "text": ""}),
+                json!({"type": "text_delta", "text": text}),
+            ),
+            _ => (
+                json!({"type": "tool_use", "id": format!("toolu_{index}"), "name": text,
+                       "input": {}}),
+                Value::Null,
+            ),
+        };
+        event(json!({"type": "content_block_start", "index": index, "content_block": block}));
+        if !delta.is_null() && !text.is_empty() {
+            event(json!({"type": "content_block_delta", "index": index, "delta": delta}));
+        }
+        event(json!({"type": "content_block_stop", "index": index}));
+    }
+    event(
+        json!({"type": "message_delta", "delta": {"stop_reason": stop_reason},
+                 "usage": {"output_tokens": 9}}),
+    );
+    event(json!({"type": "message_stop"}));
+    out
+}
+
+#[test]
+fn progress_updates_are_only_the_thinking_right_before_a_tool_call() {
+    let progress = |blocks: &[(&str, &str)], stop: &str| {
+        let stream = anthropic_stream(blocks, stop);
+        let (assembled, events) = assemble(AnthropicStream::new(true), &stream, 16);
+        let assembled = assembled.unwrap();
+        (assembled.text, assembled.reasoning, events)
+    };
+    // What Anthropic sends: an empty reasoning block, then the progress update.
+    let (text, reasoning, events) = progress(
+        &[
+            ("thinking", ""),
+            ("thinking", "Checking /var."),
+            ("tool_use", "run_command"),
+        ],
+        "tool_use",
+    );
+    assert_eq!((text.as_str(), reasoning.as_str()), ("Checking /var.", ""));
+    // The update shows before the call it introduces.
+    assert_eq!(
+        events[..3],
+        [
+            StreamEvent::Thinking,
+            StreamEvent::Thinking,
+            self::text("Checking /var.")
+        ]
+    );
+    assert!(matches!(events[3], StreamEvent::ToolCall(_)));
+    // Reasoning with text (a provider that ignored the display) stays reasoning; the block
+    // right before the call is still the update.
+    let (text, reasoning, _) = progress(
+        &[
+            ("thinking", "Disk is full."),
+            ("thinking", "Checking /var."),
+            ("tool_use", "run_command"),
+        ],
+        "tool_use",
+    );
+    assert_eq!(
+        (text.as_str(), reasoning.as_str()),
+        ("Checking /var.", "Disk is full.")
+    );
+    // Before the answer, thinking text is reasoning.
+    let (text, reasoning, _) = progress(
+        &[("thinking", "Disk is full."), ("text", "It is /var.")],
+        "end_turn",
+    );
+    assert_eq!(
+        (text.as_str(), reasoning.as_str()),
+        ("It is /var.", "Disk is full.")
+    );
+    // An update right after a text block is a paragraph of its own.
+    let (text, _, _) = progress(
+        &[
+            ("text", "I'll check the disk."),
+            ("thinking", "Root is at 97%."),
+            ("tool_use", "run_command"),
+        ],
+        "tool_use",
+    );
+    assert_eq!(text, "I'll check the disk.\n\nRoot is at 97%.");
+    // So is thinking text the response ends with.
+    let (text, reasoning, _) = progress(
+        &[(
+            "thinking",
+            "This part of the response was interrupted before it finished.",
+        )],
+        "max_tokens",
+    );
+    assert_eq!(text, "");
+    assert_eq!(
+        reasoning,
+        "This part of the response was interrupted before it finished."
+    );
+    // Without `display: "updates"` every thinking block is reasoning.
+    let stream = anthropic_stream(
+        &[("thinking", "Checking /var."), ("tool_use", "run_command")],
+        "tool_use",
+    );
+    let (assembled, _) = assemble(AnthropicStream::new(false), &stream, 16);
+    let assembled = assembled.unwrap();
+    assert_eq!(
+        (assembled.text.as_str(), assembled.reasoning.as_str()),
+        ("", "Checking /var.")
+    );
 }
