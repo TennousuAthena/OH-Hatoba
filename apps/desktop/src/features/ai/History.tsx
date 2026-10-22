@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useVaultData } from "@/app/data";
 import { useApp } from "@/app/store";
-import { Icon, IconButton, LinkButton, Spinner } from "@/components/controls";
+import { Icon, IconButton, LinkButton } from "@/components/controls";
+import { EmptyState, SearchField } from "@/components/layout";
 import { confirm, Menu, useMenu, type MenuEntry } from "@/components/overlay";
+import { StatusLine } from "@/components/patterns";
 import { formatRelative, useT } from "@/i18n";
 import { api } from "@/ipc/api";
 import type { AiConversationView, AiSearchHit, HostView } from "@/ipc/types";
@@ -112,20 +114,17 @@ export function History({ slotId, currentId, onClose }: { slotId: string; curren
   return (
     <div className={s.history}>
       <div className={s.head}>
-        <button type="button" className={s.back} onClick={onClose} title={t("btn.back")} aria-label={t("btn.back")}>
-          <Icon name="caret-left" size={14} />
-        </button>
+        <IconButton small icon="caret-left" label={t("btn.back")} size={14} onClick={onClose} />
         <span className={s.title}>{t("ai.history")}</span>
       </div>
-      <SearchField value={query} onChange={setQuery} />
+      <SearchField fill value={query} onChange={setQuery} placeholder={t("ai.search")} clearLabel={t("ai.search.clear")} className={s.search} />
       {searching ? (
         <SearchResults search={search} query={query.trim()} history={history} hosts={hosts} currentId={currentId} onOpen={openHit} onRetry={retrySearch} />
       ) : (
         <div className={s.list} role="list">
           {list === null && (
             <div className={s.message}>
-              <Spinner size={14} />
-              {t("ai.loading")}
+              <StatusLine tone="progress">{t("ai.loading")}</StatusLine>
             </div>
           )}
           {list !== null && failed && (
@@ -137,10 +136,7 @@ export function History({ slotId, currentId, onClose }: { slotId: string; curren
             </div>
           )}
           {list?.length === 0 && !failed && (
-            <div className={s.empty}>
-              <Icon name="chats" size={26} className={s.emptyIcon} />
-              <div className={s.emptyTitle}>{t("ai.history.empty")}</div>
-            </div>
+            <EmptyState compact icon="chats" title={t("ai.history.empty")} />
           )}
           {list?.map((c) => {
             const place = conversationPlace(c, hosts);
@@ -213,49 +209,6 @@ function Activity({ id }: { id: string }) {
   );
 }
 
-/** The search field above the list; Esc clears it. */
-function SearchField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const t = useT();
-  const ref = useRef<HTMLInputElement>(null);
-  return (
-    <div className={s.search}>
-      <Icon name="magnifying-glass" size={14} className={s.searchIcon} />
-      <input
-        ref={ref}
-        className={s.searchInput}
-        type="search"
-        value={value}
-        placeholder={t("ai.search")}
-        aria-label={t("ai.search")}
-        spellCheck={false}
-        autoComplete="off"
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape" && value) {
-            e.preventDefault();
-            e.stopPropagation();
-            onChange("");
-          }
-        }}
-      />
-      {value && (
-        <button
-          type="button"
-          className={s.searchClear}
-          title={t("ai.search.clear")}
-          aria-label={t("ai.search.clear")}
-          onClick={() => {
-            onChange("");
-            ref.current?.focus();
-          }}
-        >
-          <Icon name="x-circle" fill size={14} />
-        </button>
-      )}
-    </div>
-  );
-}
-
 function Highlighted({ text, query }: { text: string; query: string }) {
   return (
     <>
@@ -294,8 +247,7 @@ function SearchResults({
     return (
       <div className={s.list}>
         <div className={s.message}>
-          <Spinner size={14} />
-          {t("ai.search.searching")}
+          <StatusLine tone="progress">{t("ai.search.searching")}</StatusLine>
         </div>
       </div>
     );

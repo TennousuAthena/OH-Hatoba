@@ -15,90 +15,16 @@
   border-bottom: 0.5px solid var(--line);
 }
 
-.back {
-  width: 20px;
-  height: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  color: var(--fg2);
-}
-
-.back:hover {
-  background: var(--fill);
-}
-
 .title {
   font-size: var(--text-sm);
   font-weight: 600;
 }
 
 /* AI-24: the search field; the field shows focus with its ring. */
+/* A SearchField across the top of the list. */
 .search {
   flex: none;
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  height: 28px;
   margin: 8px 10px 2px;
-  padding: 0 4px 0 8px;
-  border-radius: var(--radius-sm);
-  background: var(--field);
-  box-shadow: 0 0 0 0.5px var(--fieldline);
-}
-
-.search:focus-within {
-  box-shadow: var(--focus-ring);
-}
-
-.searchIcon {
-  flex: none;
-  color: var(--fg2);
-}
-
-.searchInput {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  font-size: var(--text-md);
-  outline: none;
-}
-
-.searchInput:focus-visible {
-  outline: none;
-}
-
-.searchInput::placeholder {
-  color: var(--fg3);
-}
-
-.searchInput::-webkit-search-cancel-button {
-  display: none;
-}
-
-.searchClear {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--fg3);
-}
-
-.searchClear:hover {
-  color: var(--fg2);
 }
 
 .list {
@@ -229,9 +155,6 @@
 }
 
 .more {
-  width: 26px;
-  height: 24px;
-  color: var(--fg2);
   visibility: hidden;
 }
 
@@ -268,21 +191,3 @@
   text-align: center;
 }
 
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-6);
-  padding: 48px 20px;
-  text-align: center;
-}
-
-.emptyIcon {
-  color: var(--fg3);
-  margin-bottom: 4px;
-}
-
-.emptyTitle {
-  font-size: var(--text-md);
-  font-weight: 600;
-}
