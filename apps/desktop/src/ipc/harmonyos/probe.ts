@@ -24,6 +24,7 @@ void connectHost().then((bridge) => {
     button.disabled = true;
     try {
       report.textContent = JSON.stringify(await bridge.invoke("host_probe"), null, 2);
+      console.info("OH-Hatoba P0 probe rendered");
     } catch {
       report.textContent = "原生验证失败，请查看构建与设备日志。";
     } finally {

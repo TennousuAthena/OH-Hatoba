@@ -1,5 +1,7 @@
 import { webview } from '@kit.ArkWeb';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import hatoba from 'libhatoba.so';
+import { LOCAL_ORIGIN, LOCAL_ENTRY, isLocalNavigation, resolveLocalAsset } from '../host/LocalResources';
 
 interface HostRequest {
   v: number;
@@ -30,6 +32,30 @@ struct Index {
   private generation: number = 0;
   private pending: Set<number> = new Set<number>();
   @State private hostFailed: boolean = false;
+
+  private resource(url: string, method: string): WebResourceResponse {
+    const response = new WebResourceResponse();
+    response.setResponseCode(403);
+    response.setReasonMessage('Forbidden');
+    response.setResponseData('');
+    const asset = resolveLocalAsset(url, method);
+    if (!asset) return response;
+    try {
+      const manager = this.getUIContext().getHostContext()?.resourceManager;
+      if (!manager) return response;
+      const bytes = manager.getRawFileContentSync(asset.path);
+      response.setResponseData(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+      response.setResponseMimeType(asset.mime);
+      response.setResponseEncoding('UTF-8');
+      response.setResponseHeader([{ headerKey: 'X-Content-Type-Options', headerValue: 'nosniff' }]);
+      response.setResponseCode(200);
+      response.setReasonMessage('OK');
+    } catch (_) {
+      response.setResponseCode(404);
+      response.setReasonMessage('Not Found');
+    }
+    return response;
+  }
 
   private closePorts(): void {
     this.generation++;
@@ -74,6 +100,8 @@ struct Index {
         return;
       }
       hatoba.probe().then((json: string) => {
+        // This P0 report contains only build metadata and checks over generated test data.
+        hilog.info(0x0000, 'OH-Hatoba', 'P0 native probe: %{public}s', json);
         const reply: HostReply = { v: 1, type: 'reply', id: request.id, ok: true, result: JSON.parse(json) as Object };
         this.reply(reply, generation);
       }).catch(() => {
@@ -83,9 +111,11 @@ struct Index {
       });
       });
       // Navigation is restricted to packaged resources below. There are no remote frames.
-      this.controller.postMessage('oh-hatoba-host/v1', [this.ports[1]], '*');
+      this.controller.postMessage('oh-hatoba-host/v1', [this.ports[1]], LOCAL_ORIGIN);
+      hilog.info(0x0000, 'OH-Hatoba', 'P0 host port offered');
       this.hostFailed = false;
     } catch (_) {
+      hilog.error(0x0000, 'OH-Hatoba', 'P0 host port connection failed');
       this.hostFailed = true;
       this.closePorts();
     }
@@ -106,17 +136,37 @@ struct Index {
       if (this.hostFailed) {
         Text('原生宿主连接失败，请重新打开应用。').padding(16)
       }
-      Web({ src: $rawfile('web/harmonyos-probe.html'), controller: this.controller })
+      Web({ src: LOCAL_ENTRY, controller: this.controller })
         .javaScriptAccess(true)
         .domStorageAccess(false)
         .fileAccess(false)
         .mixedMode(MixedMode.None)
-        .onPageBegin(() => this.closePorts())
-        .onPageEnd(() => this.connect())
+        .onInterceptRequest((event) => this.resource(event?.request.getRequestUrl() ?? '', event?.request.getRequestMethod() ?? ''))
+        .onPageBegin(() => {
+          hilog.info(0x0000, 'OH-Hatoba', 'P0 page loading');
+          this.closePorts();
+        })
+        .onPageEnd(() => {
+          hilog.info(0x0000, 'OH-Hatoba', 'P0 page loaded');
+          this.connect();
+        })
+        .onConsole((event) => {
+          // Never forward arbitrary Web console data, which could contain future user data.
+          if (event?.message.getMessage() === 'OH-Hatoba P0 probe rendered') {
+            hilog.info(0x0000, 'OH-Hatoba', 'P0 Web received and rendered native probe');
+          }
+          if (event?.message.getMessageLevel() === MessageLevel.Error) {
+            hilog.error(0x0000, 'OH-Hatoba', 'P0 Web console error at line %{public}d', event.message.getLineNumber());
+          }
+          return false;
+        })
         .onLoadIntercept((event) => {
           if (!event) return true;
           const url: string = event.data.getRequestUrl();
-          return !url.startsWith('resource://');
+          if (!isLocalNavigation(url)) {
+            hilog.warn(0x0000, 'OH-Hatoba', 'P0 blocked navigation scheme: %{public}s', url.split(':')[0]);
+          }
+          return !isLocalNavigation(url);
         })
         .width('100%')
         .height('100%')

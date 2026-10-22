@@ -14,6 +14,11 @@ if [ ! -f local.properties ]; then
   printf 'sdk.dir=%s/sdk\n' "$HATOBA_DEVECO_HOME" > local.properties
 fi
 "$HATOBA_DEVECO_HOME/tools/ohpm/bin/ohpm" install
+# Do not mistake a stale signed artifact for the output of this build.
+rm -f entry/build/default/outputs/default/entry-default-signed.hap
 "$HATOBA_DEVECO_HOME/tools/hvigor/bin/hvigorw" --mode module \
   -p product=default -p module=entry@default -p buildMode=debug assembleHap --no-daemon "$@"
 python3 "$root/scripts/harmonyos/check-hap.py"
+if [ -f build-profile.local.json5 ]; then
+  python3 "$root/scripts/harmonyos/check-hap.py" entry/build/default/outputs/default/entry-default-signed.hap
+fi

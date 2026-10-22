@@ -13,3 +13,10 @@ test("separates credentials without replacing shared SDK policy", () => {
   assert.equal(input.app.signingConfigs[0].material.storePassword, "fixture-only");
   assert.throws(() => separateSigning({ app: { products: [] } }), /No signing configuration/);
 });
+
+test("assigns DevEco's sole generated configuration and rejects ambiguous products", () => {
+  const input = { app: { signingConfigs: [{ name: "debug" }], products: [{ name: "default" }] } };
+  assert.deepEqual(separateSigning(input).local.app.products, [{ name: "default", signingConfig: "debug" }]);
+  input.app.products.push({ name: "second" });
+  assert.throws(() => separateSigning(input), /Assign a signing configuration/);
+});

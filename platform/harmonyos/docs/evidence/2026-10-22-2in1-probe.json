@@ -1,0 +1,37 @@
+{
+  "verifiedAt": "2026-10-22T10:12:32.934526+00:00",
+  "device": "HUAWEI MateBook Pro (2in1)",
+  "system": "HarmonyOS 7.0.0 / API26 (DevEco device metadata)",
+  "webReceivedAndRendered": true,
+  "native": {
+    "host_protocol": 1,
+    "upstream_version": "0.6.0",
+    "upstream_commit": "96fd9edb83d78ddedbf70895669f7a0121c8f74b",
+    "architecture": "aarch64",
+    "target_os": "linux",
+    "target_env": "ohos"
+  },
+  "checks": [
+    {
+      "name": "random_aead_and_tamper_rejection",
+      "passed": true
+    },
+    {
+      "name": "sqlite_schema",
+      "passed": true
+    },
+    {
+      "name": "ssh_ed25519_roundtrip",
+      "passed": true
+    },
+    {
+      "name": "tokio_runtime",
+      "passed": true
+    },
+    {
+      "name": "ai_provider_url_validation",
+      "passed": true
+    }
+  ],
+  "scope": "P0 generated-data dependency probe; does not validate SSH networking, TLS, IME or lifecycle recovery"
+}

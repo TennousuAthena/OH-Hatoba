@@ -31,6 +31,8 @@ apps/site/public/demo/
 
 # HarmonyOS local SDK/signing settings and generated build output
 platform/harmonyos/.hvigor/
+platform/harmonyos/.clangd
+platform/harmonyos/.clang-tidy
 platform/harmonyos/.cxx/
 platform/harmonyos/entry/.cxx/
 platform/harmonyos/build/
