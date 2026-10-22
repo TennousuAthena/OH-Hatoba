@@ -1,0 +1,31 @@
+{
+  "verifiedAt": "2026-10-22T17:32:34.339912+00:00",
+  "device": "HUAWEI MatePad Pro (tablet)",
+  "system": "HarmonyOS 7 / API26",
+  "normalApplicationBoot": true,
+  "reactRendered": true,
+  "scope": "Normal application entry loads its real native runtime, host capabilities, vault status and React application. No projection or UI interaction; does not prove layout, IME, touch or biometric usability.",
+  "nativeWindowSurfaceSynchronized": true,
+  "branding": {
+    "displayName": "Hatoba",
+    "productNameSource": "apps/desktop/src-tauri/tauri.conf.json",
+    "iconSource": "apps/desktop/src-tauri/icons/icon.png",
+    "iconSha256": "6a6bfddcc6b01d28b7bf264950282a1f1ff750248c132e219eed1e020806ddb5",
+    "packagedIconMatchesUpstreamBytes": true,
+    "oldPlatformIconAbsent": true,
+    "webTitle": "Hatoba"
+  },
+  "validation": {
+    "typecheck": true,
+    "eslint": true,
+    "signedHapMetadataAndBrandingChecked": true,
+    "commandContractChecked": true,
+    "hostBoundariesChecked": true,
+    "localSigningScriptTestsPassed": 2
+  },
+  "artifact": {
+    "name": "entry-default-signed.hap",
+    "sha256": "c4bd948e5107335567849b35d500b67c754ca8c6f019f672e8ba442c950ad458",
+    "bytes": 54721889
+  }
+}

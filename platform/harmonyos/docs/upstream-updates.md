@@ -12,6 +12,7 @@ SSH、保险库、同步、AI 或 React 页面实现。
 | Native | 独立 OHOS workspace member + C++ Node-API 薄桥 | 不链接 Tauri/GTK，不为了鸿蒙重写协议库 |
 | 业务运行层 | `hatoba-runtime` 通过 `#[path]` 编译原桌面业务源；桌面 `host` 转发 Tauri，鸿蒙注入自己的 host | 上游修改只维护同一函数，避免搬移或复制业务目录 |
 | 系统能力 | 独立的原生 SystemServices 队列和本机 capability；Web 只有明确的服务白名单 | 系统 API 与平台差异集中处理，保留不可执行的同步配置 |
+| 应用名称与图标 | Hvigor 从桌面 `productName` 和原始 `icons/icon.png` 同步到 AppScope，包检查核对图标字节 | 构建与 IDE 调试沿用上游品牌，不维护自创图标 |
 | 版本 | `upstream.json` 是已完成验证的上游提交；hostProtocol 独立版本 | 不因上游发版就更改桥接协议，不跳过验证推进基线 |
 
 当前 `createCommandApi` 仍位于原有文件，以减少上游改动和未来合并位置变化。鸿蒙未伪造

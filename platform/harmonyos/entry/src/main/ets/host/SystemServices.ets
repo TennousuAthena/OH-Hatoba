@@ -146,7 +146,7 @@ export class SystemServices {
     if (!args.challenge || args.challenge.length !== 32 || !args.challenge.every((n: number) => Number.isInteger(n) && n >= 0 && n <= 255)) throw new Error('Invalid authentication challenge');
     const types = SystemServices.authTypes();
     if (!types.length) throw new Error('Biometrics unavailable');
-    const auth = userAuth.getUserAuthInstance({ challenge: new Uint8Array(args.challenge), authType: types, authTrustLevel: userAuth.AuthTrustLevel.ATL2 }, { title: '解锁 OH-Hatoba 保险库' });
+    const auth = userAuth.getUserAuthInstance({ challenge: new Uint8Array(args.challenge), authType: types, authTrustLevel: userAuth.AuthTrustLevel.ATL2 }, { title: '解锁 Hatoba 保险库' });
     return new Promise<number[]>((resolve, reject) => {
       const timer = setTimeout(() => { try { auth.cancel(); } catch (_) {} reject(new Error('Authentication timed out')); }, 90000);
       auth.on('result', { onResult: (result: userAuth.UserAuthResult) => {

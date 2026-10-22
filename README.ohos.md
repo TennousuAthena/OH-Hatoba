@@ -2,6 +2,7 @@
 
 Hatoba 的原生 HarmonyOS 适配，目标为 HarmonyOS 6.0/API20 起的 ARM64 **2in1 与平板**。
 上游历史和 README 保留；当前集成基线见 [upstream.json](platform/harmonyos/upstream.json)。
+应用显示名称与图标沿用上游 Hatoba；Hvigor 构建时直接同步桌面产品名称和原始 PNG 图标。
 
 ## 当前进度
 

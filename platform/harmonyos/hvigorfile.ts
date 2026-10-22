@@ -3,6 +3,25 @@ import { appTasks, OhosAppContext, OhosPluginId } from '@ohos/hvigor-ohos-plugin
 import fs from 'node:fs';
 import path from 'node:path';
 
+// Launcher branding follows the upstream desktop assets, including builds started from the IDE.
+hvigor.getRootNode().afterNodeEvaluate(() => {
+  const root = hvigor.getRootNode().getNodePath();
+  const desktop = path.resolve(root, '../../apps/desktop/src-tauri');
+  const upstream = JSON.parse(fs.readFileSync(path.join(desktop, 'tauri.conf.json'), 'utf8')) as { productName: string };
+  if (!upstream.productName?.trim()) throw new Error('Upstream application name is missing');
+  const stringsPath = path.join(root, 'AppScope/resources/base/element/string.json');
+  const strings = JSON.parse(fs.readFileSync(stringsPath, 'utf8')) as { string: { name: string; value: string }[] };
+  const label = strings.string.find((entry) => entry.name === 'app_name');
+  if (!label) throw new Error('Application label resource is missing');
+  if (label.value !== upstream.productName) {
+    label.value = upstream.productName;
+    fs.writeFileSync(stringsPath, JSON.stringify(strings, null, 2) + '\n');
+  }
+  const icon = fs.readFileSync(path.join(desktop, 'icons/icon.png'));
+  const iconPath = path.join(root, 'AppScope/resources/base/media/app_icon.png');
+  if (!fs.existsSync(iconPath) || !fs.readFileSync(iconPath).equals(icon)) fs.writeFileSync(iconPath, icon);
+});
+
 // Only local signing material is merged, in memory. SDK/device policy stays in tracked config.
 // Apply before child modules construct their signing tasks and capture the product.
 hvigor.getRootNode().afterNodeEvaluate(() => {

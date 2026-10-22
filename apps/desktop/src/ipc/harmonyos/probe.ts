@@ -13,7 +13,7 @@ const fit = new FitAddon();
 terminal.loadAddon(fit);
 const container = document.querySelector<HTMLDivElement>("#terminal")!;
 terminal.open(container);
-terminal.writeln("OH-Hatoba — xterm 6 / ArkWeb 输入验证\r\n中文 · 全角字符 · emoji 🌊\r\n");
+terminal.writeln("Hatoba — xterm 6 / ArkWeb 输入验证\r\n中文 · 全角字符 · emoji 🌊\r\n");
 terminal.onData((data) => terminal.write(data === "\r" ? "\r\n" : data === "\x7f" ? "\b \b" : data));
 new ResizeObserver(() => fit.fit()).observe(container);
 document.querySelector("#keyboard")!.addEventListener("click", () => terminal.focus());

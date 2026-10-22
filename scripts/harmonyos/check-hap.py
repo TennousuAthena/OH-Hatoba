@@ -9,6 +9,10 @@ from zipfile import ZipFile
 ROOT = Path(__file__).resolve().parents[2]
 hap = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "platform/harmonyos/entry/build/default/outputs/default/entry-default-unsigned.hap"
 expected = json.loads((ROOT / "platform/harmonyos/AppScope/app.json5").read_text())["app"]
+desktop = ROOT / "apps/desktop/src-tauri"
+product_name = json.loads((desktop / "tauri.conf.json").read_text())["productName"]
+strings = json.loads((ROOT / "platform/harmonyos/AppScope/resources/base/element/string.json").read_text())["string"]
+assert next(item["value"] for item in strings if item["name"] == "app_name") == product_name, "Application name differs from upstream"
 with ZipFile(hap) as archive:
     metadata = json.loads(archive.read("module.json"))
     app = metadata["app"]
@@ -24,4 +28,6 @@ with ZipFile(hap) as archive:
     assert struct.unpack_from("<H", library, 18)[0] == 183, "Native host must be AArch64"
     for entry in ("harmonyos-app.html", "harmonyos-probe.html"):
         assert f"resources/rawfile/web/{entry}" in archive.namelist(), f"Packaged {entry} missing"
-print(f"HAP checked: ARM64, min API20, target API26, 2in1 + tablet ({hap.stat().st_size:,} bytes)")
+    assert archive.read("resources/base/media/app_icon.png") == (desktop / "icons/icon.png").read_bytes(), "Packaged icon differs from upstream"
+    assert "resources/base/media/app_icon.svg" not in archive.namelist(), "Old platform icon is still packaged"
+print(f"HAP checked: ARM64, min API20, target API26, 2in1 + tablet, upstream branding ({hap.stat().st_size:,} bytes)")
