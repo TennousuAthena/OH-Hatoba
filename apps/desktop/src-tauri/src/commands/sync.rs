@@ -451,7 +451,10 @@ fn summary(item: &Item, hosts: &dyn Fn(&str) -> Option<String>) -> Vec<(&'static
             ("fingerprint", k.fingerprint.clone()),
         ],
         Item::KnownHost(k) => vec![("fingerprint", k.fingerprint.clone())],
-        Item::Forward(f) => vec![("bind_port", f.bind_port.to_string())],
+        Item::Forward(f) => vec![
+            ("name", f.name.clone()),
+            ("bind_port", f.bind_port.to_string()),
+        ],
         Item::Snippet(s) => vec![("name", s.name.clone())],
         // Never the password.
         Item::Proxy(p) => vec![
@@ -621,6 +624,8 @@ pub fn sync_conflict_resolve(
     })?;
     if action == ConflictAction::Restore {
         sync::local_change(&app);
+        // FWD-06: a restored forward rule renames, or stops, where it runs.
+        crate::connection::rules_changed(&app);
     } else {
         sync::emit_status(&app);
     }
