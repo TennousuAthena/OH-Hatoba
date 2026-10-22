@@ -58,6 +58,11 @@ FD 测试由原生创建临时文件描述符，不能代替用户实际操作�
 
 ## 真机发现并修复
 
+- 鸿蒙界面曾显示上游的最小化/最大化/关闭按钮：原条件只排除了 macOS，按钮依赖的 Tauri
+  窗口接口在鸿蒙不可用。现在仅 Windows/Linux 渲染这组按钮，鸿蒙引导/锁屏页也不再渲染
+  空的桌面标题栏覆盖层。TypeScript、ESLint、1035项前端测试通过，新签名包已覆盖安装到平板；
+  [普通入口复验与包校验和](evidence/2026-10-22-tablet-window-controls-startup.json)已记录，未投屏验收。
+
 - ArkWeb 的 `resource://` ES Module/CSS 被 CORS 拦截。采用包内资源拦截的固定虚拟 HTTPS origin，
   拒绝外部请求和目录穿越，保持浏览器安全检查。
 - Vite/Rolldown 多入口曾将公共 helper 放进应用入口，导致诊断页隐式启动第二个宿主。

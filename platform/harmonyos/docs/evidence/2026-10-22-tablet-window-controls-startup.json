@@ -1,0 +1,20 @@
+{
+  "verifiedAt": "2026-10-22T13:01:35.465374+00:00",
+  "device": "HUAWEI MatePad Pro (tablet)",
+  "system": "HarmonyOS 7 / API26",
+  "normalApplicationBoot": true,
+  "reactRendered": true,
+  "scope": "Normal application entry loads its real native runtime, host capabilities, vault status and React application. No projection or UI interaction; does not prove layout, IME, touch or biometric usability.",
+  "change": "HarmonyOS omits the desktop caption buttons and full-window titlebar overlay; Windows/Linux caption controls and macOS native titlebar spacing are preserved.",
+  "frontendValidation": {
+    "typecheck": true,
+    "eslint": true,
+    "testFiles": 87,
+    "testsPassed": 1035
+  },
+  "artifact": {
+    "name": "entry-default-signed.hap",
+    "sha256": "1d9fe9e3722fd08da73decdd0463edaa89c55a0a8013bee30c69c6a920ec18f7",
+    "bytes": 54684515
+  }
+}

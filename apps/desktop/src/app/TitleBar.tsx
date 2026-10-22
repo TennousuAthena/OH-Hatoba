@@ -56,7 +56,7 @@ export function WindowControls() {
     };
   }, []);
 
-  if (platform === "macos") return null;
+  if (platform !== "windows" && platform !== "linux") return null;
   // Glyphs are drawn with CSS so they look the same with or without Segoe Fluent Icons installed.
   const glyph = (className: string) => <span className={className} />;
 
@@ -280,6 +280,9 @@ export function TabBar({ homeLabel, homeIcon, onNewTab, onCloseTab }: {
  * Windows caption buttons on the right. On macOS the native traffic lights sit on top of it.
  */
 export function WindowChrome({ transparent = true }: { transparent?: boolean }) {
+  const platform = useApp((st) => st.info.platform);
+  if (platform === "harmonyos") return null;
+
   return (
     <div
       data-tauri-drag-region
