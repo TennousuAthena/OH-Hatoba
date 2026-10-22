@@ -239,7 +239,7 @@ impl Context {
                 }
                 if command == "host_service" {
                     let method = args["method"].as_str().ok_or_else(|| AppError::invalid("method", "Missing host service"))?;
-                    if !["capabilities", "clipboard_write", "clipboard_read", "open_url", "pick_open_path", "pick_open_files", "pick_save_path", "window_focused", "notification_permission", "notifications_ready"].contains(&method) {
+                    if !["capabilities", "window_surface", "clipboard_write", "clipboard_read", "open_url", "pick_open_path", "pick_open_files", "pick_save_path", "window_focused", "notification_permission", "notifications_ready"].contains(&method) {
                         return Err(AppError::invalid("method", "Unavailable host service"));
                     }
                     return app.service(method, args.clone()).await;

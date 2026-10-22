@@ -20,9 +20,12 @@ parser.add_argument("--hdc", default=str(Path(os.environ.get("HATOBA_DEVECO_HOME
 parser.add_argument("--device-label", default="Unspecified development device")
 parser.add_argument("--system-label", default="Unspecified HarmonyOS version")
 parser.add_argument("--output", type=Path)
+parser.add_argument("--window-surface", action="store_true", help="Require native window background synchronization in normal application mode")
 parser.add_argument("--app", action="store_true", help="Verify normal application boot and React rendering without diagnostics")
 parser.add_argument("--network", action="store_true", help="Require the disposable loopback SSH/SFTP and untrusted TLS fixtures through hdc rport")
 args = parser.parse_args()
+if args.window_surface and not args.app:
+    parser.error("--window-surface requires --app")
 if args.app and args.network:
     parser.error("--app and --network are separate checks")
 hdc = [args.hdc, "-t", args.target]
@@ -52,6 +55,7 @@ web_terminal = False
 diagnostic_failed = False
 app_boot = False
 app_rendered = False
+window_surface = False
 console_error = False
 deadline = time.monotonic() + (80 if args.network else 30)
 while time.monotonic() < deadline:
@@ -61,6 +65,7 @@ while time.monotonic() < deadline:
         for line in log.splitlines():
             app_boot |= "Application boot completed" in line
             app_rendered |= "Application rendered" in line
+            window_surface |= "Window surface synchronized" in line
             console_error |= "Web console error" in line or "Native host initialization failed" in line
             marker = "P0 native probe: "
             if marker in line:
@@ -77,16 +82,19 @@ while time.monotonic() < deadline:
                 web_terminal = True
             if "Diagnostic failed" in line:
                 diagnostic_failed = True
-        if args.app and app_boot and app_rendered:
+        if args.app and app_boot and app_rendered and (not args.window_surface or window_surface):
             break
         if report is not None and rendered and business and (not args.network or (network is not None and (network_rendered or diagnostic_failed))):
             break
     time.sleep(0.25)
 if args.app:
     assert app_boot and app_rendered and not console_error, "Normal application boot/render check failed"
+    assert not args.window_surface or window_surface, "Native window background was not synchronized"
     evidence = {"verifiedAt": datetime.now(timezone.utc).isoformat(), "device": args.device_label,
                 "system": args.system_label, "normalApplicationBoot": app_boot, "reactRendered": app_rendered,
                 "scope": "Normal application entry loads its real native runtime, host capabilities, vault status and React application. No projection or UI interaction; does not prove layout, IME, touch or biometric usability."}
+    if args.window_surface:
+        evidence["nativeWindowSurfaceSynchronized"] = window_surface
     encoded = json.dumps(evidence, ensure_ascii=False, indent=2) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

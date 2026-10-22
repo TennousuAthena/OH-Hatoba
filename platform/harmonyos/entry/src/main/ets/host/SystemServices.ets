@@ -3,6 +3,7 @@ import { notificationManager } from '@kit.NotificationKit';
 import { userAuth } from '@kit.UserAuthenticationKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { picker, fileIo as fs, fileUri } from '@kit.CoreFileKit';
+import { window } from '@kit.ArkUI';
 import hatoba from 'libhatoba.so';
 import { ClipboardAccess } from './ClipboardAccess';
 import { BackgroundLease } from './BackgroundLease';
@@ -10,6 +11,7 @@ import { BackgroundLease } from './BackgroundLease';
 interface NotificationTarget { tab?: string | null; conversation_id?: string | null; host_id?: string | null; }
 
 interface HostArgs {
+  background?: string;
   text?: string;
   url?: string;
   directory?: boolean;
@@ -77,6 +79,21 @@ export class SystemServices {
           folderPicker: canIUse('SystemCapability.FileManagement.UserFileService.FolderSelection')
         };
         return result;
+      }
+      case 'window_surface': {
+        const background = args.background ?? '';
+        if (!/^#[0-9A-F]{6}$/i.test(background)) throw new Error('Invalid window background');
+        const mainWindow = await window.getLastWindow(this.context);
+        if (!this.current()) throw new Error('Native page changed');
+        const value = parseInt(background.slice(1), 16);
+        const luminance = (value >> 16) * 299 + ((value >> 8) & 255) * 587 + (value & 255) * 114;
+        const foreground = luminance >= 128000 ? '#000000' : '#FFFFFF';
+        mainWindow.setWindowBackgroundColor(background);
+        AppStorage.setOrCreate('OH_HATOBA_BACKGROUND', background);
+        AppStorage.setOrCreate('OH_HATOBA_FOREGROUND', foreground);
+        // Gesture navigation uses the window background; this also covers three-button mode.
+        try { await mainWindow.setWindowSystemBarProperties({ navigationBarColor: background, navigationBarContentColor: foreground }); } catch (_) {}
+        return background;
       }
       case 'clipboard_write': {
         if (typeof args.text !== 'string' || args.text.length > 1048576) throw new Error('Invalid clipboard text');
