@@ -96,19 +96,6 @@
   line-height: 1.55;
 }
 
-.error {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-6);
-  color: var(--red);
-  font-size: var(--text-sm);
-  line-height: 1.5;
-}
-
-.error i {
-  margin-top: 1px;
-}
-
 .keys {
   display: flex;
   flex-direction: column;
