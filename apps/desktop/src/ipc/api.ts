@@ -557,14 +557,16 @@ let impl: Promise<HatobaApi> | null = null;
 
 /** Cached promise so concurrent first calls share one backend instance. */
 function load(): Promise<HatobaApi> {
-  impl ??= isTauri()
+  impl ??= import.meta.env.MODE === "harmonyos"
+    ? import("./harmonyos/api").then((m) => m.createHarmonyApi())
+    : isTauri()
     ? import("./tauri").then((m) => m.createTauriApi())
     : import("./mock").then((m) => m.createMockApi());
   return impl;
 }
 
 /**
- * The backend. Calls are forwarded lazily so the Tauri or mock implementation is chosen at runtime
+ * The backend. Calls are forwarded lazily so the Tauri, HarmonyOS or mock host is selected
  * (the mock lets the UI run in a plain browser with the design's sample data).
  */
 export const api: HatobaApi = new Proxy({} as HatobaApi, {

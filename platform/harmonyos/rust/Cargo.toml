@@ -1,0 +1,19 @@
+[package]
+name = "hatoba-ohos"
+description = "HarmonyOS native host for Hatoba's shared Rust libraries"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+hatoba-core.workspace = true
+hatoba-ssh.workspace = true
+hatoba-ai.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true

@@ -12,6 +12,9 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
-    "worker:bundle": "node scripts/worker/bundle.mjs"
+    "worker:bundle": "node scripts/worker/bundle.mjs",
+    "ohos:contracts": "node scripts/harmonyos/contracts.mjs --check",
+    "ohos:audit": "node scripts/harmonyos/upstream.mjs",
+    "ohos:build": "scripts/harmonyos/build-hap.sh"
   }
 }

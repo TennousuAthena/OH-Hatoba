@@ -1,0 +1,28 @@
+name: HarmonyOS adapter
+on:
+  push:
+  pull_request:
+
+jobs:
+  contracts-and-host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/harmonyos/contracts.mjs --check
+      - run: node --test scripts/harmonyos/*.test.mjs
+      - run: pnpm --filter @hatoba/desktop typecheck
+      - run: pnpm --filter @hatoba/desktop exec vitest run src/ipc/tauri.test.ts src/ipc/harmonyos/bridge.test.ts
+      - run: pnpm --filter @hatoba/desktop exec vite build --mode harmonyos --config vite.harmonyos.config.ts
+      - run: cargo test -p hatoba-ohos --locked
+      - run: node scripts/harmonyos/check-boundaries.mjs
+      # Native cross-build/HAP require the separately installed HarmonyOS SDK. Run build-hap.sh
+      # on the development/release host; do not claim this Linux job validates an OHOS device.

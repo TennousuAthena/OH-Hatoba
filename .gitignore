@@ -28,3 +28,16 @@ apps/desktop/src-tauri/gen/schemas/
 apps/desktop/src-tauri/gen/worker/
 # The website's demo (apps/site/scripts/demo.mjs)
 apps/site/public/demo/
+
+# HarmonyOS local SDK/signing settings and generated build output
+platform/harmonyos/.hvigor/
+platform/harmonyos/.cxx/
+platform/harmonyos/entry/.cxx/
+platform/harmonyos/build/
+platform/harmonyos/entry/build/
+platform/harmonyos/oh_modules/
+platform/harmonyos/entry/oh_modules/
+platform/harmonyos/local.properties
+platform/harmonyos/build-profile.local.json5*
+platform/harmonyos/wecode-cpp.db*
+platform/harmonyos/entry/src/main/resources/rawfile/web/

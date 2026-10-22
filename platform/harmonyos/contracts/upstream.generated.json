@@ -1,0 +1,2063 @@
+{
+  "schema": 1,
+  "commands": {
+    "appInfo": {
+      "command": "app_info",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "AppInfo"
+    },
+    "windowSnapOverlay": {
+      "command": "window_snap_overlay",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "void"
+    },
+    "windowFloating": {
+      "command": "window_floating",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "boolean"
+    },
+    "windowHideToTray": {
+      "command": "window_hide_to_tray",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "void"
+    },
+    "appQuit": {
+      "command": "app_quit",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "void"
+    },
+    "traySetMenu": {
+      "command": "tray_set_menu",
+      "parameters": [
+        "menu"
+      ],
+      "channels": [],
+      "signature": "menu: TrayMenuInput",
+      "result": "void"
+    },
+    "notificationShow": {
+      "command": "notification_show",
+      "parameters": [
+        "notification"
+      ],
+      "channels": [],
+      "signature": "notification: NotificationInput",
+      "result": "void"
+    },
+    "saveTextFile": {
+      "command": "save_text_file",
+      "parameters": [
+        "path",
+        "contents"
+      ],
+      "channels": [],
+      "signature": "path: string, contents: string",
+      "result": "null"
+    },
+    "activityPing": {
+      "command": "activity_ping",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "void"
+    },
+    "updateCheck": {
+      "command": "update_check",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "UpdateCheck"
+    },
+    "updateInstall": {
+      "command": "update_install",
+      "parameters": [
+        "progress"
+      ],
+      "channels": [
+        0
+      ],
+      "signature": "progress: Channel<UpdateProgress>",
+      "result": "null"
+    },
+    "launchTake": {
+      "command": "launch_take",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "string[][]"
+    },
+    "cliCommandGet": {
+      "command": "cli_command_get",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "CliCommandView"
+    },
+    "cliCommandSet": {
+      "command": "cli_command_set",
+      "parameters": [
+        "enabled"
+      ],
+      "channels": [],
+      "signature": "enabled: boolean",
+      "result": "CliCommandView"
+    },
+    "cliAccessSet": {
+      "command": "cli_access_set",
+      "parameters": [
+        "enabled"
+      ],
+      "channels": [],
+      "signature": "enabled: boolean",
+      "result": "CliCommandView"
+    },
+    "cliActivityList": {
+      "command": "cli_activity_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "CliActivity[]"
+    },
+    "vaultStatus": {
+      "command": "vault_status",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "VaultStatus"
+    },
+    "vaultCreate": {
+      "command": "vault_create",
+      "parameters": [
+        "password"
+      ],
+      "channels": [],
+      "signature": "password: string",
+      "result": "string"
+    },
+    "vaultUnlock": {
+      "command": "vault_unlock",
+      "parameters": [
+        "password"
+      ],
+      "channels": [],
+      "signature": "password: string",
+      "result": "null"
+    },
+    "vaultUnlockBiometric": {
+      "command": "vault_unlock_biometric",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "null"
+    },
+    "vaultUnlockPin": {
+      "command": "vault_unlock_pin",
+      "parameters": [
+        "pin"
+      ],
+      "channels": [],
+      "signature": "pin: string",
+      "result": "null"
+    },
+    "vaultLock": {
+      "command": "vault_lock",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "void"
+    },
+    "vaultVerifyPassword": {
+      "command": "vault_verify_password",
+      "parameters": [
+        "password"
+      ],
+      "channels": [],
+      "signature": "password: string",
+      "result": "boolean"
+    },
+    "vaultChangePassword": {
+      "command": "vault_change_password",
+      "parameters": [
+        "current",
+        "next"
+      ],
+      "channels": [],
+      "signature": "current: string, next: string",
+      "result": "null"
+    },
+    "vaultRecover": {
+      "command": "vault_recover",
+      "parameters": [
+        "recoveryCode",
+        "newPassword"
+      ],
+      "channels": [],
+      "signature": "recoveryCode: string, newPassword: string",
+      "result": "null"
+    },
+    "vaultRestoreFromCloud": {
+      "command": "vault_restore_from_cloud",
+      "parameters": [
+        "config",
+        "password"
+      ],
+      "channels": [],
+      "signature": "config: SyncConfigInput, password: string",
+      "result": "null"
+    },
+    "vaultExportBackup": {
+      "command": "vault_export_backup",
+      "parameters": [
+        "path"
+      ],
+      "channels": [],
+      "signature": "path: string",
+      "result": "null"
+    },
+    "vaultRotateRecovery": {
+      "command": "vault_rotate_recovery",
+      "parameters": [
+        "password"
+      ],
+      "channels": [],
+      "signature": "password: string",
+      "result": "string"
+    },
+    "biometricEnable": {
+      "command": "biometric_enable",
+      "parameters": [
+        "password"
+      ],
+      "channels": [],
+      "signature": "password: string",
+      "result": "null"
+    },
+    "biometricDisable": {
+      "command": "biometric_disable",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "null"
+    },
+    "pinEnable": {
+      "command": "pin_enable",
+      "parameters": [
+        "password",
+        "pin"
+      ],
+      "channels": [],
+      "signature": "password: string, pin: string",
+      "result": "null"
+    },
+    "pinDisable": {
+      "command": "pin_disable",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "null"
+    },
+    "pinSetPersist": {
+      "command": "pin_set_persist",
+      "parameters": [
+        "persist"
+      ],
+      "channels": [],
+      "signature": "persist: boolean",
+      "result": "null"
+    },
+    "hostsList": {
+      "command": "hosts_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "HostView[]"
+    },
+    "hostGet": {
+      "command": "host_get",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "HostView"
+    },
+    "hostSave": {
+      "command": "host_save",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: HostInput",
+      "result": "HostView"
+    },
+    "hostDelete": {
+      "command": "host_delete",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "null"
+    },
+    "hostDuplicate": {
+      "command": "host_duplicate",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "HostView"
+    },
+    "hostSetFavorite": {
+      "command": "host_set_favorite",
+      "parameters": [
+        "id",
+        "favorite"
+      ],
+      "channels": [],
+      "signature": "id: string, favorite: boolean",
+      "result": "null"
+    },
+    "hostSetShowStats": {
+      "command": "host_set_show_stats",
+      "parameters": [
+        "id",
+        "on"
+      ],
+      "channels": [],
+      "signature": "id: string, on: boolean",
+      "result": "null"
+    },
+    "dashboardSetShown": {
+      "command": "dashboard_set_shown",
+      "parameters": [
+        "id",
+        "shown"
+      ],
+      "channels": [],
+      "signature": "id: string, shown: boolean",
+      "result": "null"
+    },
+    "hostCopyPassword": {
+      "command": "host_copy_password",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "null"
+    },
+    "groupsList": {
+      "command": "groups_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "GroupView[]"
+    },
+    "groupSave": {
+      "command": "group_save",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: GroupInput",
+      "result": "GroupView"
+    },
+    "groupDelete": {
+      "command": "group_delete",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "null"
+    },
+    "tagsList": {
+      "command": "tags_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "TagCount[]"
+    },
+    "hostsProbe": {
+      "command": "hosts_probe",
+      "parameters": [
+        "ids"
+      ],
+      "channels": [],
+      "signature": "ids: string[]",
+      "result": "ProbeResult[]"
+    },
+    "dashboardWatch": {
+      "command": "dashboard_watch",
+      "parameters": [
+        "hostIds",
+        "intervalSecs",
+        "channel"
+      ],
+      "channels": [
+        2
+      ],
+      "signature": "hostIds: string[], intervalSecs: number, channel: Channel<DashboardEvent>",
+      "result": "number"
+    },
+    "dashboardUnwatch": {
+      "command": "dashboard_unwatch",
+      "parameters": [
+        "watchId"
+      ],
+      "channels": [],
+      "signature": "watchId: number",
+      "result": "void"
+    },
+    "dashboardRetry": {
+      "command": "dashboard_retry",
+      "parameters": [
+        "hostId"
+      ],
+      "channels": [],
+      "signature": "hostId: string",
+      "result": "void"
+    },
+    "hostsImportPreview": {
+      "command": "hosts_import_preview",
+      "parameters": [
+        "source",
+        "path"
+      ],
+      "channels": [],
+      "signature": "source: ImportSource, path: string | null",
+      "result": "ImportPreview"
+    },
+    "hostsImport": {
+      "command": "hosts_import",
+      "parameters": [
+        "source",
+        "path",
+        "ids",
+        "keyFiles"
+      ],
+      "channels": [],
+      "signature": "source: ImportSource, path: string | null, ids: string[], keyFiles: string[]",
+      "result": "ImportResult"
+    },
+    "proxiesList": {
+      "command": "proxies_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "ProxyView[]"
+    },
+    "proxySave": {
+      "command": "proxy_save",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: ProxyInput",
+      "result": "ProxyView"
+    },
+    "proxyDelete": {
+      "command": "proxy_delete",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "null"
+    },
+    "keysList": {
+      "command": "keys_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "KeyView[]"
+    },
+    "keyImport": {
+      "command": "key_import",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: KeyImportInput",
+      "result": "KeyView"
+    },
+    "keyGenerate": {
+      "command": "key_generate",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: KeyGenerateInput",
+      "result": "KeyView"
+    },
+    "keyRename": {
+      "command": "key_rename",
+      "parameters": [
+        "id",
+        "name"
+      ],
+      "channels": [],
+      "signature": "id: string, name: string",
+      "result": "KeyView"
+    },
+    "keyDelete": {
+      "command": "key_delete",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "null"
+    },
+    "keyPublic": {
+      "command": "key_public",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "string"
+    },
+    "keyDeploy": {
+      "command": "key_deploy",
+      "parameters": [
+        "keyId",
+        "hostId"
+      ],
+      "channels": [],
+      "signature": "keyId: string, hostId: string",
+      "result": "null"
+    },
+    "sshConnect": {
+      "command": "ssh_connect",
+      "parameters": [
+        "hostId",
+        "options",
+        "channel"
+      ],
+      "channels": [
+        2
+      ],
+      "signature": "hostId: string, options: ConnectOptions, channel: Channel<TermFrame>",
+      "result": "string"
+    },
+    "sshConnectTarget": {
+      "command": "ssh_connect_target",
+      "parameters": [
+        "target",
+        "options",
+        "channel"
+      ],
+      "channels": [
+        2
+      ],
+      "signature": "target: QuickTarget, options: ConnectOptions, channel: Channel<TermFrame>",
+      "result": "string"
+    },
+    "recentTargetsList": {
+      "command": "recent_targets_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "QuickTarget[]"
+    },
+    "recentTargetRemove": {
+      "command": "recent_target_remove",
+      "parameters": [
+        "target"
+      ],
+      "channels": [],
+      "signature": "target: QuickTarget",
+      "result": "QuickTarget[]"
+    },
+    "sshWrite": {
+      "command": "ssh_write",
+      "parameters": [
+        "sessionId",
+        "data"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, data: string",
+      "result": "null"
+    },
+    "sshWriteBytes": {
+      "command": "ssh_write_bytes",
+      "parameters": [
+        "sessionId",
+        "data"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, data: number[]",
+      "result": "null"
+    },
+    "sshResize": {
+      "command": "ssh_resize",
+      "parameters": [
+        "sessionId",
+        "cols",
+        "rows"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, cols: number, rows: number",
+      "result": "null"
+    },
+    "sshDisconnect": {
+      "command": "ssh_disconnect",
+      "parameters": [
+        "sessionId"
+      ],
+      "channels": [],
+      "signature": "sessionId: string",
+      "result": "null"
+    },
+    "sshStatsStart": {
+      "command": "ssh_stats_start",
+      "parameters": [
+        "sessionId",
+        "channel"
+      ],
+      "channels": [
+        1
+      ],
+      "signature": "sessionId: string, channel: Channel<StatsEvent>",
+      "result": "number"
+    },
+    "sshStatsStop": {
+      "command": "ssh_stats_stop",
+      "parameters": [
+        "sessionId",
+        "statsId"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, statsId: number",
+      "result": "void"
+    },
+    "sshTest": {
+      "command": "ssh_test",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: HostInput",
+      "result": "TestResult"
+    },
+    "localShells": {
+      "command": "local_shells",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "LocalShellView[]"
+    },
+    "localOpen": {
+      "command": "local_open",
+      "parameters": [
+        "shellId",
+        "options",
+        "channel"
+      ],
+      "channels": [
+        2
+      ],
+      "signature": "shellId: string, options: LocalOpenOptions, channel: Channel<TermFrame>",
+      "result": "string"
+    },
+    "localWrite": {
+      "command": "local_write",
+      "parameters": [
+        "sessionId",
+        "data"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, data: string",
+      "result": "null"
+    },
+    "localWriteBytes": {
+      "command": "local_write_bytes",
+      "parameters": [
+        "sessionId",
+        "data"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, data: number[]",
+      "result": "null"
+    },
+    "localResize": {
+      "command": "local_resize",
+      "parameters": [
+        "sessionId",
+        "cols",
+        "rows"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, cols: number, rows: number",
+      "result": "null"
+    },
+    "localClose": {
+      "command": "local_close",
+      "parameters": [
+        "sessionId"
+      ],
+      "channels": [],
+      "signature": "sessionId: string",
+      "result": "null"
+    },
+    "hostkeyRespond": {
+      "command": "hostkey_respond",
+      "parameters": [
+        "requestId",
+        "accept"
+      ],
+      "channels": [],
+      "signature": "requestId: string, accept: boolean",
+      "result": "void"
+    },
+    "authPromptRespond": {
+      "command": "auth_prompt_respond",
+      "parameters": [
+        "requestId",
+        "answers"
+      ],
+      "channels": [],
+      "signature": "requestId: string, answers: string[] | null",
+      "result": "void"
+    },
+    "forwardsListAll": {
+      "command": "forwards_list_all",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "ForwardView[]"
+    },
+    "forwardSave": {
+      "command": "forward_save",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: ForwardInput",
+      "result": "ForwardView"
+    },
+    "forwardDelete": {
+      "command": "forward_delete",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "null"
+    },
+    "forwardStart": {
+      "command": "forward_start",
+      "parameters": [
+        "hostId",
+        "forwardId",
+        "options"
+      ],
+      "channels": [],
+      "signature": "hostId: string, forwardId: string, options: ForwardOptions",
+      "result": "number"
+    },
+    "forwardStop": {
+      "command": "forward_stop",
+      "parameters": [
+        "hostId",
+        "forwardId"
+      ],
+      "channels": [],
+      "signature": "hostId: string, forwardId: string",
+      "result": "void"
+    },
+    "connectionsList": {
+      "command": "connections_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "ConnectionsEvent"
+    },
+    "sftpHome": {
+      "command": "sftp_home",
+      "parameters": [
+        "sessionId"
+      ],
+      "channels": [],
+      "signature": "sessionId: string",
+      "result": "string"
+    },
+    "sftpList": {
+      "command": "sftp_list",
+      "parameters": [
+        "sessionId",
+        "path"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, path: string",
+      "result": "FileEntry[]"
+    },
+    "sftpDownload": {
+      "command": "sftp_download",
+      "parameters": [
+        "sessionId",
+        "remotePath",
+        "localPath"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, remotePath: string, localPath: string",
+      "result": "string"
+    },
+    "sftpUpload": {
+      "command": "sftp_upload",
+      "parameters": [
+        "sessionId",
+        "localPath",
+        "remoteDir"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, localPath: string, remoteDir: string",
+      "result": "string"
+    },
+    "sftpRename": {
+      "command": "sftp_rename",
+      "parameters": [
+        "sessionId",
+        "from",
+        "to"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, from: string, to: string",
+      "result": "null"
+    },
+    "sftpRemove": {
+      "command": "sftp_remove",
+      "parameters": [
+        "sessionId",
+        "path",
+        "isDir"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, path: string, isDir: boolean",
+      "result": "null"
+    },
+    "sftpMkdir": {
+      "command": "sftp_mkdir",
+      "parameters": [
+        "sessionId",
+        "path"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, path: string",
+      "result": "null"
+    },
+    "transferCancel": {
+      "command": "transfer_cancel",
+      "parameters": [
+        "transferId"
+      ],
+      "channels": [],
+      "signature": "transferId: string",
+      "result": "void"
+    },
+    "syncStatus": {
+      "command": "sync_status",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "SyncStatus"
+    },
+    "syncTest": {
+      "command": "sync_test",
+      "parameters": [
+        "config"
+      ],
+      "channels": [],
+      "signature": "config: SyncConfigInput",
+      "result": "SyncTestResult"
+    },
+    "syncConfigure": {
+      "command": "sync_configure",
+      "parameters": [
+        "config",
+        "password"
+      ],
+      "channels": [],
+      "signature": "config: SyncConfigInput, password: string",
+      "result": "null"
+    },
+    "syncJoin": {
+      "command": "sync_join",
+      "parameters": [
+        "config",
+        "password"
+      ],
+      "channels": [],
+      "signature": "config: SyncConfigInput, password: string",
+      "result": "null"
+    },
+    "syncNow": {
+      "command": "sync_now",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "null"
+    },
+    "syncLogin": {
+      "command": "sync_login",
+      "parameters": [
+        "password"
+      ],
+      "channels": [],
+      "signature": "password: string",
+      "result": "null"
+    },
+    "syncCheckWorker": {
+      "command": "sync_check_worker",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "void"
+    },
+    "syncDismissWorkerUpdate": {
+      "command": "sync_dismiss_worker_update",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "null"
+    },
+    "syncSetAuto": {
+      "command": "sync_set_auto",
+      "parameters": [
+        "enabled"
+      ],
+      "channels": [],
+      "signature": "enabled: boolean",
+      "result": "void"
+    },
+    "syncDisconnect": {
+      "command": "sync_disconnect",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "null"
+    },
+    "syncDevices": {
+      "command": "sync_devices",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "DeviceView[]"
+    },
+    "syncRevokeDevice": {
+      "command": "sync_revoke_device",
+      "parameters": [
+        "deviceId"
+      ],
+      "channels": [],
+      "signature": "deviceId: string",
+      "result": "null"
+    },
+    "syncConflicts": {
+      "command": "sync_conflicts",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "ConflictView[]"
+    },
+    "syncConflictResolve": {
+      "command": "sync_conflict_resolve",
+      "parameters": [
+        "id",
+        "action"
+      ],
+      "channels": [],
+      "signature": "id: number, action: ConflictAction",
+      "result": "null"
+    },
+    "deployStart": {
+      "command": "deploy_start",
+      "parameters": [
+        "apiToken",
+        "accountId"
+      ],
+      "channels": [],
+      "signature": "apiToken: string, accountId: string | null",
+      "result": "DeployStart"
+    },
+    "deployInspect": {
+      "command": "deploy_inspect",
+      "parameters": [
+        "handle",
+        "target"
+      ],
+      "channels": [],
+      "signature": "handle: string, target: DeployTarget",
+      "result": "DeployPlan"
+    },
+    "deployRun": {
+      "command": "deploy_run",
+      "parameters": [
+        "handle",
+        "target",
+        "progress"
+      ],
+      "channels": [
+        2
+      ],
+      "signature": "handle: string, target: DeployTarget, progress: Channel<DeployProgress>",
+      "result": "DeployOutcome"
+    },
+    "deployCheck": {
+      "command": "deploy_check",
+      "parameters": [
+        "handle"
+      ],
+      "channels": [],
+      "signature": "handle: string",
+      "result": "boolean"
+    },
+    "deployCleanup": {
+      "command": "deploy_cleanup",
+      "parameters": [
+        "handle"
+      ],
+      "channels": [],
+      "signature": "handle: string",
+      "result": "null"
+    },
+    "deployCancel": {
+      "command": "deploy_cancel",
+      "parameters": [
+        "handle"
+      ],
+      "channels": [],
+      "signature": "handle: string",
+      "result": "void"
+    },
+    "deploySetup": {
+      "command": "deploy_setup",
+      "parameters": [
+        "handle",
+        "password"
+      ],
+      "channels": [],
+      "signature": "handle: string, password: string",
+      "result": "null"
+    },
+    "deployJoin": {
+      "command": "deploy_join",
+      "parameters": [
+        "handle",
+        "target",
+        "password"
+      ],
+      "channels": [],
+      "signature": "handle: string, target: DeployTarget, password: string",
+      "result": "null"
+    },
+    "deployUpgradeDefaults": {
+      "command": "deploy_upgrade_defaults",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "UpgradeDefaults"
+    },
+    "deployUpgradeInspect": {
+      "command": "deploy_upgrade_inspect",
+      "parameters": [
+        "handle",
+        "target"
+      ],
+      "channels": [],
+      "signature": "handle: string, target: UpgradeTarget",
+      "result": "UpgradePlan"
+    },
+    "deployUpgrade": {
+      "command": "deploy_upgrade",
+      "parameters": [
+        "handle",
+        "target",
+        "progress"
+      ],
+      "channels": [
+        2
+      ],
+      "signature": "handle: string, target: UpgradeTarget, progress: Channel<DeployProgress>",
+      "result": "DeployOutcome"
+    },
+    "settingsGet": {
+      "command": "settings_get",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "SettingsView"
+    },
+    "settingsSave": {
+      "command": "settings_save",
+      "parameters": [
+        "patch"
+      ],
+      "channels": [],
+      "signature": "patch: SettingsPatch",
+      "result": "null"
+    },
+    "prefsGet": {
+      "command": "prefs_get",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "LocalPrefs"
+    },
+    "prefsSave": {
+      "command": "prefs_save",
+      "parameters": [
+        "prefs"
+      ],
+      "channels": [],
+      "signature": "prefs: LocalPrefs",
+      "result": "null"
+    },
+    "starPromptGet": {
+      "command": "star_prompt_get",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "StarPrompt"
+    },
+    "starPromptDone": {
+      "command": "star_prompt_done",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "null"
+    },
+    "aiProvidersList": {
+      "command": "ai_providers_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "AiProviderView[]"
+    },
+    "aiProviderSave": {
+      "command": "ai_provider_save",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: AiProviderInput",
+      "result": "AiProviderView"
+    },
+    "aiProviderDelete": {
+      "command": "ai_provider_delete",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "null"
+    },
+    "aiProviderModels": {
+      "command": "ai_provider_models",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: AiProviderInput",
+      "result": "AiModel[]"
+    },
+    "aiProviderTest": {
+      "command": "ai_provider_test",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: AiProviderInput",
+      "result": "AiTestResult"
+    },
+    "aiChatgptSignIn": {
+      "command": "ai_chatgpt_sign_in",
+      "parameters": [
+        "providerId"
+      ],
+      "channels": [],
+      "signature": "providerId: string | null",
+      "result": "AiChatgptSignIn"
+    },
+    "aiChatgptSignInCancel": {
+      "command": "ai_chatgpt_sign_in_cancel",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "void"
+    },
+    "aiChatgptSignOut": {
+      "command": "ai_chatgpt_sign_out",
+      "parameters": [
+        "providerId"
+      ],
+      "channels": [],
+      "signature": "providerId: string",
+      "result": "boolean"
+    },
+    "searchProvidersList": {
+      "command": "search_providers_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "SearchProviderView[]"
+    },
+    "searchProviderSave": {
+      "command": "search_provider_save",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: SearchProviderInput",
+      "result": "SearchProviderView"
+    },
+    "searchProviderDelete": {
+      "command": "search_provider_delete",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "null"
+    },
+    "searchProviderTest": {
+      "command": "search_provider_test",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: SearchProviderInput",
+      "result": "AiTestResult"
+    },
+    "aiSettingsGet": {
+      "command": "ai_settings_get",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "AiSettingsView"
+    },
+    "aiSettingsSave": {
+      "command": "ai_settings_save",
+      "parameters": [
+        "patch"
+      ],
+      "channels": [],
+      "signature": "patch: AiSettingsPatch",
+      "result": "null"
+    },
+    "aiConversationsList": {
+      "command": "ai_conversations_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "AiConversationView[]"
+    },
+    "aiConversationGet": {
+      "command": "ai_conversation_get",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "AiConversationDetail"
+    },
+    "aiConversationRename": {
+      "command": "ai_conversation_rename",
+      "parameters": [
+        "id",
+        "title"
+      ],
+      "channels": [],
+      "signature": "id: string, title: string",
+      "result": "AiConversationView"
+    },
+    "aiConversationPin": {
+      "command": "ai_conversation_pin",
+      "parameters": [
+        "id",
+        "pinned"
+      ],
+      "channels": [],
+      "signature": "id: string, pinned: boolean",
+      "result": "AiConversationView"
+    },
+    "aiConversationDelete": {
+      "command": "ai_conversation_delete",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "null"
+    },
+    "aiConversationFork": {
+      "command": "ai_conversation_fork",
+      "parameters": [
+        "id",
+        "entryId",
+        "title"
+      ],
+      "channels": [],
+      "signature": "id: string, entryId: string | null, title: string",
+      "result": "AiConversationView"
+    },
+    "aiSend": {
+      "command": "ai_send",
+      "parameters": [
+        "input",
+        "channel"
+      ],
+      "channels": [
+        1
+      ],
+      "signature": "input: AiSendInput, channel: Channel<AiTurnEvent>",
+      "result": "AiSendStarted"
+    },
+    "aiRetry": {
+      "command": "ai_retry",
+      "parameters": [
+        "conversationId",
+        "context",
+        "channel"
+      ],
+      "channels": [
+        2
+      ],
+      "signature": "conversationId: string, context: AiTurnContext, channel: Channel<AiTurnEvent>",
+      "result": "null"
+    },
+    "aiToolResult": {
+      "command": "ai_tool_result",
+      "parameters": [
+        "conversationId",
+        "toolCallId",
+        "result"
+      ],
+      "channels": [],
+      "signature": "conversationId: string, toolCallId: string, result: AiToolResultInput",
+      "result": "AiEntryView"
+    },
+    "aiToolRun": {
+      "command": "ai_tool_run",
+      "parameters": [
+        "conversationId",
+        "toolCallId",
+        "sessionId",
+        "editedArguments",
+        "judged"
+      ],
+      "channels": [],
+      "signature": "conversationId: string, toolCallId: string, sessionId: string | null, editedArguments: string | null, judged: boolean",
+      "result": "AiToolRun"
+    },
+    "aiJudge": {
+      "command": "ai_judge",
+      "parameters": [
+        "conversationId",
+        "toolCallId",
+        "screenTail"
+      ],
+      "channels": [],
+      "signature": "conversationId: string, toolCallId: string, screenTail: string | null",
+      "result": "AiAutoVerdict"
+    },
+    "aiJudgeTest": {
+      "command": "ai_judge_test",
+      "parameters": [
+        "judge"
+      ],
+      "channels": [],
+      "signature": "judge: {\n\tprovider_id: string,\n\tmodel_id: string,\n} | null",
+      "result": "AiJudgeSampleOutcome[]"
+    },
+    "aiFilePreview": {
+      "command": "ai_file_preview",
+      "parameters": [
+        "conversationId",
+        "toolCallId",
+        "sessionId",
+        "editedArguments"
+      ],
+      "channels": [],
+      "signature": "conversationId: string, toolCallId: string, sessionId: string | null, editedArguments: string | null",
+      "result": "AiFilePreview"
+    },
+    "aiFileChanges": {
+      "command": "ai_file_changes",
+      "parameters": [
+        "conversationId"
+      ],
+      "channels": [],
+      "signature": "conversationId: string",
+      "result": "AiFileChange[]"
+    },
+    "aiFileChangeDiff": {
+      "command": "ai_file_change_diff",
+      "parameters": [
+        "conversationId",
+        "responseId",
+        "toolCallId"
+      ],
+      "channels": [],
+      "signature": "conversationId: string, responseId: string, toolCallId: string",
+      "result": "{\n\t/**  The path the call names. */\n\tpath: string,\n\t/**\n\t *  The file as Hatoba read it, or `None` when it does not exist (the call creates it) or\n\t *  `error` is set.\n\t */\n\tbefore: string | null,\n\t/**  The file after the call, or `None` when `error` is set. */\n\tafter: string | null,\n\t/**  Why the call cannot apply: the error result running it would give the model. */\n\terror: string | null,\n\t/**  Most of the file's line breaks are CRLF, and the write keeps them. */\n\tcrlf: boolean,\n} | null"
+    },
+    "aiFileRevert": {
+      "command": "ai_file_revert",
+      "parameters": [
+        "conversationId",
+        "responseId",
+        "toolCallId",
+        "sessionId",
+        "restore"
+      ],
+      "channels": [],
+      "signature": "conversationId: string, responseId: string, toolCallId: string, sessionId: string | null, restore: boolean",
+      "result": "AiFileRevert"
+    },
+    "aiSessionServer": {
+      "command": "ai_session_server",
+      "parameters": [
+        "sessionId"
+      ],
+      "channels": [],
+      "signature": "sessionId: string | null",
+      "result": "string | null"
+    },
+    "aiStop": {
+      "command": "ai_stop",
+      "parameters": [
+        "conversationId"
+      ],
+      "channels": [],
+      "signature": "conversationId: string",
+      "result": "null"
+    },
+    "aiCompact": {
+      "command": "ai_compact",
+      "parameters": [
+        "conversationId",
+        "context",
+        "instructions"
+      ],
+      "channels": [],
+      "signature": "conversationId: string, context: AiTurnContext, instructions: string | null",
+      "result": "AiEntryView"
+    },
+    "aiSideQuestion": {
+      "command": "ai_side_question",
+      "parameters": [
+        "input",
+        "channel"
+      ],
+      "channels": [
+        1
+      ],
+      "signature": "input: AiSideQuestionInput, channel: Channel<AiSideEvent>",
+      "result": "AiSideAnswer"
+    },
+    "aiSideStop": {
+      "command": "ai_side_stop",
+      "parameters": [
+        "conversationId",
+        "questionId"
+      ],
+      "channels": [],
+      "signature": "conversationId: string, questionId: number",
+      "result": "null"
+    },
+    "aiSearch": {
+      "command": "ai_search",
+      "parameters": [
+        "query"
+      ],
+      "channels": [],
+      "signature": "query: string",
+      "result": "AiSearchHit[]"
+    },
+    "aiEditResend": {
+      "command": "ai_edit_resend",
+      "parameters": [
+        "conversationId",
+        "entryId",
+        "text",
+        "context",
+        "channel"
+      ],
+      "channels": [
+        4
+      ],
+      "signature": "conversationId: string, entryId: string, text: string, context: AiTurnContext, channel: Channel<AiTurnEvent>",
+      "result": "AiSendStarted"
+    },
+    "aiReadDroppedFiles": {
+      "command": "ai_read_dropped_files",
+      "parameters": [
+        "paths"
+      ],
+      "channels": [],
+      "signature": "paths: string[]",
+      "result": "DroppedFile[]"
+    },
+    "aiSkillCommands": {
+      "command": "ai_skill_commands",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "AiSkillCommand[]"
+    },
+    "aiSkillText": {
+      "command": "ai_skill_text",
+      "parameters": [
+        "name"
+      ],
+      "channels": [],
+      "signature": "name: string",
+      "result": "string"
+    },
+    "aiHostList": {
+      "command": "ai_host_list",
+      "parameters": [
+        "sessionId",
+        "path"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, path: string",
+      "result": "AiHostListing"
+    },
+    "aiHostRead": {
+      "command": "ai_host_read",
+      "parameters": [
+        "sessionId",
+        "path"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, path: string",
+      "result": "AiHostFile"
+    },
+    "aiAllowancesList": {
+      "command": "ai_allowances_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "AiAllowance[]"
+    },
+    "aiAllowanceAdd": {
+      "command": "ai_allowance_add",
+      "parameters": [
+        "allowance"
+      ],
+      "channels": [],
+      "signature": "allowance: AiAllowance",
+      "result": "AiAllowance[]"
+    },
+    "aiAllowanceRemove": {
+      "command": "ai_allowance_remove",
+      "parameters": [
+        "allowance"
+      ],
+      "channels": [],
+      "signature": "allowance: AiAllowance",
+      "result": "AiAllowance[]"
+    },
+    "aiMemoriesList": {
+      "command": "ai_memories_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "AiMemoryView[]"
+    },
+    "aiMemorySave": {
+      "command": "ai_memory_save",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: AiMemoryInput",
+      "result": "AiMemoryView"
+    },
+    "aiMemoryDelete": {
+      "command": "ai_memory_delete",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "null"
+    },
+    "aiMemoriesDeleteAll": {
+      "command": "ai_memories_delete_all",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "null"
+    },
+    "skillsList": {
+      "command": "skills_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "SkillView[]"
+    },
+    "skillGet": {
+      "command": "skill_get",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "SkillDetail"
+    },
+    "skillBuiltinGet": {
+      "command": "skill_builtin_get",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "BuiltinSkillView"
+    },
+    "skillSave": {
+      "command": "skill_save",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: SkillInput",
+      "result": "SkillView"
+    },
+    "skillDelete": {
+      "command": "skill_delete",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "null"
+    },
+    "skillSetEnabled": {
+      "command": "skill_set_enabled",
+      "parameters": [
+        "id",
+        "enabled"
+      ],
+      "channels": [],
+      "signature": "id: string, enabled: boolean",
+      "result": "null"
+    },
+    "skillImportPreview": {
+      "command": "skill_import_preview",
+      "parameters": [
+        "path"
+      ],
+      "channels": [],
+      "signature": "path: string",
+      "result": "SkillImportPreview"
+    },
+    "skillImport": {
+      "command": "skill_import",
+      "parameters": [
+        "path",
+        "replaceId",
+        "rename"
+      ],
+      "channels": [],
+      "signature": "path: string, replaceId: string | null, rename: string | null",
+      "result": "SkillView"
+    },
+    "skillExport": {
+      "command": "skill_export",
+      "parameters": [
+        "id",
+        "path"
+      ],
+      "channels": [],
+      "signature": "id: string, path: string",
+      "result": "null"
+    },
+    "mcpServersList": {
+      "command": "mcp_servers_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "McpServerView[]"
+    },
+    "mcpServerSave": {
+      "command": "mcp_server_save",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: McpServerInput",
+      "result": "McpServerView"
+    },
+    "mcpServerDelete": {
+      "command": "mcp_server_delete",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "null"
+    },
+    "mcpServerSetEnabled": {
+      "command": "mcp_server_set_enabled",
+      "parameters": [
+        "id",
+        "enabled"
+      ],
+      "channels": [],
+      "signature": "id: string, enabled: boolean",
+      "result": "null"
+    },
+    "mcpServerStatus": {
+      "command": "mcp_server_status",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "McpServerStatus"
+    },
+    "mcpServerStart": {
+      "command": "mcp_server_start",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "McpServerStatus"
+    },
+    "mcpServerStop": {
+      "command": "mcp_server_stop",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "null"
+    },
+    "mcpSetAlwaysAllow": {
+      "command": "mcp_set_always_allow",
+      "parameters": [
+        "serverId",
+        "tool",
+        "allow"
+      ],
+      "channels": [],
+      "signature": "serverId: string, tool: string | null, allow: boolean",
+      "result": "null"
+    },
+    "mcpToolInfo": {
+      "command": "mcp_tool_info",
+      "parameters": [
+        "conversationId",
+        "name"
+      ],
+      "channels": [],
+      "signature": "conversationId: string, name: string",
+      "result": "{\n\tserver_id: string,\n\tserver_name: string,\n\talways_ask: boolean,\n\ttool: McpToolView,\n} | null"
+    },
+    "mcpProxyInfo": {
+      "command": "mcp_proxy_info",
+      "parameters": [
+        "conversationId",
+        "callArguments"
+      ],
+      "channels": [],
+      "signature": "conversationId: string, callArguments: string",
+      "result": "McpProxyInfo"
+    },
+    "mcpWarm": {
+      "command": "mcp_warm",
+      "parameters": [
+        "disabledMcpServers"
+      ],
+      "channels": [],
+      "signature": "disabledMcpServers: string[]",
+      "result": "null"
+    },
+    "mcpPromptGet": {
+      "command": "mcp_prompt_get",
+      "parameters": [
+        "serverId",
+        "name",
+        "promptArguments"
+      ],
+      "channels": [],
+      "signature": "serverId: string, name: string, promptArguments: McpPromptArgumentInput[]",
+      "result": "string"
+    },
+    "mcpResourceRead": {
+      "command": "mcp_resource_read",
+      "parameters": [
+        "serverId",
+        "uri"
+      ],
+      "channels": [],
+      "signature": "serverId: string, uri: string",
+      "result": "string"
+    },
+    "mcpImportPreview": {
+      "command": "mcp_import_preview",
+      "parameters": [
+        "json"
+      ],
+      "channels": [],
+      "signature": "json: string",
+      "result": "McpImportPreview"
+    },
+    "mcpImport": {
+      "command": "mcp_import",
+      "parameters": [
+        "json"
+      ],
+      "channels": [],
+      "signature": "json: string",
+      "result": "McpServerView[]"
+    },
+    "mcpExport": {
+      "command": "mcp_export",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "string"
+    }
+  },
+  "events": {
+    "vault://locked": "VaultLockedEvent",
+    "sync://status": "SyncStatus",
+    "ssh://hostkey-prompt": "HostKeyPrompt",
+    "ssh://auth-prompt": "AuthPrompt",
+    "ssh://state": "SessionStateEvent",
+    "transfer://progress": "TransferProgressEvent",
+    "ssh://connections": "ConnectionsEvent",
+    "ssh://forwards-lost": "ForwardsLostEvent",
+    "ai://mcp-status": "McpServerStatus",
+    "window://chrome": "WindowChromeEvent",
+    "app://launch": "null",
+    "window://close-prompt": "null",
+    "app://notification-click": "NotificationTarget",
+    "tray://update": "null",
+    "cli://activity": "{ entries: CliActivity[] }"
+  },
+  "dtos": {
+    "AiAllowance": "ca75f9da53e4ffa466d4b87074f68368fb65e7b41ed4e5b06fc95a8110181db3",
+    "AiAllowanceKind": "5c24b5ad12e8180a75c90139e97a3764c9661b23b9b8ac956c4251becd14a4a1",
+    "AiAuthHeader": "032f2659b1e313bdf01e5c03ad312fa25da7ffd1da33874d6f38c579ffcce17a",
+    "AiAutoVerdict": "431c13f5c36e696ad56ff8d2610f1a4a44d8c1a3a70fbcde8ec50bc685a0feb9",
+    "AiChatgptSignIn": "c1e886be5ca87b9372e6d2095ffc26dd1213db277955b8e3c8aa043aacbadb48",
+    "AiChatgptStatus": "1d0a475b7ac064d560c15041a3a778f98c7dbfe4ff7b53e922dbea175ad57c9d",
+    "AiChatgptView": "392539a5974e4e60debde86ace836ad951483e2dd4211cf589dd26006d4d9450",
+    "AiConversationDetail": "69c409b7329ce616afa557b8485f728945f5e2ec80ece82b7874aa3900de7bae",
+    "AiConversationView": "4ff64381a82ee5bb7dbb9440697d648a68ed5da3ea6a09bc8793d95afd68bfe9",
+    "AiEffort": "4297675f87a8ddd1875ac9bd5f6e276408db786a906f6d4ab99ac2bf3120ab72",
+    "AiEntryView": "8fe9cda3ef50418b0f9a4b6775c8e72a798c612c96acdd05348c7a13532cb328",
+    "AiFileChange": "355a6a249e27a1b50993f819cd2529976be3ecfa54bd947bf0cc286a37dd6c17",
+    "AiFileChangeState": "ebe926c963ce0388ff05685dae2d9fde5b02f0c8b9b1b0738a2e26cbd65db26c",
+    "AiFilePreview": "69e701f7adc924322c8d9f88c8feb94a9f147a18bcc49b7d62b6a3bafc688aec",
+    "AiFileRevert": "51c8f17cec8a114ee0687dbcdecc3abeed274c10187697ed73f0a61e721dbb98",
+    "AiFinish": "20dbce85349fda354681832c406fa65e3a5a59da718af11103ef505f008a6660",
+    "AiHostEntry": "e760fb4074dccf9df99987856bc7de71830905905f11b3bff9b4395714378f2e",
+    "AiHostFile": "ee0ceb83e149b03bf68373eb329e6679ed87275b3e74d392c209cb2c17e1c3b5",
+    "AiHostListing": "8bbd0b1a10b06440d5f2f645ab0444423fb8e24d52926d513211550c6d37fc80",
+    "AiHostRefusal": "3aa0c176c6b22a343dc48c18a0a442c3bf3515c841d0f46be4e61eb3862f6375",
+    "AiJudgeAnswer": "b555933aa90c8dbb9d9959e4f2f10a176c3b9b984ecd8c5e7ccb32aecd769ed4",
+    "AiJudgeDecision": "55c66d51f398745ced0866c17f7c20252f9a371f9b75dafa66d8f88d1ddbb8b0",
+    "AiJudgeSampleOutcome": "b7dd8944f6ae0f6b648f211f68b776c712d13b3ef59fd5e5728c9b830c89db49",
+    "AiLocalTab": "a5df1c6a0b92f5a5fd171a69da89fc92bf8d2b97b3a76389df7b9f600a70eb3a",
+    "AiMemoryInput": "85953926e416867669e6f97522a2e339fe900d8f73eaa756d214b3b76d2b485c",
+    "AiMemoryView": "bdbd9cc4c5290e3a73c1aeb80654eb4083f920144c60a4ede606f0bbd2dbd08a",
+    "AiModel": "4ce860af29721e6decc613adf70c2ac3ce04605f2f5614bfe0ebf163857aa250",
+    "AiModelRef": "26f1dc08436a658a69cefbc0073dc6ddbe023d789d4133c4e02a165e35c89418",
+    "AiPermissionMode": "b8a5242df673e2c721959c968fdf3518a4e50e151789809faa545300c14f3281",
+    "AiProtocol": "6d09b8cc838d12e2e6c7898ea777a90850e6566e70fdf1fed91a51680cb741d8",
+    "AiProviderInput": "76cf93b1e1f13886257c815cf102e4d2eb31f92ae329728b5f21eed217280893",
+    "AiProviderView": "2ac5eb7b062e7e23f5a829360c09a169c846490b4c5492651687c3408172cc19",
+    "AiRevertFailure": "fe158d44e8e437e5ba97ff860d4af8b4590f842ca3aa39969e745d8b7f585d87",
+    "AiScreen": "e6e98a8a432929e9006993202e1b35607b85188674337580837ea0cd7a305e95",
+    "AiSearchHit": "b7e6c7f75d01a06b406e3521a4cd0c9c69713114b0ae788505ded1c84907f446",
+    "AiSendInput": "d73043387c4fa245f698b36b6d2d46e1b991c4e69535c39ccbbefc6b678aec75",
+    "AiSendStarted": "9fba51f8e87966e69d585479ea44b7b29b0c95c547dc1737f8d2f9605c12b970",
+    "AiSettingsPatch": "9e4ce389a38dae71575bfdeea851254de680e3c85d4679bc0911280545186321",
+    "AiSettingsView": "147ab3abeaf9c571d0bb067ea256f4f60bca5c7a4485f3c5850cdf4546a63c9f",
+    "AiSideAnswer": "5058f4eacf07953f8939dce28f779133d4b6ac85a28d986a1e2bffcbe29dcedb",
+    "AiSideEvent": "6a3e5d08fc1c102bc8883898ae25d29878326b2f94bf2e3e75b86c92d1e9db9c",
+    "AiSideQuestionInput": "d38ebb8b105b4ff2ce1eedc3048e4db2195a993100c5bb3ae6a93e152a72fba7",
+    "AiSkillCommand": "2b4600e02832f284e8bb7c8cb0b23891391369167bf1b5b79428cb6f91df3542",
+    "AiTestFailure": "ff3eae06cdd8f55ca74ed80705bb3598c22aa5ab7e24c8e92b0b35d21af993b2",
+    "AiTestResult": "03262048e1d2df6ed4ee487277f50f04238a58ccdb13e4b26d9246f18e28dc1f",
+    "AiToolCall": "7eaa174452ae057e088886a6f84f8819924876c63cfb2f39437e8e8662b60f09",
+    "AiToolResultInput": "0062c3d78b414d27ea9c8a18496e31e19547f132fd88f2770d81659574267f05",
+    "AiToolRun": "cfd52d633b4909fa0ad7e791a1ec57f2dfde77c0713b2d8120148e39fdcf04ec",
+    "AiToolStatus": "c76f1c5800568f2ce52799a30b312f0997aa92fab17cd4c89ad2770e2d17b869",
+    "AiTurnContext": "15faf357f4baa043e530be879ec9757c53358cf8643c9dd7251ecb27ce802b0e",
+    "AiTurnEndReason": "88d2a584997511f40c563f13c08247f4466139b3322caf360445d2f660da2375",
+    "AiTurnEvent": "a23b65b323af248c20994c987937a597d1e2bcd57a3b64c13aaab6b99a846f76",
+    "AiUsage": "cda5bf08509d394372b6fc1cfa4f8f7873d3fd0e0b7240afba32418cc7231116",
+    "AppError": "7c0b77c39383a76c15342af2cfe3ad34d285cc85f1557fc57f580e1cbab78393",
+    "AppInfo": "8fb2f0fa097c2504934ee329a10389960c17ce18c88ff16d578c65a878f85da2",
+    "Appearance": "459d3b2fbea432ae470fa2bc126e6e274a3b68c420d092dcf559b321a5da6615",
+    "AuthKind": "59bdfab037e7f058382d22d77671402ea88380b0021fff7d93eaba0b986e0bf7",
+    "AuthPrompt": "0df1dc165047510fbee13650a59d1581dc5b7558dc0428475a7630352eb14154",
+    "AuthPromptField": "2da6d12ad85ba2b23ba7c496076dd5832ec1d0a30321fbd165cda4357c4369de",
+    "AvailableUpdate": "13b8b681209ea19b72f831cbdca8ab6dd284e8d071e03c165ac4ca2fe178d265",
+    "BuiltinSkillView": "040ea2f11d96bbcf64ea3b850b4584e9ae7b75c36b5d763445f9a2a380de3433",
+    "CliActivity": "ca74328126deabd7573ee7e84edb12bfc68d27735f9b229a821b4720e7aa8619",
+    "CliActivityEvent": "7a967b35bc5c428bbbe0b790dabf009dbfe24a332ab10522f65dea3707747f4d",
+    "CliActivityKind": "6ddac60f7063701b0146b58cf9a614779b7970cfe4cc7b8718abf615ac9ee1d6",
+    "CliActivityState": "95189630bf18ab598c7e14ef080d0d77ad969095aad2ec231fce8c3fa2dd1c15",
+    "CliCommandView": "2968e03af117340146670acad8b3d74b1cee903e08e3147987848a5c777e2a6a",
+    "CloseAction": "8e5d651f1518611b92d25604147564d6a5e3e0c0ee37ffda485e60130f798e2b",
+    "ClosePromptEvent": "89758013ef7cc5ccd453c9448a2b95ee2870dc9319f23cc8d67c3edf103274f6",
+    "CloudflareAccount": "9299c94c37c293a657597bb54c696f252c69a120c45ef5c10e61007705661f81",
+    "CloudflarePermission": "b589cae800144ac8816c45064caeda651b8a6054117ff19e0b38838ae619b35b",
+    "ConflictAction": "3ea4688bc0de8b0e97439fe743779559fa1320773840c1ed5b31df97f3cb058b",
+    "ConflictField": "f2ccadb0f1ed7390e578e1c6b64bae029b9231e7bf46238f0a47c8da27a30f52",
+    "ConflictResolution": "e535c7af226a83f60acaae4a5f0cc926356e7f35635b4eb1ef99b71b7e09de73",
+    "ConflictView": "e7f866e115ab59ff37a1183ebed6e9b7e54bd2d7254a8d4b4afc5e465f5dcfcf",
+    "ConnectOptions": "112d1314fbb5f6c1f3bdf60d1d43cc1a29a3dfc27c3f234a9fe979987b0df628",
+    "ConnectionsEvent": "6243940a93a90c2fb70b6148df5f967416ab65921f3fb625369d3a81a064de31",
+    "CursorChoice": "ef5c43c9f20792c0eb21dd7c3d2391c7e7909acb444e4559d42be725762a3a84",
+    "D1Database": "dd40d21ce051794a33f13b93e4d4838bd4b45e4c6a1beadd22a640d88832a17d",
+    "DashboardEvent": "a26b6938972c7bd379e3366fd6ceaa56e03c8fa09258911e619963524fabf7a0",
+    "DashboardHold": "200ce19f03b03da8adcb02a36534ae27c35b1a664065dfdaf30def2c06719006",
+    "DashboardLayout": "dc64850b14dee6b960adf90d69ad8025616cd48b0ccdbb87d84e9b406d4f75fd",
+    "Density": "209f6e51c8a0b987239835a64f83a9dc25658a7ad62bfccca423f1b034f27ba2",
+    "DeployDatabaseAction": "b82636ea64ccbdda1e2e087531a0e4eb7f886808ffae2f4523c49d3c2fa9c481",
+    "DeployOutcome": "469c64b207c0c2123eae1f54bbfeb4c8cd1d7cf29da6f1a433c62acc32eedf1d",
+    "DeployPlan": "15952b19f55d8dc71eaccf6b796581fbe5b3a80b2417c4b358ea8121031cea39",
+    "DeployProgress": "5c74201b5726888c2b9a8589ded847db84c846b984cb8983c0cdc03e9a3a142c",
+    "DeployStart": "0e31568b21fdc8364ad0ea343653c4452679a52e6ccbde64b2facccbc3c07f4e",
+    "DeployStep": "edff0d4b3c97ad021b84a1911243fbf2716fa6aa1ec2ef061200ef2754719de9",
+    "DeployStepStatus": "2736bff6065f21545c0055b5f0cbac864b4bd37b8cc4cca434d1f824adc004aa",
+    "DeployTarget": "8beb79a08d4f2c70ea08e11bda32ca8ee449969cbb4f98aa9b8a677c324397f6",
+    "DeployWorkerAction": "93e02523249a4051f5aa0ced1b9aa9b6118c874ae326d5ffc00f40a8e7abd68e",
+    "DeviceView": "70a50db7765ac19e467f171e00ea7d3e0aecd56cc7540918bdeac41fc32c5729",
+    "DroppedFile": "639f29369275b4a82029e8011b8cefa5470bd7ebca815f4c9faf88ad92066eac",
+    "DroppedFileRefusal": "e0e08dee71ba4874709425af07ace3a2001bbd3156bc8d4be8ce23908c305ecf",
+    "ErrorCode": "e48e9829f29698c4f19321425c0ffd969be774d95d3f3990e8201127787d2e1f",
+    "FailedForwardView": "252f5686df00397e0d283705847f07e08b6fea37c0ce749e62682e2167cfbd6d",
+    "FileEntry": "e3006b586ed029962c6670d1c663437d53340986262cfd5f72a5ee4f1a4a60f9",
+    "ForwardInput": "fc432185d3049767a3feb2a2b3f12f881445b974bb7ec964b4fd5323f15d3b65",
+    "ForwardKind": "9e049a3987d1e3abe0ecf45f3da04a61a2ab4a64d3371f073c2ff34ab01b230e",
+    "ForwardOptions": "0c781cbdbabc31842a3ad065565977d52a2fa3bf01cd93ab71bf495f10ce0c6b",
+    "ForwardView": "33a3de90b5151d9037ec353e425ed076f2f24b412b3495c2547690cdd96c1c93",
+    "ForwardsLostEvent": "d837e01b563bc21441f4f02a618a43589dc8b475ea1fe24123cca72cc3301692",
+    "GenerateAlgorithm": "6d4b2cb3ef24aa7a7e7abacaced3324393995e3524d273adc82ad9667717a572",
+    "GroupInput": "12b2e4b28b16020b8088910dddbe9c11e6214e6a3065c21b64345b57beb4000a",
+    "GroupView": "1907cba03b578b374ebdf38379763c871216f6f9fbd99458214df35e9e847e2e",
+    "HostConnectionView": "7117859b00fc235699295eacb3f5864b3afa40ef0f3fea2584934ef12cbf5c04",
+    "HostEnvVar": "194d4d5c81fb829c8ff0cdc8a9a2b2d7382bec169c0d29d21cd3d9a0ad40c8f5",
+    "HostInput": "f297b87a31b7a4e8ffd2a7faf15ba3d32861d8db104da6dd6c09e375afad4a9e",
+    "HostKeyPrompt": "21aadd6bdae36ff3c6afafdefce85072e67828591c88253bf57b5e0634d21874",
+    "HostKeyPromptKind": "bb461a54da27b64047d5431b6a21e128a34206e0af62efad67228412b88e09c0",
+    "HostView": "8e8965a84aa2676a1a349db9dca3fc663d7e984f6180a3316102e076a8cc2343",
+    "ImportCandidate": "e2d00e71ee51de58c09446d70b3c3362dac31a16545fb6263b1000ab5300138c",
+    "ImportPreview": "26c952c07be22cba36b051f1ddd8256096d16816b14bae1f7d792315c9067957",
+    "ImportResult": "3ce6c08938be54b90f92380112b6212f93252c49909433bfe1aaf1e027a8375c",
+    "ImportSource": "1834e175571dccaf1b42177c82d356a528f89b3c9bfd190b760d61702501d662",
+    "ItemType": "76725be1ec4358d14e3f2ab6edbff9396cc35b6ae8e38a14e69f83d114004b7f",
+    "KeyAlgorithm": "81ffa5115d78700f9d787d3daae7b4d27144ad85fc9e7933866f3f9fbc6fe1a0",
+    "KeyGenerateInput": "683fba6ab30ae93d4ccf697cb8c165f72bbb3bd328d3c3cfddd9a8b47d822a9a",
+    "KeyImportInput": "590e6cf5d8b6a4352e945745be00110c05fed0247a627015d6fe2169acce9e22",
+    "KeyParseErrorKind": "947079b9db7e5158f926e6e09fb775ddb81a87f831a922e7b855bab5c19d950f",
+    "KeyView": "4fa8c753a6f898a4163cb31bb33526dc4823e5a152f0ed9c59f7da2364de1ee5",
+    "Language": "257b75b2f21614d835f97887f517ca39fe5c2277ba1366ad40b73c8cd495d5b3",
+    "LaunchEvent": "9ae0e8c72434ccaf3d67e46e24278ffbec4ca3642bb39090c60edec704a1c7dd",
+    "LocalOpenOptions": "5f5ba9ae2d82a61db50f15be00481a6224bac700f4560344a9665f8c3461316d",
+    "LocalPrefs": "c78d5392b6d6563ed929db572209805ad0dfe3c3cbc9710c16cc08b996df9bd7",
+    "LocalShellKind": "58ff8a4b92881aa5102eea0953df87d49624c4e2a25bf8b4eebd122b8288315a",
+    "LocalShellView": "6f106d7af5ca87bd8c1e2d781b510b680e11ba74017802a045a6890c221fb70c",
+    "LockReason": "82d017280f2f9743a0adc01bae0fa928f7510ad01504df44c7c9c047d4e14348",
+    "McpImportPreview": "19b0d2007514cfc88b68e5998f52834c8acf7040f71255d46339870a4b3d69fe",
+    "McpImportServer": "14d966050bbc99c869c69078ffffe1e49c7ce59c710a5e18777fbc7de9ae348b",
+    "McpImportSkipped": "6e961e7eab87457262c50cf9f0a369cc429668d22f301ef3b90da05db4b53105",
+    "McpPromptArgumentInput": "3fcd7a987711021c7f464773a489e2aff7efc346206eac421d666f62b5ce8492",
+    "McpPromptArgumentView": "a48405e235f58cc56818a99c21a20edc9d654b0e7e70954cfd03e1895994e27e",
+    "McpPromptView": "c3c3b909f56b600d8e662d7ac1e7e7378a0e430989fb476a89fa75d2eaf58296",
+    "McpProxyInfo": "9111987ff4f002b8dabb6c54ed3827170ccae8b9aba82a6d3a383f85e5782dde",
+    "McpResourceView": "d16fc1881a75135a1db3ec833c7d3b908bfe845626dfd7c83ff38e3ff82294bf",
+    "McpSecretInput": "4d3dce35e8979477f175a83d37a4ac6acd3eefc80e5f669198506e546b14634d",
+    "McpServerInput": "9fe3cb3c03230727c7e2e7b35e16e36f381ebf4a586f7161bd21cc3b73772d26",
+    "McpServerState": "f4af9c97644ea178870e9cea8e5fe6d30e54dd9d3567ff2290ab3b2ac32941c9",
+    "McpServerStatus": "577635017fdd487eb19153a8ccfdfd0f47e374aad6c17f50832394fd785a492e",
+    "McpServerView": "2419dfdf90abbf11ee01043838824a017aeff5d7b969e7796daa453fa6cfab96",
+    "McpToolAnnotations": "0f9b089310afe39302e3f9fa59c6217c55187edbd524f9d4b70db1d99bfc855e",
+    "McpToolInfo": "3ae8af42d0ae63331c2dc232829acf016f23f1e8c72a9113f7983e6687772838",
+    "McpToolView": "e99ca5c79ea7d27c82a89d363cce95a661b7a56ab6477f0120a8035a8b1b0298",
+    "McpTransportInput": "ae7d323ae37a379fea12556ac000a8c280f2d3eefd40c9d49509dd51d9f6c746",
+    "McpTransportView": "d1e8fe296b9381560efa6f8a02f313c5a5fddc1d9f4a6a6d7614d7a094ff6ccc",
+    "MountView": "3baf99aa33682eb4f59e26b04c1f73e6d97cc92bd7bdae2dd53ea6d8c5207dcb",
+    "NotificationInput": "aa621dc3dffc05ec29df812b32957ded919ad4d71c7d3bb52a052c9739e5ac52",
+    "NotificationTarget": "87fe2e92b6607a992bdf1eb04bd972a4ba0dccd45fb047436a2c2b26bccd0e59",
+    "PackageManager": "03cecfac767f4026dd9147836787c46ab7c277ebf4fdcf7dde4b459109e3d092",
+    "Platform": "44fcb35f51fa8d8b3dc0b788bd04cb0ce17a81ef7cb424ed89b2c7ac7930d66f",
+    "ProbeResult": "9b450ecc9123b2bb939a540734f5bf6ede13ef867c7bc1889b136e6f30918c0b",
+    "ProxyInput": "c0b2008a55e9281bc38ebe0483862e075def9a51fbed37b2e7262800acfedd44",
+    "ProxyKind": "8edda7eb70997c67f8c3d1f8aeb0b141b6e288eb103aa81b63a398e344227544",
+    "ProxyMode": "ccb2d62ac1b3c8d9ad78014188485f5918aa9b577700af0aed68de0d9729532e",
+    "ProxyView": "a18b9622b4df036571e655120c07ee081777c0fd99f36382309e6850b86c9508",
+    "QuickTarget": "2e114965da10a6e0d6fbd7a9394b7d0f2c2da53e51ff71bc3989aed7bb1d497e",
+    "RightClick": "a1654ed32d9379f11c9c83a256276e5100321619da7dd56d9107190db7dde8a5",
+    "RunningForwardView": "893505bc56a0094f607b095a4057271d0abcbead20d1e7e873e79afd1edc911e",
+    "SearchKind": "01b529ae52506250176bb9fe9a047aa412d75e9e0b784bd6708dbc93d7ed7322",
+    "SearchProviderInput": "d1005a9b8f3ba26f31870f1721fce29a71eb1eb7821b8c847b37f40e856b0ea0",
+    "SearchProviderView": "c7f3b47d5d8f633b5801e76d33fd25e3c886bc971ee80c08b4a6b747bc0a9c9e",
+    "ServerStatsView": "be5c2d5ef0d70404d98f92652986d2e139e6b3864f3f018a33dd52201320b2a3",
+    "SessionState": "589c3cbb0524623bfc7b5c224b3d74934787df2e8ed2307287fba9517a99e889",
+    "SessionStateEvent": "c045dd7cc8fd894b349ef7a2b95d1ce079b1124e51ffb6c1ffbd334c4968ebb4",
+    "SettingsPatch": "d6ebfad9bc0980fbd9b8d7370e426a61017a86209e517ce64fbeec29a4d3da53",
+    "SettingsView": "9aa39796478fc6c1b12e15dbaa66fe15a61ef04ed7bb925875a08a1d7cc7943a",
+    "SkillDetail": "462e1b89e7bf09143862481975f47cbf76348571522f2d553044897d5cd648d6",
+    "SkillFileView": "e75097046f6c66ee900a1aa4241194adee228c731e30974135e927aa56c92d06",
+    "SkillImportPreview": "9d80fd6fca295c08b7fd81d2005d8b7ad80b4fe0da049345aaa351652976e3ff",
+    "SkillInput": "f8ae1edcbd9969ee42c7347257acd05f1c5394b136758bbb6ee3d01ee58bde8c",
+    "SkillIssue": "4f8b378de84980fbd2fcab1751755891d6300336dc51f1e290c3351416051a2d",
+    "SkillView": "7d229b82ef88e2afcf7ea901c4a315e9c6897d43a8ae9d1eaea71d9dc9e8740d",
+    "SshErrorKind": "c4c302346ed79100fbdbefda964866c3e29877447c6686e133c8a7083fb71cc5",
+    "StarPrompt": "533ceedf0746b0f8d50ae3df10200f69312f7e721623efad8ee1b1c544da58a5",
+    "StatsEvent": "a1607f418b627cd46b06f88ffeaea8e5bdfa11a7504023f6bb10931805ed60f2",
+    "SyncConfigInput": "6c4f0b42f5ae23eb3db9f1d664e312c7183877b16c9b067333f09c3edb8bdcdf",
+    "SyncCounts": "184b8e145d8272301639f453fac8f847155fd7801f23435cfa41a6dbd50cb7a3",
+    "SyncKind": "83c2c505fe85143a5756ab042e102ebe06657063dd066114cd6f8eaec27f96b2",
+    "SyncState": "a9cd8c45c2b78407e4f49b66621ac8ce4268552e763bdde0d9e1a42d0d5d0b56",
+    "SyncStatus": "2f869fd871bd47ae9a8b6b8975a6ac061c5af99f843c51d2a2b81e2af1fef619",
+    "SyncTestResult": "e250b945eb07cc040012fa0de3d16af4451c9de6c51f855eff02bb61c0d04976",
+    "TagCount": "033b346dba13ce1dec3fe382b70bb701f800eeaed3b16239b8f050a7e9f9de30",
+    "TermFrame": "42f25fe46d93e6ee46219bd69ff2210db8f30ef279939c0ca284f89affefe0d9",
+    "TerminalSettings": "66a4e8daa2fbf9ca10a7b5e50a578a3965c794a66d2dbb65b59ef918b921d710",
+    "TerminalSettingsPatch": "710cc89effde6c68bc3c57d18dfff7aee1fd4556f6cf8457cdd39d3e5196e6a0",
+    "TestResult": "215de86a3f352fe22984dbde1982d3ad6c691e03fcbfa42963438b072b183cbf",
+    "ThemeChoice": "7c252f0583c07daab4d595470f207e7d3d696b0b3ab223f2a90b1e2e6679e75a",
+    "TooLargeItem": "a5bd4f8e6e2b8f794ee323d8d62e847afae0909eb024df7418e62f2cac4348b6",
+    "TransferDirection": "799d3c2256a7cda855c1d331578d095a5c8de666063034209beb894ec6a9f85a",
+    "TransferProgressEvent": "4c0230c7e989b33d1b235309d98cccd3c951c775331af20014d5da444b210e18",
+    "TransferState": "9bdfbf7305fd03fc91f2e98e216d8c2935c44bc85be80696bb25bf3e6ee1a34a",
+    "TrayMenuInput": "a01e98d80305612836cba575f4bdd3d8a47ce46b59a7da78365f50cda012e726",
+    "TrayUpdateEvent": "c86505ee911c45dce7f804103bb2cce919eff136d70587add8c4a244d922f9f0",
+    "UpdateCheck": "2f225a775055e31a9ed94bc1ad51617b92c1f42665cff88694ee8478f6ba54fa",
+    "UpdateProgress": "9aa936b32789b2c9b3db64f9496dc7154e22f8f68b4ffaf803be046bb7a64037",
+    "UpgradeDefaults": "26faff927da5a4f716718f2399236673c7f6879ea6b10fcc66f9e8c620f0f794",
+    "UpgradePlan": "28c8ac71d35187bca0b0417a3b376e1fa2de72c3db03ad6762f48418c1290ab3",
+    "UpgradeTarget": "42d55994c52e3f0f248e6d9539fba3bebbc759aa334d10b8da5d6c1d8e39c8dc",
+    "UpgradeWorkerAction": "b5400c0113acb73da01cb6ee60bd70c3006314769cf391570c767f36f1471908",
+    "VaultLockedEvent": "2be7d46bc8574105be9f7798863e8b1c811959cb72fc6293514d3d01898414ce",
+    "VaultState": "df9982d37a31c974944a9f07a17f6c6fc658ccc64ccfaeda132f0ba0270cf156",
+    "VaultStatus": "aa7761d4a41edfe135484c27f2574c0c61397e44e8e685cf9b6a801b1644632d",
+    "WindowChromeEvent": "a9e73038eeaca723228a9614f12f73a75bdcf7c0b88b846db12f81175e6e6c9a",
+    "WorkerUpdate": "bf495bae5e1c6b3a799f45f976c11ecad84e4b3c363e307bb1b048f5b49798a8",
+    "WorkerUpdateKind": "18ca60b893fd5aba8d2bcc9f5976b9d02129ee1ba0f519f7a729c2b26b730fc1",
+    "EventEmit": "5934634084a50156fbe6b33604f94633b19620984b92e46b7bc7bf311647d9b6"
+  }
+}

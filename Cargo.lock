@@ -2437,6 +2437,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hatoba-ohos"
+version = "0.6.0"
+dependencies = [
+ "hatoba-ai",
+ "hatoba-core",
+ "hatoba-ssh",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "hatoba-ssh"
 version = "0.6.0"
 dependencies = [

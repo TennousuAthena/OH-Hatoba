@@ -1,0 +1,4 @@
+HATOBA_HOST_1 {
+  global: RegisterHatobaModule;
+  local: *;
+};

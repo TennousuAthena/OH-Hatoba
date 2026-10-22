@@ -8,10 +8,17 @@ import type { AiSideEvent, AiTurnEvent, DashboardEvent, DeployProgress, StatsEve
 const done = (result: Promise<null>): Promise<void> => result.then(() => undefined);
 
 /**
- * Tauri implementation of {@link HatobaApi}, on the command functions tauri-specta generates, so
- * a changed command name or parameter list fails the type check here.
+ * Native transport around the command functions tauri-specta generates. The shared adapter
+ * keeps command names and parameters checked against those generated functions.
  */
-export function createTauriApi(): HatobaApi {
+export interface ApiTransport {
+  commands: typeof commands;
+  Channel: typeof Channel;
+  listen: typeof tauriListen;
+}
+
+/** One command/argument mapping for every native host. Keep upstream API changes here. */
+export function createCommandApi({ commands, Channel, listen: tauriListen }: ApiTransport): HatobaApi {
   return {
     app_info: () => commands.appInfo(),
     update_check: () => commands.updateCheck(),
@@ -282,4 +289,8 @@ export function createTauriApi(): HatobaApi {
 
     listen: (event, handler) => tauriListen(event, (e) => handler(e.payload as never)),
   };
+}
+
+export function createTauriApi(): HatobaApi {
+  return createCommandApi({ commands, Channel, listen: tauriListen });
 }

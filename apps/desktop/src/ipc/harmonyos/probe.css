@@ -1,0 +1,16 @@
+:root { font-family: system-ui, sans-serif; color: #d9e8e5; background: #101a1b; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 1100px; margin: auto; padding: 40px clamp(18px, 4vw, 48px); }
+header { margin-bottom: 32px; }
+h1 { font-size: clamp(24px, 4vw, 38px); margin: 10px 0; letter-spacing: -.03em; }
+h2 { font-size: 18px; margin: 0 0 14px; }
+p { color: #9bb1ac; line-height: 1.7; }
+.eyebrow { font-size: 12px; letter-spacing: .18em; color: #a7dfb9; }
+section { border: 1px solid #314344; border-radius: 16px; background: #152123; padding: 22px; margin-bottom: 22px; }
+.section-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; justify-content: space-between; }
+button { min-height: 44px; border: 1px solid #719e83; border-radius: 8px; padding: 10px 16px; background: #234c40; color: #e5f7e9; font: inherit; cursor: pointer; }
+button:disabled { opacity: .55; cursor: default; }
+pre { white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.6; }
+#terminal { background: #0b1314; height: clamp(220px, 35vh, 440px); padding: 12px; margin-bottom: 16px; border-radius: 8px; }
+@media (max-width: 600px) { main { padding-top: 22px; } section { padding: 16px; } }
