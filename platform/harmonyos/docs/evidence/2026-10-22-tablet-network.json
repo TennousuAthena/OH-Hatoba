@@ -1,5 +1,5 @@
 {
-  "verifiedAt": "2026-10-22T12:06:59.942787+00:00",
+  "verifiedAt": "2026-10-22T12:45:21.379780+00:00",
   "device": "HUAWEI MatePad Pro (tablet)",
   "system": "HarmonyOS 7 / API26",
   "webReceivedAndRendered": true,
@@ -34,11 +34,17 @@
       "passed": true
     }
   ],
-  "scope": "Real OHOS native TLS trust/rejection, SSH authentication/host-key rejection/exec/PTY binary Unicode/resize, SFTP upload/download through descriptor grants with byte comparison and cancellation, local and dynamic forwards, plus shared business IPC smoke. Controlled loopback fixtures; does not validate UI/IME, external accounts, remote forwarding, or lifecycle recovery.",
+  "scope": "Real OHOS native TLS trust/rejection, SSH authentication/host-key rejection/exec/PTY binary Unicode/resize, SFTP upload/download through descriptor grants with byte comparison and cancellation, local/remote/dynamic forwards, AI streaming and cancellation, HTTP MCP, OAuth PKCE/state callback and cancellation, descriptor-based config/skill imports and grant revocation, plus shared business IPC smoke. Controlled generated-data fixtures; does not validate actual picker interaction, UI/IME, external account sign-in, or lifecycle recovery.",
   "networkChecks": {
+    "aiHttpModels": true,
+    "aiStreamingUnicodeAndCancellation": true,
+    "documentConfigSkillZipFolderAndGrantRevocation": true,
     "dynamicForward": true,
     "localForward": true,
+    "mcpHttpInitializeListCallAndShutdown": true,
+    "oauthPkceStateCallbackAndCancellation": true,
     "ptyBinaryUnicodeAndResize": true,
+    "remoteForward": true,
     "sftpUploadDownloadDocumentGrantsAndCancel": true,
     "sshExec": true,
     "sshHandshakeAndAuthentication": true,

@@ -23,13 +23,14 @@
 - 原生宿主6项测试通过：依赖探针、文件 FD 生命周期/权限、文档导入/撤销、旧缓存清理及初始化/页面销毁竞态。
   macOS 的 `/dev/fd` 不支持目录遍历，本机文档测试对目录使用实际临时路径；
   OHOS 真机文档检查必须使用真实 `/proc/self/fd` 目录路径。
+- 本机检查与交付 HAP 的摘要见 [结构化记录](evidence/2026-10-22-host-validation.json)。
 - 整个 workspace 的 Clippy（所有 target，warnings 为错误）、rustfmt 和注释宽度检查通过。
 
 完整 workspace 测试在本机网络环境遇到4条未修改的上游网络断言失败：
 `dns_failure`、`blackholed_address_times_out`、`tcp_probe_reports_reachability_only`、
 `probes_go_through_the_proxy_and_wait_for_the_server`。本机实测会解析 `nonexistent.invalid`，
 使这些“域名不可达/地址黑洞”的前提不成立。`crates/hatoba-ssh` 没有移植改动，未放宽其断言。
-这4条不计入通过数；其他回归单独执行。桌面子进程清理测试曾在高并发编译时出现计时失败，
+这4条不计入通过数；其他 workspace 回归在显式排除这4条后执行完成。桌面子进程清理测试曾在高并发编译时出现计时失败，
 降低测试并发后377项全部通过。未将默认关闭的 OpenSSH 集成环境计作真实 sshd 验收。
 
 ## 真机证据
@@ -39,8 +40,9 @@
 | MateBook Pro / 2in1 / API26 | [业务 IPC](evidence/2026-10-22-2in1-business.json) | typed facade、保险库创建/重开、主机 CRUD、Agent 配置保留、锁事件、锁定拒读与解锁 |
 | MatePad Pro / tablet / API26 | [业务 IPC](evidence/2026-10-22-tablet-business.json) | 同上，使用隔离诊断保险库 |
 | MateBook Pro / 2in1 / API26 | [网络及文件](evidence/2026-10-22-2in1-network.json) | 15项原生检查以及 Web SSH 二进制终端消费确认 |
-| MatePad Pro / tablet / API26 | [网络及文件](evidence/2026-10-22-tablet-network.json) | 以证据内实际列出的检查为准；最后一轮15项复验曾被自动锁屏阻止 |
+| MatePad Pro / tablet / API26 | [网络及文件](evidence/2026-10-22-tablet-network.json) | 15项原生检查以及 Web SSH 二进制终端消费确认 |
 | MateBook Pro / 2in1 / API26 | [普通入口](evidence/2026-10-22-2in1-startup.json) | 正常应用的原生初始化、能力读取、保险库状态和 React 渲染 |
+| MatePad Pro / tablet / API26 | [普通入口](evidence/2026-10-22-tablet-startup.json) | 同上，无需投屏或操作用户保险库 |
 
 15项检查覆盖：系统 CA 的公网 HTTPS 正向连接、自签名证书拒绝、SSH 主机密钥拒绝和密码认证、
 exec、PTY 非 UTF-8/中文/emoji/resize、SFTP 512KiB 上传下载及 FD 提交字节一致性/预取消、
