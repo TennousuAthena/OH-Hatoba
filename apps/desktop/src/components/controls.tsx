@@ -69,6 +69,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       type={type}
       disabled={disabled || busy}
+      aria-busy={busy || undefined}
       className={cx(
         s.button,
         variant === "primary" && s.primary,
@@ -79,13 +80,18 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       )}
       {...rest}
     >
-      {busy ? (
-        <Icon name="circle-notch" className={cx(s.icon, s.spinner)} />
-      ) : icon ? (
-        <Icon name={icon} className={s.icon} />
-      ) : null}
-      {children}
-      {trailingIcon && <Icon name={trailingIcon} className={s.icon} style={{ fontSize: 12 }} />}
+      {icon && <Icon name={busy ? "circle-notch" : icon} className={cx(s.icon, busy && s.spinner)} />}
+      {/* Without an icon to swap, the label stays (hidden) to hold the width
+          and the spinner sits over it. */}
+      <span className={cx(s.buttonLabel, busy && !icon && s.buttonLabelHidden)}>
+        {children}
+        {trailingIcon && <Icon name={trailingIcon} className={s.icon} style={{ fontSize: 12 }} />}
+      </span>
+      {busy && !icon && (
+        <span className={s.buttonBusy}>
+          <Icon name="circle-notch" className={cx(s.icon, s.spinner)} />
+        </span>
+      )}
     </button>
   );
 });

@@ -44,12 +44,17 @@
 }
 
 .testResult {
+  transition: opacity var(--motion-fade) var(--ease-out);
   display: flex;
   align-items: flex-start;
   gap: 8px;
   max-width: 100%;
   font-size: var(--text-sm);
   line-height: 1.5;
+}
+
+.testStale {
+  opacity: 0.5;
 }
 
 .testResult > :first-child {
