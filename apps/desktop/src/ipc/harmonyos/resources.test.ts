@@ -3,7 +3,7 @@ import { isLocalNavigation, LOCAL_ENTRY, resolveLocalAsset } from "../../../../.
 
 describe("packaged HarmonyOS origin", () => {
   it("serves the entry and Vite chunks with module-compatible MIME types", () => {
-    expect(resolveLocalAsset(LOCAL_ENTRY, "GET")).toEqual({ path: "web/harmonyos-probe.html", mime: "text/html" });
+    expect(resolveLocalAsset(LOCAL_ENTRY, "GET")).toEqual({ path: "web/harmonyos-app.html", mime: "text/html" });
     expect(resolveLocalAsset("https://hatoba.invalid/assets/chunk-123.js", "GET")?.mime).toBe("text/javascript");
     expect(resolveLocalAsset("https://hatoba.invalid/assets/style-123.css", "GET")?.mime).toBe("text/css");
   });

@@ -31,7 +31,7 @@ pub(crate) fn ensure_crypto_provider() {
 /// Builds the shared client. Loopback targets bypass any configured proxy.
 pub(crate) fn build_client(loopback: bool) -> Result<reqwest::Client> {
     ensure_crypto_provider();
-    let mut builder = reqwest::Client::builder()
+    let mut builder = hatoba_net::client_builder()
         .timeout(REQUEST_TIMEOUT)
         .connect_timeout(CONNECT_TIMEOUT)
         // Never follow redirects: they could carry the bearer token to another origin.

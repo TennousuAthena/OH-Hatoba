@@ -12,6 +12,8 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::host::AppHandle;
+use crate::host::Event;
 use hatoba_core::model::Item;
 use hatoba_core::platform::{SecretStore, secret_keys};
 use hatoba_core::sync::{
@@ -19,8 +21,6 @@ use hatoba_core::sync::{
     WorkerCompat, load_session, worker_compat,
 };
 use hatoba_core::vault::Vault;
-use tauri::AppHandle;
-use tauri_specta::Event;
 use tokio::sync::Notify;
 
 use crate::dto::{
@@ -613,7 +613,7 @@ fn adopt_legacy_prefs(app: &AppHandle) {
 
 /// The background scheduler loop.
 pub fn spawn_scheduler(app: AppHandle) {
-    tauri::async_runtime::spawn(async move {
+    crate::host::async_runtime::spawn(async move {
         let mut backoff = Backoff::default();
         let mut retry_at: Option<tokio::time::Instant> = None;
         loop {

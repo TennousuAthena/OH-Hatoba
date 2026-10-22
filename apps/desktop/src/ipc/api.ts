@@ -102,7 +102,7 @@ import type {
 } from "./types";
 
 /** Receives raw terminal frames (see FRAME_* in types.ts). */
-export type FrameHandler = (frame: Uint8Array) => void;
+export type FrameHandler = (frame: Uint8Array) => unknown;
 export type Unlisten = () => void;
 
 /**
@@ -541,6 +541,10 @@ export interface HatobaApi {
 
 export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+export function isHarmonyOS(): boolean {
+  return import.meta.env.MODE === "harmonyos";
 }
 
 export function isAppError(e: unknown): e is AppError {

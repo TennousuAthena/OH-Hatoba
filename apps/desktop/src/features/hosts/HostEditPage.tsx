@@ -1,3 +1,4 @@
+import { hostCapabilities } from "@/lib/hostServices";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useVaultData } from "@/app/data";
 import { errorMessage } from "@/app/errors";
@@ -331,7 +332,7 @@ export function HostEditPage({
     { value: "password" as const, label: t("hosts.auth.password"), icon: "password" },
     { value: "key" as const, label: t("hosts.auth.key"), icon: "key" },
     { value: "ask" as const, label: t("hosts.auth.ask"), icon: "keyboard" },
-    { value: "agent" as const, label: t("hosts.auth.agent"), icon: "identification-badge" },
+    { value: "agent" as const, label: t("hosts.auth.agent"), icon: "identification-badge", disabled: !hostCapabilities().sshAgent, title: !hostCapabilities().sshAgent ? t("host.localUnavailable") : undefined },
   ];
 
   return (

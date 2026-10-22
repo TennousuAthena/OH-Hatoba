@@ -2186,7 +2186,7 @@ export type PackageManager = "scoop" |
 /**  One that Hatoba has no instructions for. */
 "other";
 
-export type Platform = "windows" | "macos" | "linux";
+export type Platform = "windows" | "macos" | "linux" | "harmonyos";
 
 export type ProbeResult = {
 	id: string,

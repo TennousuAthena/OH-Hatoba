@@ -183,10 +183,10 @@ pub trait EventSink: Send + Sync + 'static {
     fn send(&self, event: AiTurnEvent);
 }
 
-impl EventSink for tauri::ipc::Channel<AiTurnEvent> {
+impl EventSink for crate::host::ipc::Channel<AiTurnEvent> {
     fn send(&self, event: AiTurnEvent) {
         // A reloaded WebView drops its channels; the turn goes on and its entries are stored.
-        let _ = tauri::ipc::Channel::<AiTurnEvent>::send(self, event);
+        let _ = crate::host::ipc::Channel::<AiTurnEvent>::send(self, event);
     }
 }
 
@@ -209,7 +209,7 @@ pub trait AiEnv: Send + Sync + 'static {
     fn app_version(&self) -> String;
 }
 
-/// A turn's task, spawned by the caller (`tauri::async_runtime::spawn` in the app).
+/// A turn's task, spawned by the caller (`crate::host::async_runtime::spawn` in the app).
 pub type TurnTask = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
 
 /// Running turns and tools. Cheap to clone; every clone is the same manager.
@@ -4672,6 +4672,7 @@ async fn run_command(
         conn::Conn::Ssh(ssh) => remote_command::run(ssh, &args.command, workdir, stop)
             .await
             .map_err(|e| e.message),
+        #[cfg(feature = "desktop-host")]
         conn::Conn::Local(local) => local.tools.run_command(&args.command, workdir, stop).await,
     };
     match ran {
@@ -6515,12 +6516,20 @@ pub fn error_kind(e: &AiError) -> &'static str {
     }
 }
 
+#[path = "ai/chatgpt.rs"]
 pub mod chatgpt;
+#[path = "ai/conn.rs"]
 pub mod conn;
+#[path = "ai/files.rs"]
 mod files;
+#[path = "ai/memory.rs"]
 pub mod memory;
+#[path = "ai/mentions.rs"]
 pub mod mentions;
+#[path = "ai/models_dev.rs"]
 pub mod models_dev;
+#[path = "ai/search.rs"]
 mod search;
 #[cfg(test)]
+#[path = "ai/tests.rs"]
 mod tests;

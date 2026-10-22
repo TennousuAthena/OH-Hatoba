@@ -9,6 +9,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+hatoba-net.workspace = true
 # `process`: MCP stdio servers run as child processes.
 tokio = { workspace = true, features = ["process"] }
 tokio-util.workspace = true

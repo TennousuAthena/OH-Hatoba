@@ -1,0 +1,43 @@
+{
+  "verifiedAt": "2026-10-22T12:44:10.447231+00:00",
+  "environment": "macOS ARM64 / Rust 1.97.0 / DevEco Studio 26.0.0.851 / Native SDK 26.0.0.105",
+  "checks": {
+    "frontendTypecheck": true,
+    "frontendLint": true,
+    "frontendTestFiles": 87,
+    "frontendTestsPassed": 1035,
+    "desktopProductionBuild": true,
+    "desktopRustTestsPassed": 377,
+    "portableRuntimeTestsPassed": 295,
+    "nativeHostTestsPassed": 6,
+    "adapterScriptTestsPassed": 6,
+    "allWorkspaceClippy": true,
+    "rustfmt": true,
+    "commentWidth": true,
+    "contractCommands": 200,
+    "generatedPortableHandlers": 183,
+    "productionBoundary": true,
+    "upstreamBaselineAudit": true,
+    "filteredWorkspaceRunCompleted": true
+  },
+  "unpassedUpstreamEnvironmentTests": [
+    "dns_failure",
+    "blackholed_address_times_out",
+    "tcp_probe_reports_reachability_only",
+    "probes_go_through_the_proxy_and_wait_for_the_server"
+  ],
+  "environmentFinding": "The host resolver returns addresses for nonexistent.invalid. Unmodified upstream unreachable-domain/blackhole assumptions fail. These tests were excluded from the subsequent filtered run and are not counted as passing.",
+  "artifact": {
+    "name": "entry-default-signed.hap",
+    "sha256": "d9200e6e8a078bf0303aa6a46b15be4344f309e424555386d3179efd07d0ede5",
+    "bytes": 54684512,
+    "minimumApi": 20,
+    "targetApi": 26,
+    "architecture": "arm64-v8a",
+    "deviceTypes": [
+      "2in1",
+      "tablet"
+    ]
+  },
+  "scope": "Host regression and packaged-artifact checks. Host tests do not validate HarmonyOS device interactions; see separate device evidence. OpenSSH integration services were not enabled."
+}

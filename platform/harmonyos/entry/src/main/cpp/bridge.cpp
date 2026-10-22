@@ -3,6 +3,7 @@
 
 extern "C" char *hatoba_native_probe();
 extern "C" void hatoba_string_free(char *value);
+void DefineRuntime(napi_env env, napi_value exports);
 
 namespace {
 struct ProbeWork {
@@ -68,6 +69,7 @@ napi_value Init(napi_env env, napi_value exports)
         {"probe", nullptr, Probe, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, 1, properties);
+    DefineRuntime(env, exports);
     return exports;
 }
 

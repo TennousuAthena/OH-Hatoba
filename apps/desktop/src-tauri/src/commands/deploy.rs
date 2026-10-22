@@ -2,6 +2,8 @@
 
 use std::sync::Arc;
 
+use crate::host::ipc::Channel;
+use crate::host::{AppHandle, State};
 use hatoba_core::sync::deploy::{
     self as core_deploy, DatabasePlan, Deployment, Outcome, Step, StepFailure, StepStatus, Target,
     UpgradeWorker, WorkerPlan,
@@ -9,8 +11,6 @@ use hatoba_core::sync::deploy::{
 use hatoba_core::sync::{
     SyncBackend, SyncConfig, WorkerBackend, WorkerDeployment, flows, save_session,
 };
-use tauri::ipc::Channel;
-use tauri::{AppHandle, State};
 use zeroize::Zeroizing;
 
 use crate::deploy::bundle;
@@ -84,8 +84,8 @@ fn step_failed(failure: StepFailure) -> AppError {
 
 /// Step 1 (DEPLOY-02): checks the API token. The token crosses to Rust here once; every later
 /// call names the deployment by the returned handle (DEPLOY-07).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn deploy_start(
     state: State<'_, AppState>,
     api_token: String,
@@ -123,8 +123,8 @@ pub async fn deploy_start(
 }
 
 /// Step 2: what the deployment will do, before anything is written.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn deploy_inspect(
     state: State<'_, AppState>,
     handle: String,
@@ -163,8 +163,8 @@ pub async fn deploy_inspect(
 
 /// Steps 2 to 8 (DEPLOY-03), reporting each step on `progress`. Run it again after a failure to
 /// continue the deployment (DEPLOY-05).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn deploy_run(
     state: State<'_, AppState>,
     handle: String,
@@ -187,8 +187,8 @@ pub async fn deploy_run(
 }
 
 /// "Check again" while step 8 waits for the Worker.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn deploy_check(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -204,8 +204,8 @@ pub async fn deploy_check(
 }
 
 /// "Remove what Hatoba created": only what this deployment created (DEPLOY-05).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn deploy_cleanup(state: State<'_, AppState>, handle: String) -> AppResult<()> {
     let deployment = state.deploy.get(&handle)?;
     let mut deployment = deployment.lock().await;
@@ -216,8 +216,8 @@ pub async fn deploy_cleanup(state: State<'_, AppState>, handle: String) -> AppRe
 }
 
 /// Ends the deployment and forgets its tokens (the user cancelled or left the wizard).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn deploy_cancel(state: State<'_, AppState>, handle: String) {
     state.deploy.end(&handle);
 }
@@ -225,8 +225,8 @@ pub fn deploy_cancel(state: State<'_, AppState>, handle: String) {
 /// The master password step after a deployment: Flow A step 3 (§6.6) with the Worker URL and the
 /// setup token from the deployment, then deletes the `SETUP_TOKEN` secret (DEPLOY-06) and ends
 /// the deployment.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn deploy_setup(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -285,8 +285,8 @@ pub async fn deploy_setup(
 ///
 /// The sync settings record no deployment: the app did not deploy this Worker, so an update
 /// treats it like one deployed by hand (a Git integration may redeploy it).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn deploy_join(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -367,13 +367,13 @@ fn upgrade_target(state: &AppState, input: UpgradeTarget) -> AppResult<core_depl
 /// paused it, and pushes what waited.
 fn upgraded(app: &AppHandle) {
     let app = app.clone();
-    tauri::async_runtime::spawn(async move { sync::recheck_worker(&app).await });
+    crate::host::async_runtime::spawn(async move { sync::recheck_worker(&app).await });
 }
 
 /// What "Update Worker" starts from (DEPLOY-08): the account ID and Worker name recorded when the
 /// app deployed the Worker, or else the name in its workers.dev URL.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn deploy_upgrade_defaults(state: State<'_, AppState>) -> AppResult<UpgradeDefaults> {
     let (url, deployment) = configured_url(&state)?;
     Ok(match deployment {
@@ -393,8 +393,8 @@ pub fn deploy_upgrade_defaults(state: State<'_, AppState>) -> AppResult<UpgradeD
 }
 
 /// Step 2 of an upgrade: what it will do, before anything is written.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn deploy_upgrade_inspect(
     state: State<'_, AppState>,
     handle: String,
@@ -428,8 +428,8 @@ pub async fn deploy_upgrade_inspect(
 
 /// "Update Worker" (DEPLOY-08): the deployment steps as an upgrade, reporting each step on
 /// `progress`. Run it again after a failure to continue the upgrade.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn deploy_upgrade(
     app: AppHandle,
     state: State<'_, AppState>,

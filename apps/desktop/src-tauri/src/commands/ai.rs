@@ -6,6 +6,8 @@
 
 use std::sync::Arc;
 
+use crate::host::ipc::Channel;
+use crate::host::{AppHandle, State};
 use hatoba_ai::AiError;
 use hatoba_ai::chatgpt::SessionStatus;
 use hatoba_ai::models::{TestFailure, TestOutcome};
@@ -17,8 +19,6 @@ use hatoba_core::model::{
     MAX_ITEM_PLAINTEXT_BYTES, SETTINGS_ID, SearchKind as CoreSearchKind, SearchProvider,
 };
 use hatoba_core::{SnapshotKey, Vault};
-use tauri::ipc::Channel;
-use tauri::{AppHandle, State};
 use zeroize::Zeroizing;
 
 use crate::ai::{
@@ -54,10 +54,13 @@ impl AiEnv for AppEnv {
         let state = state(&self.0);
         match state.ssh.get(session_id) {
             Ok(live) => Some(crate::ai::conn::Conn::Ssh(live.session.clone())),
+            #[cfg(feature = "desktop-host")]
             Err(_) => state
                 .local
                 .find(session_id)
                 .map(crate::ai::conn::Conn::Local),
+            #[cfg(not(feature = "desktop-host"))]
+            Err(_) => None,
         }
     }
 
@@ -371,8 +374,8 @@ pub(crate) fn delete_provider(v: &mut Vault, id: &str) -> AppResult<()> {
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn ai_providers_list(state: State<'_, AppState>) -> AppResult<Vec<AiProviderView>> {
     state.with_unlocked(|v| {
         let mut list: Vec<AiProviderView> = v
@@ -385,8 +388,8 @@ pub fn ai_providers_list(state: State<'_, AppState>) -> AppResult<Vec<AiProvider
     })
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_provider_save(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -398,8 +401,8 @@ pub async fn ai_provider_save(
     Ok(view)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn ai_provider_delete(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
     let signed_in = state.with_unlocked(|v| {
         let signed_in = chatgpt::credentials(v, &id).is_some();
@@ -409,7 +412,7 @@ pub fn ai_provider_delete(app: AppHandle, state: State<'_, AppState>, id: String
     sync::local_change(&app);
     // AI-52: this device's session of a ChatGPT provider goes with it, revoked at OpenAI.
     if signed_in {
-        tauri::async_runtime::spawn(async move {
+        crate::host::async_runtime::spawn(async move {
             let revoked = chatgpt::sessions()
                 .sign_out(&id, &tokio_util::sync::CancellationToken::new())
                 .await;
@@ -425,15 +428,13 @@ pub fn ai_provider_delete(app: AppHandle, state: State<'_, AppState>, id: String
 /// adds a ChatGPT provider with the account's models, or provider `provider_id`'s account again.
 /// Waits until the browser comes back (at most 15 minutes), `ai_chatgpt_sign_in_cancel` cancels
 /// it, or the vault locks.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_chatgpt_sign_in(
     app: AppHandle,
     state: State<'_, AppState>,
     provider_id: Option<String>,
 ) -> AppResult<AiChatgptSignIn> {
-    use tauri_plugin_opener::OpenerExt;
-
     let sessions = chatgpt::sessions();
     // Registered with the read, so a lock either came first or cancels the sign-in.
     let (request, op) = state.with_unlocked(|v| {
@@ -444,8 +445,8 @@ pub async fn ai_chatgpt_sign_in(
     })?;
     let cancel = state.ai.chatgpt_sign_in_started(op.token());
     let sign_in = hatoba_ai::chatgpt::oauth::SignIn::start(sessions.endpoints(), &request).await?;
-    app.opener()
-        .open_url(sign_in.url().as_str(), None::<&str>)
+    crate::host::open_url(&app, sign_in.url().as_str())
+        .await
         .map_err(|_| {
             AppError::new(
                 crate::error::ErrorCode::Ai,
@@ -566,8 +567,8 @@ pub async fn ai_chatgpt_sign_in(
 }
 
 /// AI-52: cancels the sign-in that waits for the browser.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn ai_chatgpt_sign_in_cancel(state: State<'_, AppState>) {
     state.ai.chatgpt_sign_in_cancel();
 }
@@ -575,8 +576,8 @@ pub fn ai_chatgpt_sign_in_cancel(state: State<'_, AppState>) {
 /// AI-52: signs provider `provider_id` out on this device and revokes the session at OpenAI.
 /// Returns whether OpenAI confirmed the revocation; the session is gone from this device either
 /// way, and the provider keeps its account for the next sign-in.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_chatgpt_sign_out(
     state: State<'_, AppState>,
     provider_id: String,
@@ -593,8 +594,8 @@ pub async fn ai_chatgpt_sign_out(
 }
 
 /// AI-03: the model list of a saved or unsaved provider.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_provider_models(
     state: State<'_, AppState>,
     input: AiProviderInput,
@@ -629,8 +630,8 @@ pub async fn ai_provider_models(
 }
 
 /// AI-04: a minimal request to the first model, or the model list when there is none.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_provider_test(
     state: State<'_, AppState>,
     input: AiProviderInput,
@@ -724,8 +725,8 @@ pub(crate) fn delete_search_provider(v: &mut Vault, id: &str) -> AppResult<()> {
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn search_providers_list(state: State<'_, AppState>) -> AppResult<Vec<SearchProviderView>> {
     state.with_unlocked(|v| {
         let mut list: Vec<SearchProviderView> = v
@@ -738,8 +739,8 @@ pub fn search_providers_list(state: State<'_, AppState>) -> AppResult<Vec<Search
     })
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn search_provider_save(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -756,8 +757,8 @@ pub async fn search_provider_save(
     Ok(view)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn search_provider_delete(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -769,8 +770,8 @@ pub fn search_provider_delete(
 }
 
 /// A real query through a saved or unsaved search provider.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn search_provider_test(
     state: State<'_, AppState>,
     input: SearchProviderInput,
@@ -915,14 +916,14 @@ pub(crate) fn save_ai_settings(v: &mut Vault, patch: &AiSettingsPatch) -> AppRes
     Ok(true)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn ai_settings_get(state: State<'_, AppState>) -> AppResult<AiSettingsView> {
     state.with_unlocked(|v| Ok(ai_settings_view(&v.settings().ai)))
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn ai_settings_save(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -966,8 +967,8 @@ pub(crate) fn rename_conversation(
 }
 
 /// Every conversation, unsorted; the panel sorts by `last_activity`, pinned first.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_conversations_list(
     state: State<'_, AppState>,
 ) -> AppResult<Vec<AiConversationView>> {
@@ -980,8 +981,8 @@ pub async fn ai_conversations_list(
     })
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_conversation_get(
     state: State<'_, AppState>,
     id: String,
@@ -989,8 +990,8 @@ pub async fn ai_conversation_get(
     state.ai.conversation_detail(&state.vault, &id)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_conversation_rename(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1002,8 +1003,8 @@ pub async fn ai_conversation_rename(
     Ok(view)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_conversation_pin(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1015,8 +1016,8 @@ pub async fn ai_conversation_pin(
     Ok(view)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_conversation_delete(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1029,8 +1030,8 @@ pub async fn ai_conversation_delete(
 
 /// AI-43: copies the conversation up to the entry `entry_id`, or all of it without one, into a
 /// new conversation titled `title`, and returns the new conversation.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_conversation_fork(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1047,8 +1048,8 @@ pub async fn ai_conversation_fork(
 
 /// Stores the user's message and starts a turn; its events stream on `channel` until
 /// `turn_ended`.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_send(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1060,13 +1061,13 @@ pub async fn ai_send(
         .ai
         .send(&state.vault, Arc::new(AppEnv(app)), input, sink)
         .await?;
-    tauri::async_runtime::spawn(task);
+    crate::host::async_runtime::spawn(task);
     Ok(started)
 }
 
 /// Retry after an error: the next request from the stored conversation, on a new channel.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_retry(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1082,13 +1083,13 @@ pub async fn ai_retry(
         context,
         sink,
     )?;
-    tauri::async_runtime::spawn(task);
+    crate::host::async_runtime::spawn(task);
     Ok(())
 }
 
 /// Stores a result the frontend produced (`read_terminal`, `send_input`, a rejection).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_tool_result(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1111,8 +1112,8 @@ pub async fn ai_tool_result(
 /// The change an open `edit_file` or `write_file` call would make to the file on `session_id`'s
 /// host, for its approval card (AI-39, AI-40), with the arguments as the user edited them on the
 /// card, if they did.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_file_preview(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1136,8 +1137,8 @@ pub async fn ai_file_preview(
 
 /// The changes of the conversation's `edit_file` and `write_file` calls that this device keeps
 /// and can revert, or has reverted (AI-41).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_file_changes(
     state: State<'_, AppState>,
     conversation_id: String,
@@ -1148,8 +1149,8 @@ pub async fn ai_file_changes(
 /// What an `edit_file` or `write_file` call changed (AI-41), from its snapshot, for its block and
 /// the revert's confirmation: the file before the call and as the call wrote it. `None` once the
 /// change was reverted or dropped.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_file_change_diff(
     state: State<'_, AppState>,
     conversation_id: String,
@@ -1168,8 +1169,8 @@ pub async fn ai_file_change_diff(
 
 /// The server a revert (AI-41) on the tab `session_id` runs on, as `AiFileChange.server` names it;
 /// null while the tab is not connected. Edit and resend asks before it offers to revert changes.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn ai_session_server(app: AppHandle, session_id: Option<String>) -> Option<String> {
     crate::ai::session_server(&AppEnv(app), session_id.as_deref())
 }
@@ -1177,8 +1178,8 @@ pub fn ai_session_server(app: AppHandle, session_id: Option<String>) -> Option<S
 /// Reverts the change an `edit_file` or `write_file` call made (AI-41), on the conversation's tab
 /// `session_id`. A file the call created is deleted, so the panel asks first. `restore`: Restore
 /// anyway, over what the diff of the last revert showed, which the panel also asks about first.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_file_revert(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1209,8 +1210,8 @@ pub async fn ai_file_revert(
 /// keeping the snapshot of a file change dropped older ones (AI-41). `judged`: Auto decided the
 /// call (it runs on the judge's verdict, or its approval card showed one), so the result keeps the
 /// verdict (AI-47).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_tool_run(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1238,8 +1239,8 @@ pub async fn ai_tool_run(
 /// and returns its verdict: run the call without the approval card, or ask. `screen_tail` is the
 /// screen's last lines, which a `send_input` call shows the judge. Never fails because the judge
 /// does: without a judge, or when it fails, the verdict asks and says why.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_judge(
     state: State<'_, AppState>,
     conversation_id: String,
@@ -1260,8 +1261,8 @@ pub async fn ai_judge(
 /// AI-47: **Test** beside the judge in Settings → AI. Judges sample calls with `judge`, which
 /// need not be saved yet, or with the saved judge when it is `None`, and returns each verdict
 /// with the decision expected. Fails only when the judge does not name a listed model.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_judge_test(
     state: State<'_, AppState>,
     judge: Option<AiModelRef>,
@@ -1270,8 +1271,8 @@ pub async fn ai_judge_test(
 }
 
 /// Stops the turn: aborts the request and running tools, cancels calls without a result.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_stop(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1286,8 +1287,8 @@ pub async fn ai_stop(
 
 /// AI-21: summarizes the context with the given model and moves `context_start` to the summary.
 /// `instructions`: what `/compact <instructions>` asks of the summary (AI-50).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_compact(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1308,15 +1309,15 @@ pub async fn ai_compact(
 }
 
 /// AI-50: the skills the panel's `/` menu offers as commands.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_skill_commands(state: State<'_, AppState>) -> AppResult<Vec<AiSkillCommand>> {
     state.with_unlocked(|v| Ok(crate::ai::skill_commands(v)))
 }
 
 /// AI-50: the `SKILL.md` of the enabled skill `name`, which a `/<skill>` command attaches.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_skill_text(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1328,8 +1329,8 @@ pub async fn ai_skill_text(
 
 /// AI-51: the entries of the directory `path` on the host of the tab's session `session_id`, for
 /// the `@` menu: to complete a path, and to attach a folder.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_host_list(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1343,8 +1344,8 @@ pub async fn ai_host_list(
 
 /// AI-51: the text file `path` on the host of the tab's session `session_id`, which an `@`
 /// mention attaches.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_host_read(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1358,8 +1359,8 @@ pub async fn ai_host_read(
 
 /// AI-42: asks a side question about the conversation without stopping its turn. The answer
 /// streams on `channel` and comes back whole; nothing is stored.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_side_question(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1378,8 +1379,8 @@ pub async fn ai_side_question(
 
 /// AI-42: stops the conversation's side question `question_id`, if it is on its way; its turn
 /// goes on, and so does a newer side question.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_side_stop(
     state: State<'_, AppState>,
     conversation_id: String,
@@ -1390,8 +1391,8 @@ pub async fn ai_side_stop(
 }
 
 /// AI-24: conversations whose title or message text contains `query`, ignoring case.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_search(state: State<'_, AppState>, query: String) -> AppResult<Vec<AiSearchHit>> {
     let vault = state.vault.clone();
     blocking(move || crate::ai::search(&vault, &query)).await
@@ -1399,8 +1400,8 @@ pub async fn ai_search(state: State<'_, AppState>, query: String) -> AppResult<V
 
 /// AI-26: replaces the user's message `entry_id` with `text`, deletes every entry after it, and
 /// starts a turn whose events stream on `channel`, like `ai_send`.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_edit_resend(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1423,7 +1424,7 @@ pub async fn ai_edit_resend(
             sink,
         )
         .await?;
-    tauri::async_runtime::spawn(task);
+    crate::host::async_runtime::spawn(task);
     Ok(started)
 }
 
@@ -1431,8 +1432,8 @@ pub async fn ai_edit_resend(
 /// only their paths. Reads only paths of the window's last drop, each once
 /// (`crate::dropped`); with any other path, nothing is read. One result per path, in order,
 /// naming the file by its base name. The per-message total stays the panel's to check.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_read_dropped_files(
     state: State<'_, AppState>,
     paths: Vec<String>,

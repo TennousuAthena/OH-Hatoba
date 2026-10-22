@@ -5,11 +5,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
+use crate::host::Event;
+use crate::host::ipc::{Channel, InvokeResponseBody, IpcResponse};
+use crate::host::{AppHandle, State};
 use hatoba_core::model::{Host, HostProxy, Item};
 use hatoba_ssh::{AuthMethod, ConnectConfig, ShellEvent, ShellOptions};
-use tauri::ipc::{Channel, InvokeResponseBody, IpcResponse};
-use tauri::{AppHandle, State};
-use tauri_specta::Event;
 use tokio::sync::mpsc;
 use zeroize::Zeroizing;
 
@@ -50,7 +50,7 @@ impl TermFrame {
 }
 
 impl IpcResponse for TermFrame {
-    fn body(self) -> tauri::Result<InvokeResponseBody> {
+    fn body(self) -> crate::host::Result<InvokeResponseBody> {
         Ok(InvokeResponseBody::Raw(self.0))
     }
 }
@@ -90,8 +90,8 @@ fn overrides(options: &ConnectOptions) -> Overrides {
     }
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ssh_connect(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -132,8 +132,8 @@ pub async fn ssh_connect(
 /// not saved as a host. Authentication is the ssh-agent, then the server's keyboard-interactive
 /// prompts or a password asked once (SSH-03, SSH-08, SSH-09); the host key goes through the
 /// usual check and is saved like any other (SSH-04).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ssh_connect_target(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -150,7 +150,11 @@ pub async fn ssh_connect_target(
         target.address.clone(),
         target.port,
         target.username.clone(),
-        AuthMethod::AgentThenAsk,
+        if crate::host::supports_local_processes() {
+            AuthMethod::AgentThenAsk
+        } else {
+            AuthMethod::Ask
+        },
     );
     cfg.proxy = proxy;
     let (live, events) = open_terminal(
@@ -284,12 +288,23 @@ fn pump(
     mut events: mpsc::Receiver<ShellEvent>,
     channel: Channel<TermFrame>,
 ) {
-    tauri::async_runtime::spawn(async move {
+    crate::host::async_runtime::spawn(async move {
         let host_id = host_id.as_deref();
         while let Some(event) = events.recv().await {
             match event {
                 ShellEvent::Data(bytes) => {
-                    if channel.send(TermFrame::new(FRAME_DATA, &bytes)).is_err() {
+                    let mut failed = false;
+                    // Preserve byte boundaries; a native transport frame has a bounded payload.
+                    for chunk in bytes.chunks(256 * 1024 - 1) {
+                        if crate::host::send_terminal(&channel, TermFrame::new(FRAME_DATA, chunk))
+                            .await
+                            .is_err()
+                        {
+                            failed = true;
+                            break;
+                        }
+                    }
+                    if failed {
                         // The WebView went away (reload / window closed): don't leak the session.
                         live.close().await;
                         break;
@@ -330,8 +345,8 @@ fn pump(
     });
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ssh_write(
     state: State<'_, AppState>,
     session_id: String,
@@ -342,8 +357,8 @@ pub async fn ssh_write(
 
 /// Writes bytes to the shell as they are. xterm sends legacy mouse reports as binary, one byte per
 /// character, and their coordinates go above 0x7F, which `ssh_write`'s UTF-8 would re-encode.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ssh_write_bytes(
     state: State<'_, AppState>,
     session_id: String,
@@ -362,8 +377,8 @@ async fn write_shell(state: &AppState, session_id: &str, data: Vec<u8>) -> AppRe
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ssh_resize(
     state: State<'_, AppState>,
     session_id: String,
@@ -381,8 +396,8 @@ pub async fn ssh_resize(
 /// place of a sampling already running on the session. Readings stream on `channel` until
 /// `ssh_stats_stop` with the returned id, the end of the session, or the WebView dropping the
 /// channel. When starts overlap, the one that arrived last keeps running.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ssh_stats_start(
     state: State<'_, AppState>,
     session_id: String,
@@ -393,7 +408,7 @@ pub async fn ssh_stats_start(
     let live = state.ssh.get(&session_id)?;
     let (handle, mut events) = live.session.open_stats(STATS_INTERVAL).await?;
     live.set_stats(id, handle);
-    tauri::async_runtime::spawn(async move {
+    crate::host::async_runtime::spawn(async move {
         while let Some(event) = events.recv().await {
             let event = match event {
                 hatoba_ssh::StatsEvent::Stats(stats) => StatsEvent::Stats {
@@ -412,16 +427,16 @@ pub async fn ssh_stats_start(
 }
 
 /// Stops the sampling that `ssh_stats_start` returned `stats_id` for; a later one keeps running.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn ssh_stats_stop(state: State<'_, AppState>, session_id: String, stats_id: u64) {
     if let Ok(live) = state.ssh.get(&session_id) {
         live.stop_stats(stats_id);
     }
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ssh_disconnect(state: State<'_, AppState>, session_id: String) -> AppResult<()> {
     if let Some(live) = state.ssh.take(&session_id) {
         live.close().await;
@@ -430,8 +445,8 @@ pub async fn ssh_disconnect(state: State<'_, AppState>, session_id: String) -> A
 }
 
 /// "Test connection" in the host editor: connect, authenticate, verify the host key, disconnect.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ssh_test(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -465,14 +480,14 @@ pub async fn ssh_test(
     })
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn hostkey_respond(state: State<'_, AppState>, request_id: String, accept: bool) {
     state.ssh.answer_hostkey(&request_id, accept);
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn auth_prompt_respond(
     state: State<'_, AppState>,
     request_id: String,

@@ -148,6 +148,7 @@ export class LiveSession {
   private fitTimer: number | undefined;
   private readonly outputListeners = new Set<(text: string) => void>();
   private readonly outputDecoder = new TextDecoder();
+  private readonly consumedWrites = new Set<() => void>();
 
   constructor(
     readonly tabId: string,
@@ -470,7 +471,10 @@ export class LiveSession {
             const text = this.outputDecoder.decode(data, { stream: true });
             this.outputListeners.forEach((listener) => listener(text));
           }
-          this.term.write(data);
+          return new Promise<void>((resolve) => {
+            this.consumedWrites.add(resolve);
+            this.term.write(data, () => { this.consumedWrites.delete(resolve); resolve(); });
+          });
         }
         break;
       case FRAME_CLOSED:
@@ -530,6 +534,8 @@ export class LiveSession {
   async dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.consumedWrites.forEach((resolve) => resolve());
+    this.consumedWrites.clear();
     // Host-key and login prompts of an attempt still in progress would outlive the tab.
     if (this.isConnecting && this.pendingSessionId) cancelSessionPrompts(this.pendingSessionId);
     this.gen++;

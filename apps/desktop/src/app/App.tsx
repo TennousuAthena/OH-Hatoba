@@ -20,6 +20,7 @@ import { closeSessionTab, openLocalTerminal } from "@/features/terminal/connect"
 import { UnlockScreen } from "@/features/unlock/UnlockScreen";
 import { useT, type MessageKey } from "@/i18n";
 import { api } from "@/ipc/api";
+import { hostService } from "@/lib/hostServices";
 import type { SyncState } from "@/ipc/types";
 import { ClosePrompt, useTrayMenu } from "./ClosePrompt";
 import { ContextMenuHost } from "./ContextMenu";
@@ -42,6 +43,13 @@ export function App() {
   const settingsOpen = useApp((st) => st.settingsOpen);
   const hasSessions = useTabs((st) => st.tabs.length > 0);
   const platform = useApp((st) => st.info.platform);
+
+  useEffect(() => {
+    if (platform === "harmonyos" && phase !== "boot") {
+      console.info("OH-Hatoba application rendered");
+      void hostService("notifications_ready", { ready: phase === "unlocked" }).catch(() => {});
+    }
+  }, [phase, platform]);
 
   useGlobalEvents();
   useWindowChrome();

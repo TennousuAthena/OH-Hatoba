@@ -2,6 +2,9 @@
 //! One endpoint, the verdict kept until the call's result is stored, and the `permission_mode`
 //! notes of Auto.
 
+// Some shared fixtures are used only by desktop stdio tests.
+#![cfg_attr(not(feature = "desktop-host"), allow(dead_code, unused_imports))]
+
 use super::*;
 use crate::ai::{auto_view, find_conversation, guard, judge_state, open_call_at, screen_tail};
 use crate::commands::ai::save_ai_settings;
@@ -389,6 +392,7 @@ fn a_verdict_shows_its_answers_in_the_order_the_judge_asks() {
     }
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_mcp_call_shows_the_judge_its_server_description_and_annotations() {
     let f = Fixture::new(vec![

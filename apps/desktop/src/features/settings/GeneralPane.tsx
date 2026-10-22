@@ -9,6 +9,7 @@ import { api, toAppError } from "@/ipc/api";
 import type { CliActivity, CliCommandView, CloseAction, TerminalSettings } from "@/ipc/types";
 import { pickSavePath } from "@/lib/native";
 import { defaultRightClick } from "@/lib/platform";
+import { hostCapabilities, hostService } from "@/lib/hostServices";
 import { Pane, SettingRow, usePrefs, type PaneProps } from "./shared";
 import s from "./shared.module.css";
 
@@ -81,7 +82,7 @@ export function GeneralPane({ settings, updateTerminal }: PaneProps) {
           <Switch label={t("settings.probe")} checked={prefs.host_probe} onChange={(host_probe) => setPrefs({ host_probe })} />
         </SettingRow>
         {/* WIN-10: macOS's close button hides the window (MAC-06). */}
-        {platform !== "macos" && (
+        {platform !== "macos" && hostCapabilities().tray && (
           <SettingRow label={t("settings.closeAction")} hint={t("settings.closeAction.hint")}>
             <PopupSelect<CloseAction>
               ariaLabel={t("settings.closeAction")}
@@ -97,12 +98,13 @@ export function GeneralPane({ settings, updateTerminal }: PaneProps) {
           </SettingRow>
         )}
         <SettingRow label={t("settings.aiNotifications")} hint={t("settings.aiNotifications.hint")}>
+          {platform === "harmonyos" && <Button onClick={() => void hostService("notification_permission").catch((e: unknown) => toast(errorMessage(t, e), "error"))}>{t("host.notificationPermission")}</Button>}
           <Switch label={t("settings.aiNotifications")} checked={prefs.ai_notifications} onChange={(ai_notifications) => setPrefs({ ai_notifications })} />
         </SettingRow>
       </Group>
 
       <Group>
-        <CliCommandRows />
+        {hostCapabilities().desktopCli && <CliCommandRows />}
       </Group>
 
       <Group>

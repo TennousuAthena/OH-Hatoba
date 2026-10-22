@@ -11,6 +11,7 @@ mod deploy;
 mod dropped;
 mod dto;
 mod error;
+mod host;
 mod import;
 mod launch;
 mod local;

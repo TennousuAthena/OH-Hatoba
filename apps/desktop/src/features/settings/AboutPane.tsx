@@ -1,3 +1,4 @@
+import { hostCapabilities } from "@/lib/hostServices";
 import { useApp } from "@/app/store";
 import { useTabs } from "@/app/tabs";
 import { useUpdate } from "@/app/update";
@@ -140,7 +141,7 @@ export function AboutPane() {
         </button>
       </div>
 
-      <Group>
+      {hostCapabilities().updater && <Group>
         <SettingRow
           label={t("settings.about.update")}
           hint={
@@ -186,7 +187,7 @@ export function AboutPane() {
             />
           </SettingRow>
         )}
-      </Group>
+      </Group>}
 
       {update && (
         <Card role="region" className={s.notes} aria-label={t("settings.about.notes", { version: update.version })}>

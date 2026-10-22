@@ -116,5 +116,7 @@ security-framework = { version = "3.7.0", default-features = false, features = [
 security-framework-sys = { version = "2.17.0", default-features = false, features = ["OSX_10_15"] }
 
 [features]
+default = ["desktop-host"]
+desktop-host = []
 # Enables devtools in release builds. Never enabled for distributed builds (SEC-05).
 devtools = ["tauri/devtools"]

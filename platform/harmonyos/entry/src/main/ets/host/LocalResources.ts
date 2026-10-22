@@ -1,6 +1,7 @@
 // A virtual HTTPS origin served entirely from packaged rawfiles. No listener or remote server.
 export const LOCAL_ORIGIN = 'https://hatoba.invalid';
-export const LOCAL_ENTRY = `${LOCAL_ORIGIN}/harmonyos-probe.html`;
+export const LOCAL_ENTRY = `${LOCAL_ORIGIN}/harmonyos-app.html`;
+export const DIAGNOSTIC_ENTRY = `${LOCAL_ORIGIN}/harmonyos-probe.html`;
 
 export interface LocalAsset {
   path: string;
@@ -8,7 +9,7 @@ export interface LocalAsset {
 }
 
 export function isLocalNavigation(url: string): boolean {
-  return url === LOCAL_ENTRY || url.startsWith(`${LOCAL_ENTRY}#`);
+  return url === LOCAL_ENTRY || url.startsWith(`${LOCAL_ENTRY}#`) || url === DIAGNOSTIC_ENTRY;
 }
 
 export function resolveLocalAsset(url: string, method: string): LocalAsset | undefined {
@@ -16,7 +17,7 @@ export function resolveLocalAsset(url: string, method: string): LocalAsset | und
   const path = url.slice(LOCAL_ORIGIN.length + 1);
   // Reject encoding, queries, traversal and alternate separators before touching the resource manager.
   if (!/^[A-Za-z0-9_./-]+$/.test(path) || path.split('/').some((part: string) => !part || part === '.' || part === '..')) return undefined;
-  if (path !== 'harmonyos-probe.html' && !path.startsWith('assets/')) return undefined;
+  if (path !== 'harmonyos-app.html' && path !== 'harmonyos-probe.html' && !path.startsWith('assets/')) return undefined;
   const extension = path.slice(path.lastIndexOf('.') + 1);
   let mime: string;
   switch (extension) {

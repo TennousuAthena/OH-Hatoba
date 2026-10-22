@@ -3,9 +3,9 @@
 use std::io::Read;
 use std::path::Path;
 
+use crate::host::{AppHandle, State};
 use hatoba_core::model::{Item, KeyAlgorithm as CoreAlg, SshKey};
 use hatoba_ssh::{GenerateKind, KeyAlgorithm as SshAlg, ParsedKey};
-use tauri::{AppHandle, State};
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::convert::key_view;
@@ -114,8 +114,8 @@ fn store_parsed(
     })
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn keys_list(state: State<'_, AppState>) -> AppResult<Vec<KeyView>> {
     state.with_unlocked(|v| {
         let mut keys: Vec<KeyView> = v.keys().iter().map(|(id, k)| key_view(id, k, v)).collect();
@@ -125,8 +125,8 @@ pub fn keys_list(state: State<'_, AppState>) -> AppResult<Vec<KeyView>> {
 }
 
 /// KEY-01 / WIN-09: OpenSSH, PEM and PuTTY .ppk, from a file or pasted text, with clear errors.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn key_import(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -165,8 +165,8 @@ pub async fn key_import(
 }
 
 /// KEY-02: Ed25519 by default, RSA 4096 optional.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn key_generate(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -195,8 +195,8 @@ pub async fn key_generate(
     Ok(view)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn key_rename(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -227,8 +227,8 @@ pub fn key_rename(
 }
 
 /// KEY-05: the UI lists the hosts using the key before calling this; they fall back to "ask".
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn key_delete(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
     state.with_unlocked(|v| {
         v.get(&id)
@@ -242,8 +242,8 @@ pub fn key_delete(app: AppHandle, state: State<'_, AppState>, id: String) -> App
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn key_public(state: State<'_, AppState>, id: String) -> AppResult<String> {
     state.with_unlocked(|v| {
         v.get(&id)
@@ -255,8 +255,8 @@ pub fn key_public(state: State<'_, AppState>, id: String) -> AppResult<String> {
 
 /// KEY-06: appends the public key to `~/.ssh/authorized_keys` on a host (like `ssh-copy-id`).
 /// The key travels on stdin, so nothing from it is interpreted by the remote shell.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn key_deploy(
     app: AppHandle,
     state: State<'_, AppState>,

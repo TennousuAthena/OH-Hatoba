@@ -1,7 +1,7 @@
 //! App info and window helpers.
 
-use tauri::ipc::Channel;
-use tauri::{AppHandle, State};
+use crate::host::ipc::Channel;
+use crate::host::{AppHandle, State};
 
 use crate::dto::{AppInfo, NotificationInput, TrayMenuInput, UpdateCheck, UpdateProgress};
 use crate::error::{AppError, AppResult};
@@ -9,8 +9,8 @@ use crate::platform;
 use crate::state::AppState;
 use crate::{notification, tray, update};
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn app_info(app: AppHandle, state: State<'_, AppState>) -> AppInfo {
     AppInfo {
         version: app.package_info().version.to_string(),
@@ -24,8 +24,8 @@ pub fn app_info(app: AppHandle, state: State<'_, AppState>) -> AppInfo {
 
 /// Asks GitHub whether a newer version exists (Settings → About). Runs when the user checks,
 /// and once after unlock while the automatic check is on.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn update_check(app: AppHandle, state: State<'_, AppState>) -> AppResult<UpdateCheck> {
     update::check(&app, &state.updates).await
 }
@@ -33,52 +33,52 @@ pub async fn update_check(app: AppHandle, state: State<'_, AppState>) -> AppResu
 /// Downloads and installs the update the last check found. Hatoba closes, which ends every SSH
 /// session, and the installer starts the new version. Refused when a package manager installed
 /// Hatoba.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn update_install(app: AppHandle, progress: Channel<UpdateProgress>) -> AppResult<()> {
     update::install(&app, &progress).await
 }
 
 /// Opens the Windows 11 Snap Layouts flyout (hovering the custom maximize button, WIN-01).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn window_snap_overlay() {
     platform::window::snap_overlay();
 }
 
 /// Whether the Linux main window shows its painted chrome: false while maximized, fullscreen
 /// or tiled, false without a compositor, and false on other platforms.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn window_floating() -> bool {
     platform::window::floating()
 }
 
 /// The close prompt's **Minimize to Tray** (WIN-10).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn window_hide_to_tray(app: AppHandle) {
     tray::hide_to_tray(&app);
 }
 
 /// The close prompt's **Quit Hatoba** (WIN-10).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn app_quit(app: AppHandle) {
     app.exit(0);
 }
 
 /// The tray menu's labels in the app's language, and whether **Lock** is enabled (WIN-10).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn tray_set_menu(app: AppHandle, menu: TrayMenuInput) {
     tray::set_menu(&app, &menu);
 }
 
 /// Shows a system notification (AI-07). The WebView sends one only while the window is not
 /// focused.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn notification_show(app: AppHandle, notification: NotificationInput) {
     notification::show(&app, notification);
 }
@@ -88,8 +88,8 @@ pub fn notification_show(app: AppHandle, notification: NotificationInput) {
 const TEXT_EXTENSIONS: [&str; 3] = ["txt", "md", "json"];
 
 /// Writes text to a path the user chose in the native save dialog.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn save_text_file(path: String, contents: String) -> AppResult<()> {
     let path = std::path::PathBuf::from(path);
     // Only plain-text files at an absolute, user-chosen location: this command is not a general
@@ -110,8 +110,8 @@ fn is_text_file(path: &std::path::Path) -> bool {
 }
 
 /// Feeds the idle auto-lock timer (SEC-02).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn activity_ping(state: State<'_, AppState>) {
     state.touch_activity();
 }

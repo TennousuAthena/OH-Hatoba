@@ -43,12 +43,27 @@ describe("HarmonyOS transport", () => {
     frame.set([3, 0, 255], 4);
     port.receive(frame.buffer);
     expect(frames).toEqual([new Uint8Array([3, 0, 255])]);
+    await vi.waitFor(() => expect(port.messages.at(-1)?.type).toBe("ack"));
     expect(port.messages.at(-1)).toMatchObject({ type: "ack", channel: id, bytes: 3 });
     port.receive({ v: 1, type: "reply", id: call.id, ok: false, error: { code: "ssh", detail: "rejected" } });
     await expect(result).rejects.toMatchObject({ code: "ssh" });
     port.receive(frame.buffer);
     expect(frames).toHaveLength(1);
     bridge.close();
+  });
+
+  it("withholds terminal credits until parsing ends and preserves ACK order", async () => {
+    const port = new Port(); const bridge = new HostBridge(port as unknown as MessagePort);
+    const consumed: (() => void)[] = [];
+    const id = bridge.channel(() => new Promise<void>((resolve) => consumed.push(resolve)));
+    for (const length of [2, 3]) {
+      const frame = new Uint8Array(length + 4); new DataView(frame.buffer).setUint32(0, id, true); port.receive(frame.buffer);
+    }
+    consumed[1](); await Promise.resolve(); await Promise.resolve();
+    expect(port.messages).toEqual([]);
+    consumed[0]();
+    await vi.waitFor(() => expect(port.messages).toHaveLength(2));
+    expect(port.messages.map((m) => m.bytes)).toEqual([2, 3]); bridge.close();
   });
 
   it("does not confuse timed-out replies with later calls", async () => {

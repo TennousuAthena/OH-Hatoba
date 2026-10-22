@@ -81,7 +81,7 @@ fn spawn(task: impl Future<Output = ()> + Send + 'static) {
             handle.spawn(task);
         }
         Err(_) => {
-            tauri::async_runtime::spawn(task);
+            crate::host::async_runtime::spawn(task);
         }
     }
 }
@@ -167,6 +167,11 @@ impl DeviceState {
 
     /// Whether the server is enabled on this device (AI-29).
     pub fn enabled(&self, id: &str, transport: &McpTransport) -> bool {
+        if matches!(transport, McpTransport::Stdio { .. })
+            && !crate::host::supports_local_processes()
+        {
+            return false;
+        }
         self.servers
             .get(id)
             .and_then(|s| s.enabled)
@@ -1006,6 +1011,13 @@ impl McpManager {
         spawn(async move {
             let ended = ended.drop_guard();
             let start = async {
+                if matches!(config, McpTransportConfig::Stdio { .. })
+                    && !crate::host::supports_local_processes()
+                {
+                    return Err(McpError::Spawn(
+                        "Local process transport is unavailable on this device".into(),
+                    ));
+                }
                 if let Some(old) = old {
                     old.shutdown().await;
                 }
@@ -1013,7 +1025,7 @@ impl McpManager {
                 let http = manager.http();
                 // The login shell's PATH on macOS, resolved when the first stdio server starts.
                 let path = if matches!(config, McpTransportConfig::Stdio { .. }) {
-                    tauri::async_runtime::spawn_blocking(platform::login_shell::default_path)
+                    crate::host::async_runtime::spawn_blocking(platform::login_shell::default_path)
                         .await
                         .ok()
                         .flatten()
@@ -1637,4 +1649,5 @@ impl McpManager {
 }
 
 #[cfg(test)]
+#[path = "mcp/tests.rs"]
 pub(crate) mod tests;

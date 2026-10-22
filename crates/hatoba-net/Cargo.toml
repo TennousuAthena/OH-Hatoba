@@ -1,0 +1,14 @@
+[package]
+name = "hatoba-net"
+description = "Shared native HTTP trust-store boundary for Hatoba"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2", "charset", "system-proxy"] }
+
+[target.'cfg(target_env = "ohos")'.dependencies]
+rustls-native-certs = "0.8"

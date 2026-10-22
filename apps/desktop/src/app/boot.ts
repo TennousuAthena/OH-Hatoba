@@ -1,11 +1,13 @@
 import { api } from "@/ipc/api";
 import { applyPrefs, DEFAULT_PREFS, useApp } from "./store";
 import { useVaultData } from "./data";
+import { initializeHostServices } from "@/lib/hostServices";
 
 /** Load platform info, device-local prefs and vault state before the first render. */
 export async function boot() {
   const root = document.documentElement;
   try {
+    await initializeHostServices();
     const info = await api.app_info();
     root.dataset.platform = info.platform;
     if (info.mica) root.dataset.material = "mica";
@@ -19,6 +21,7 @@ export async function boot() {
     const vault = await useApp.getState().refreshVault();
     if (vault.state === "unlocked") await enterUnlocked();
     else useApp.setState({ phase: vault.state === "uninitialized" ? "onboarding" : "locked" });
+    if (info.platform === "harmonyos") console.info("OH-Hatoba application boot completed");
   } catch (e) {
     console.error("boot failed", e);
     applyPrefs(DEFAULT_PREFS);

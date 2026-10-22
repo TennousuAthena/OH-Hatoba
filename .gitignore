@@ -43,3 +43,7 @@ platform/harmonyos/local.properties
 platform/harmonyos/build-profile.local.json5*
 platform/harmonyos/wecode-cpp.db*
 platform/harmonyos/entry/src/main/resources/rawfile/web/
+
+# Local Python diagnostic caches
+__pycache__/
+*.pyc

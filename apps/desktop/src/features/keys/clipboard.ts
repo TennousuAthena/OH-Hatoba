@@ -1,7 +1,9 @@
-import { isTauri } from "@/ipc/api";
+import { isTauri, isHarmonyOS } from "@/ipc/api";
+import { hostService } from "@/lib/hostServices";
 
 /** Writes text to the system clipboard (Tauri plugin in the app, the web API in a browser). */
 export async function copyText(text: string): Promise<void> {
+  if (isHarmonyOS()) return hostService("clipboard_write", { text });
   if (isTauri()) {
     const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
     await writeText(text);

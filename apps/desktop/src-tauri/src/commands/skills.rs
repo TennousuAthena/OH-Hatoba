@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use std::path::Path;
 
+use crate::host::{AppHandle, State};
 use hatoba_ai::skills::{
     self, BUILTIN_NAME, MAX_DESCRIPTION_CHARS, MAX_FILES, SkillError, SkillFileData, SkillImport,
     SkillIssue as Issue, SkillPackage,
@@ -19,7 +20,6 @@ use hatoba_ai::skills::{
 use hatoba_core::Vault;
 use hatoba_core::model::{Item, Skill, SkillFile};
 use serde_json::{Map, Value};
-use tauri::{AppHandle, State};
 
 use crate::dto::{
     BuiltinSkillView, SkillDetail, SkillFileView, SkillImportPreview, SkillInput, SkillIssue,
@@ -416,12 +416,17 @@ pub(crate) fn set_skill_enabled(v: &mut Vault, id: &str, enabled: bool) -> AppRe
 // ───────────────────────── import ─────────────────────────
 
 /// Reads a folder, a `.zip`, or the folder of a picked `SKILL.md`.
+#[cfg(test)]
 fn read_source(path: &Path) -> AppResult<SkillImport> {
+    read_named_source(path, path)
+}
+
+pub fn read_named_source(path: &Path, display_name: &Path) -> AppResult<SkillImport> {
     let meta = std::fs::metadata(path)
         .map_err(|_| AppError::invalid("path", "The folder or file could not be opened."))?;
     let result = if meta.is_dir() {
         skills::read_folder(path)
-    } else if path
+    } else if display_name
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("zip"))
     {
@@ -519,8 +524,8 @@ pub(crate) fn import_skill(
 
 // ───────────────────────── commands ─────────────────────────
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn skills_list(state: State<'_, AppState>) -> AppResult<Vec<SkillView>> {
     state.with_unlocked(|v| {
         let mut list: Vec<SkillView> = v
@@ -533,15 +538,15 @@ pub async fn skills_list(state: State<'_, AppState>) -> AppResult<Vec<SkillView>
     })
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn skill_get(state: State<'_, AppState>, id: String) -> AppResult<SkillDetail> {
     state.with_unlocked(|v| skill_detail(v, &id))
 }
 
 /// The built-in `hatoba` skill (AI-34), with this app's version, for the viewer in Settings.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn skill_builtin_get(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -551,8 +556,8 @@ pub async fn skill_builtin_get(
 }
 
 /// Validates like an import (AI-27); rejects with `invalid_input` naming the field.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn skill_save(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -564,8 +569,8 @@ pub async fn skill_save(
     Ok(view)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn skill_delete(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
     state.with_unlocked(|v| Ok(v.skill_delete(&id)?))?;
     tracing::info!(skill_id = %id, "skill deleted");
@@ -573,8 +578,8 @@ pub async fn skill_delete(app: AppHandle, state: State<'_, AppState>, id: String
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn skill_set_enabled(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -587,21 +592,23 @@ pub async fn skill_set_enabled(
 }
 
 /// Reads a folder or `.zip` the user picked; nothing is saved.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn skill_import_preview(
+    app: AppHandle,
     state: State<'_, AppState>,
     path: String,
 ) -> AppResult<SkillImportPreview> {
     state.with_unlocked(|_| Ok(()))?;
-    let import = blocking(move || read_source(Path::new(&path))).await?;
+    let name = crate::host::input_name(&app, Path::new(&path)).await?;
+    let import = blocking(move || read_named_source(Path::new(&path), Path::new(&name))).await?;
     state.with_unlocked(|v| Ok(preview(v, &import)))
 }
 
 /// Imports the skill at `path`, reading it again. `replace_id` replaces that skill; `rename`
 /// saves it under a new name.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn skill_import(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -610,7 +617,8 @@ pub async fn skill_import(
     rename: Option<String>,
 ) -> AppResult<SkillView> {
     state.with_unlocked(|_| Ok(()))?;
-    let import = blocking(move || read_source(Path::new(&path))).await?;
+    let name = crate::host::input_name(&app, Path::new(&path)).await?;
+    let import = blocking(move || read_named_source(Path::new(&path), Path::new(&name))).await?;
     let view = state
         .with_unlocked(|v| import_skill(v, import, replace_id.as_deref(), rename.as_deref()))?;
     tracing::info!(skill_id = %view.id, files = view.files.len(), "skill imported");
@@ -619,8 +627,8 @@ pub async fn skill_import(
 }
 
 /// Writes the skill as a `.zip` to a path the user picked.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn skill_export(state: State<'_, AppState>, id: String, path: String) -> AppResult<()> {
     let pkg = state.with_unlocked(|v| package_of(v, &id))?;
     blocking(move || {
@@ -635,4 +643,5 @@ pub async fn skill_export(state: State<'_, AppState>, id: String, path: String) 
 }
 
 #[cfg(test)]
+#[path = "skills/tests.rs"]
 mod tests;

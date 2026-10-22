@@ -6,7 +6,9 @@
       "compatibleSdkVersion": "6.0.0(20)",
       "targetSdkVersion": "26.0.0",
       "runtimeOS": "HarmonyOS",
-      "buildOption": { "strictMode": { "caseSensitiveCheck": true, "useNormalizedOHMUrl": true } }
+      "buildOption": { "strictMode": { "caseSensitiveCheck": true, "useNormalizedOHMUrl": true },
+        "nativeCompiler": "BiSheng"
+      }
     }],
     "buildModeSet": [{ "name": "debug" }, { "name": "release" }]
   },

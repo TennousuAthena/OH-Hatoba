@@ -1,13 +1,13 @@
 //! Synced settings item (spec §5.1 `Settings`), device-local preferences, and the star prompt
 //! state.
 
+use crate::host::{AppHandle, State};
 use hatoba_core::Vault;
 use hatoba_core::model::{
     CursorStyle, Item, RightClick as CoreRightClick, SETTINGS_ID, Settings,
     TerminalSettings as CoreTerminal, ThemeMode,
 };
 use serde_json::{Map, Value};
-use tauri::{AppHandle, State};
 
 use crate::dto::{
     CursorChoice, LocalPrefs, RightClick, SettingsPatch, SettingsView, StarPrompt,
@@ -50,14 +50,14 @@ pub fn settings_view(s: &Settings) -> SettingsView {
     }
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn settings_get(state: State<'_, AppState>) -> AppResult<SettingsView> {
     state.with_unlocked(|v| Ok(settings_view(&v.settings())))
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn settings_save(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -156,8 +156,8 @@ fn is_scheme_id(id: &str) -> bool {
 }
 
 /// Readable while locked: the unlock screen needs the language.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn prefs_get(state: State<'_, AppState>) -> AppResult<LocalPrefs> {
     let json = state.vault().local_prefs()?;
     Ok(json
@@ -165,8 +165,8 @@ pub fn prefs_get(state: State<'_, AppState>) -> AppResult<LocalPrefs> {
         .unwrap_or_default())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn prefs_save(state: State<'_, AppState>, mut prefs: LocalPrefs) -> AppResult<()> {
     prefs.auto_lock_minutes = prefs.auto_lock_minutes.min(MAX_AUTO_LOCK_MINUTES);
     prefs.dashboard_interval_secs = prefs.dashboard_interval_secs.clamp(1, 60);
@@ -244,15 +244,15 @@ pub fn adopt_legacy_prefs_after_unlock(vault: &mut Vault) -> AppResult<bool> {
 }
 
 /// The sidebar's star prompt (spec §9). The first read records when this device started waiting.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn star_prompt_get(state: State<'_, AppState>) -> AppResult<StarPrompt> {
     load_star_prompt(&mut state.vault())
 }
 
 /// The user starred, opened the bug report form, or closed the prompt: it never shows again.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn star_prompt_done(state: State<'_, AppState>) -> AppResult<()> {
     let mut vault = state.vault();
     let mut prompt = load_star_prompt(&mut vault)?;

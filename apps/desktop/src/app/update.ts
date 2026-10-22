@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { api, toAppError } from "@/ipc/api";
 import type { AppError, AvailableUpdate, UpdateCheck, UpdateProgress } from "@/ipc/types";
 import { useApp } from "./store";
+import { hostCapabilities } from "@/lib/hostServices";
 
 /** A running Hatoba checks again this long after the last check that succeeded. */
 const RECHECK_MS = 24 * 60 * 60 * 1000;
@@ -81,6 +82,7 @@ let started = false;
  * Never when a package manager installed Hatoba.
  */
 export function startAutoCheck() {
+  if (!hostCapabilities().updater) return;
   if (started) return;
   started = true;
   autoCheck();

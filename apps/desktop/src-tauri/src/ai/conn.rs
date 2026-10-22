@@ -2,6 +2,7 @@
 //! on this computer (§7.5). The file and search tools take either; the scripts for a host are in
 //! `hatoba_ssh`, those for this computer in `hatoba_local`.
 
+#[cfg(feature = "desktop-host")]
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -9,11 +10,13 @@ use hatoba_ssh::SshSession;
 use hatoba_ssh::remote_file::{self, Expect, RemoteDir, RemoteFile, RemoteFileError, RemoteLines};
 use hatoba_ssh::remote_search::{self, GrepQuery, RemoteSearchError, Scope, SearchOutput};
 
+#[cfg(feature = "desktop-host")]
 use crate::local::LocalSession;
 
 #[derive(Clone)]
 pub enum Conn {
     Ssh(SshSession),
+    #[cfg(feature = "desktop-host")]
     Local(Arc<LocalSession>),
 }
 
@@ -22,6 +25,7 @@ impl Conn {
     pub fn is_closed(&self) -> bool {
         match self {
             Self::Ssh(session) => session.is_closed(),
+            #[cfg(feature = "desktop-host")]
             Self::Local(local) => local.is_closed(),
         }
     }
@@ -31,6 +35,7 @@ impl Conn {
     pub fn windows_paths(&self) -> bool {
         match self {
             Self::Ssh(_) => false,
+            #[cfg(feature = "desktop-host")]
             Self::Local(local) => local.tools.windows_paths(),
         }
     }
@@ -46,6 +51,7 @@ impl Conn {
                 session.host(),
                 session.port()
             ),
+            #[cfg(feature = "desktop-host")]
             Self::Local(local) => local.tools.server().to_owned(),
         }
     }
@@ -53,6 +59,7 @@ impl Conn {
     pub async fn read(&self, path: &str, max: u64) -> Result<RemoteFile, RemoteFileError> {
         match self {
             Self::Ssh(session) => remote_file::read(session, path, max).await,
+            #[cfg(feature = "desktop-host")]
             Self::Local(local) => local.tools.read(path, max).await,
         }
     }
@@ -65,6 +72,7 @@ impl Conn {
     ) -> Result<RemoteLines, RemoteFileError> {
         match self {
             Self::Ssh(session) => remote_file::read_lines(session, path, from, max).await,
+            #[cfg(feature = "desktop-host")]
             Self::Local(local) => local.tools.read_lines(path, from, max).await,
         }
     }
@@ -72,6 +80,7 @@ impl Conn {
     pub async fn list_dir(&self, path: &str, max: u64) -> Result<RemoteDir, RemoteFileError> {
         match self {
             Self::Ssh(session) => remote_file::list_dir(session, path, max).await,
+            #[cfg(feature = "desktop-host")]
             Self::Local(local) => local.tools.list_dir(path, max).await,
         }
     }
@@ -85,6 +94,7 @@ impl Conn {
     ) -> Result<String, RemoteFileError> {
         match self {
             Self::Ssh(session) => remote_file::write(session, path, content, expect, mode).await,
+            #[cfg(feature = "desktop-host")]
             Self::Local(local) => local.tools.write(path, content, expect, mode).await,
         }
     }
@@ -92,6 +102,7 @@ impl Conn {
     pub async fn delete(&self, path: &str, expect: &[u8]) -> Result<String, RemoteFileError> {
         match self {
             Self::Ssh(session) => remote_file::delete(session, path, expect).await,
+            #[cfg(feature = "desktop-host")]
             Self::Local(local) => local.tools.delete(path, expect).await,
         }
     }
@@ -104,6 +115,7 @@ impl Conn {
     ) -> Result<SearchOutput, RemoteSearchError> {
         match self {
             Self::Ssh(session) => remote_search::glob(session, scope, max, time_limit).await,
+            #[cfg(feature = "desktop-host")]
             Self::Local(local) => local.tools.glob(scope, max, time_limit).await,
         }
     }
@@ -116,6 +128,7 @@ impl Conn {
     ) -> Result<SearchOutput, RemoteSearchError> {
         match self {
             Self::Ssh(session) => remote_search::grep(session, query, max, time_limit).await,
+            #[cfg(feature = "desktop-host")]
             Self::Local(local) => local.tools.grep(query, max, time_limit).await,
         }
     }

@@ -334,8 +334,9 @@ pub enum SessionState {
     Failed,
 }
 
-#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "ssh://state")]
+#[derive(Debug, Clone, Serialize, Type)]
+#[cfg_attr(feature = "desktop-host", derive(tauri_specta::Event))]
+#[cfg_attr(feature = "desktop-host", tauri_specta(event_name = "ssh://state"))]
 pub struct SessionStateEvent {
     pub session_id: String,
     /// `None` for a quick-connect session (HOST-12).
@@ -387,8 +388,12 @@ pub enum HostKeyPromptKind {
     Changed,
 }
 
-#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "ssh://hostkey-prompt")]
+#[derive(Debug, Clone, Serialize, Type)]
+#[cfg_attr(feature = "desktop-host", derive(tauri_specta::Event))]
+#[cfg_attr(
+    feature = "desktop-host",
+    tauri_specta(event_name = "ssh://hostkey-prompt")
+)]
 pub struct HostKeyPrompt {
     pub request_id: String,
     pub session_id: Option<String>,
@@ -407,8 +412,12 @@ pub struct AuthPromptField {
     pub echo: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "ssh://auth-prompt")]
+#[derive(Debug, Clone, Serialize, Type)]
+#[cfg_attr(feature = "desktop-host", derive(tauri_specta::Event))]
+#[cfg_attr(
+    feature = "desktop-host",
+    tauri_specta(event_name = "ssh://auth-prompt")
+)]
 pub struct AuthPrompt {
     pub request_id: String,
     pub session_id: Option<String>,
@@ -577,8 +586,12 @@ pub enum TransferState {
     Cancelled,
 }
 
-#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "transfer://progress")]
+#[derive(Debug, Clone, Serialize, Type)]
+#[cfg_attr(feature = "desktop-host", derive(tauri_specta::Event))]
+#[cfg_attr(
+    feature = "desktop-host",
+    tauri_specta(event_name = "transfer://progress")
+)]
 pub struct TransferProgressEvent {
     pub transfer_id: String,
     pub session_id: String,
@@ -621,8 +634,9 @@ pub struct SyncCounts {
     pub groups: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "sync://status")]
+#[derive(Debug, Clone, Serialize, Type)]
+#[cfg_attr(feature = "desktop-host", derive(tauri_specta::Event))]
+#[cfg_attr(feature = "desktop-host", tauri_specta(event_name = "sync://status"))]
 pub struct SyncStatus {
     pub kind: SyncKind,
     pub endpoint: Option<String>,
@@ -1150,6 +1164,8 @@ pub enum Platform {
     Windows,
     Macos,
     Linux,
+    #[cfg_attr(feature = "desktop-host", allow(dead_code))]
+    Harmonyos,
 }
 
 #[derive(Debug, Clone, Serialize, Type)]
@@ -1182,20 +1198,26 @@ pub enum PackageManager {
 /// Whether the Linux main window shows its painted chrome right now: off while maximized,
 /// fullscreen or tiled, and off without a compositor. The WebView mirrors it to
 /// `:root[data-floating]`; `window_floating` reports the same value.
-#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "window://chrome")]
+#[derive(Debug, Clone, Serialize, Type)]
+#[cfg_attr(feature = "desktop-host", derive(tauri_specta::Event))]
+#[cfg_attr(feature = "desktop-host", tauri_specta(event_name = "window://chrome"))]
 pub struct WindowChromeEvent {
     pub floating: bool,
 }
 
 /// WIN-10: the close button asks whether to hide the window to the tray or quit.
-#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "window://close-prompt")]
+#[derive(Debug, Clone, Serialize, Type)]
+#[cfg_attr(feature = "desktop-host", derive(tauri_specta::Event))]
+#[cfg_attr(
+    feature = "desktop-host",
+    tauri_specta(event_name = "window://close-prompt")
+)]
 pub struct ClosePromptEvent;
 
 /// WIN-10: the tray menu's **Update to vX.Y.Z** was clicked.
-#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "tray://update")]
+#[derive(Debug, Clone, Serialize, Type)]
+#[cfg_attr(feature = "desktop-host", derive(tauri_specta::Event))]
+#[cfg_attr(feature = "desktop-host", tauri_specta(event_name = "tray://update"))]
 pub struct TrayUpdateEvent;
 
 /// WIN-10: the tray menu's labels in the app's language, and whether the vault can be locked.
@@ -1232,8 +1254,12 @@ pub struct NotificationInput {
 /// What a notification is about, which a click on it shows: a tab, and in it a conversation
 /// (AI-07), or a saved host whose forwards stopped (FWD-05). The click brings the window back and
 /// sends this to the WebView.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "app://notification-click")]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+#[cfg_attr(feature = "desktop-host", derive(tauri_specta::Event))]
+#[cfg_attr(
+    feature = "desktop-host",
+    tauri_specta(event_name = "app://notification-click")
+)]
 pub struct NotificationTarget {
     pub tab: Option<String>,
     pub conversation_id: Option<String>,
@@ -1241,8 +1267,9 @@ pub struct NotificationTarget {
 }
 
 /// A second launch handed its arguments to this window (HOST-13); `launch_take` returns them.
-#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "app://launch")]
+#[derive(Debug, Clone, Serialize, Type)]
+#[cfg_attr(feature = "desktop-host", derive(tauri_specta::Event))]
+#[cfg_attr(feature = "desktop-host", tauri_specta(event_name = "app://launch"))]
 pub struct LaunchEvent;
 
 /// The `hatoba` command on this device (HOST-13).
@@ -1295,8 +1322,9 @@ pub enum CliActivityState {
 }
 
 /// The list in Settings → General changed (HOST-15).
-#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "cli://activity")]
+#[derive(Debug, Clone, Serialize, Type)]
+#[cfg_attr(feature = "desktop-host", derive(tauri_specta::Event))]
+#[cfg_attr(feature = "desktop-host", tauri_specta(event_name = "cli://activity"))]
 pub struct CliActivityEvent {
     pub entries: Vec<CliActivity>,
 }
@@ -1331,8 +1359,9 @@ pub enum UpdateProgress {
     Installing,
 }
 
-#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "vault://locked")]
+#[derive(Debug, Clone, Serialize, Type)]
+#[cfg_attr(feature = "desktop-host", derive(tauri_specta::Event))]
+#[cfg_attr(feature = "desktop-host", tauri_specta(event_name = "vault://locked"))]
 pub struct VaultLockedEvent {
     pub reason: LockReason,
 }
@@ -1461,8 +1490,12 @@ pub struct HostConnectionView {
 
 /// SSH-16: every saved host's open connection, sent whenever one opens or closes or its forwards
 /// change. `version` grows with each change, so a list read earlier never replaces a newer one.
-#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "ssh://connections")]
+#[derive(Debug, Clone, Serialize, Type)]
+#[cfg_attr(feature = "desktop-host", derive(tauri_specta::Event))]
+#[cfg_attr(
+    feature = "desktop-host",
+    tauri_specta(event_name = "ssh://connections")
+)]
 pub struct ConnectionsEvent {
     pub version: u64,
     pub connections: Vec<HostConnectionView>,
@@ -1470,8 +1503,12 @@ pub struct ConnectionsEvent {
 
 /// FWD-05: a host's connection ended on its own with forwards on it, which stopped with it.
 /// Closing it with nothing left on it, the lock (SEC-03) and quitting send nothing.
-#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "ssh://forwards-lost")]
+#[derive(Debug, Clone, Serialize, Type)]
+#[cfg_attr(feature = "desktop-host", derive(tauri_specta::Event))]
+#[cfg_attr(
+    feature = "desktop-host",
+    tauri_specta(event_name = "ssh://forwards-lost")
+)]
 pub struct ForwardsLostEvent {
     pub host_id: String,
     pub host_name: String,
@@ -2718,8 +2755,9 @@ pub struct McpToolView {
 
 /// A server's live state (AI-32), also pushed as `ai://mcp-status` on every change. The stderr
 /// lines stay in memory and are never logged.
-#[derive(Clone, Serialize, Type, PartialEq, Eq, tauri_specta::Event)]
-#[tauri_specta(event_name = "ai://mcp-status")]
+#[derive(Clone, Serialize, Type, PartialEq, Eq)]
+#[cfg_attr(feature = "desktop-host", derive(tauri_specta::Event))]
+#[cfg_attr(feature = "desktop-host", tauri_specta(event_name = "ai://mcp-status"))]
 pub struct McpServerStatus {
     pub server_id: String,
     pub state: McpServerState,

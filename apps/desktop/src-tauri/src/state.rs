@@ -4,33 +4,38 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use std::time::Instant;
 
+use crate::host::{AppHandle, Manager};
 use hatoba_core::vault::Vault;
-use tauri::{AppHandle, Manager};
 
 use crate::ai::AiManager;
+#[cfg(feature = "desktop-host")]
 use crate::cli_access::CliAccess;
 use crate::connection::Connections;
 use crate::dashboard::Dashboard;
 use crate::deploy::Deployments;
 use crate::dropped::DroppedPaths;
 use crate::error::{AppError, AppResult};
+#[cfg(feature = "desktop-host")]
 use crate::local::LocalManager;
 use crate::lock::LockPolicy;
 use crate::mcp::McpManager;
+#[cfg(feature = "desktop-host")]
 use crate::platform::secrets::KeyringStore;
 use crate::ssh::SshManager;
 use crate::sync::SyncController;
+#[cfg(feature = "desktop-host")]
 use crate::update::Updates;
 
 pub use hatoba_core::sync::SharedVault;
 
 pub struct AppState {
     pub vault: SharedVault,
-    pub secrets: Arc<KeyringStore>,
+    pub secrets: Arc<dyn hatoba_core::platform::SecretStore>,
     pub ssh: SshManager,
     /// Each saved host's connection, which its terminal tabs and forwards share (SSH-16).
     pub connections: Connections,
     /// Local terminal tabs (§7.5).
+    #[cfg(feature = "desktop-host")]
     pub local: LocalManager,
     /// The dashboard's background connections and readers (HOST-14).
     pub dashboard: Dashboard,
@@ -44,8 +49,10 @@ pub struct AppState {
     /// The paths of the window's last file drop, which the AI panel may read (AI-35).
     pub dropped: DroppedPaths,
     /// What other programs run through the `hatoba` command (HOST-15).
+    #[cfg(feature = "desktop-host")]
     pub cli: CliAccess,
     /// The update the last check found (spec §11).
+    #[cfg(feature = "desktop-host")]
     pub updates: Updates,
     pub mica: bool,
     pub lock_policy: LockPolicy,
@@ -53,16 +60,30 @@ pub struct AppState {
 }
 
 impl AppState {
+    #[cfg(any(feature = "desktop-host", test))]
     pub fn new(vault: Vault, mica: bool) -> Self {
+        #[cfg(feature = "desktop-host")]
+        let secrets = Arc::new(KeyringStore);
+        #[cfg(not(feature = "desktop-host"))]
+        let secrets = Arc::new(hatoba_core::platform::MemorySecretStore::new());
+        Self::with_secrets(vault, mica, secrets)
+    }
+
+    pub fn with_secrets(
+        vault: Vault,
+        mica: bool,
+        secrets: Arc<dyn hatoba_core::platform::SecretStore>,
+    ) -> Self {
         let mcp = McpManager::default();
         let vault = Arc::new(Mutex::new(vault));
         // AI-52: this device's ChatGPT sessions live in the vault.
         crate::ai::chatgpt::install(&vault);
         Self {
             vault,
-            secrets: Arc::new(KeyringStore),
+            secrets,
             ssh: SshManager::default(),
             connections: Connections::default(),
+            #[cfg(feature = "desktop-host")]
             local: LocalManager::default(),
             dashboard: Dashboard::default(),
             sync: SyncController::default(),
@@ -70,7 +91,9 @@ impl AppState {
             ai: AiManager::with_mcp(mcp.clone()),
             mcp,
             dropped: DroppedPaths::default(),
+            #[cfg(feature = "desktop-host")]
             cli: CliAccess::default(),
+            #[cfg(feature = "desktop-host")]
             updates: Updates::default(),
             mica,
             lock_policy: LockPolicy::default(),
@@ -105,7 +128,7 @@ impl AppState {
     }
 }
 
-pub fn state(app: &AppHandle) -> tauri::State<'_, AppState> {
+pub fn state(app: &AppHandle) -> crate::host::State<'_, AppState> {
     app.state::<AppState>()
 }
 
@@ -120,7 +143,7 @@ pub fn now_ms() -> i64 {
 pub async fn blocking<R: Send + 'static>(
     f: impl FnOnce() -> AppResult<R> + Send + 'static,
 ) -> AppResult<R> {
-    tauri::async_runtime::spawn_blocking(f)
+    crate::host::async_runtime::spawn_blocking(f)
         .await
         .map_err(|e| AppError::internal(format!("background task failed: {e}")))?
 }

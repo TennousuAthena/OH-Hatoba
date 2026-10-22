@@ -1,6 +1,9 @@
 //! MCP server command tests (AI-29, AI-31, AI-33): saving with values that never come back,
 //! device-local enablement and Always allow, import, export and their errors.
 
+// Some shared fixtures are used only by desktop stdio tests.
+#![cfg_attr(not(feature = "desktop-host"), allow(dead_code, unused_imports))]
+
 use hatoba_core::KdfParams;
 
 use super::*;
@@ -64,6 +67,7 @@ fn stored(v: &Vault, id: &str) -> McpTransport {
     find_server(v, id).unwrap().transport
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[test]
 fn saved_values_stay_in_the_vault_and_out_of_views() {
     let mut v = vault();
@@ -225,6 +229,7 @@ fn http_urls_follow_the_provider_rules() {
     assert_eq!(checked_url(&stdio).unwrap(), None);
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[test]
 fn enablement_and_always_allow_are_device_local() {
     let mut v = vault();
@@ -289,6 +294,7 @@ fn enablement_and_always_allow_are_device_local() {
     assert_eq!(servers_list(&v).len(), 1);
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[test]
 fn a_changed_command_line_keeps_this_devices_choice() {
     let mut v = vault();
@@ -352,6 +358,7 @@ const IMPORT: &str = r#"{
   }
 }"#;
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[test]
 fn imports_add_servers_and_exports_hide_values() {
     let mut v = vault();

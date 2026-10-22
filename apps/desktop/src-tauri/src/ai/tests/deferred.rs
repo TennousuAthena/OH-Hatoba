@@ -3,6 +3,9 @@
 //! `mcp_tools` notes, servers that go away, and that the tool definitions and the system prompt
 //! stay byte for byte the same from request to request.
 
+// Some shared fixtures are used only by desktop stdio tests.
+#![cfg_attr(not(feature = "desktop-host"), allow(dead_code, unused_imports))]
+
 use super::*;
 use crate::commands::mcp::{proxy_info, set_always_allow};
 use crate::mcp::tests::{hanging_server, put_server, set_enabled, stdio_server};
@@ -188,6 +191,7 @@ fn deferred_tools() -> Vec<String> {
 
 /// Below the threshold the MCP tools go to the provider directly, as before AI-45, and no message
 /// lists them.
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mcp_tools_below_the_threshold_are_offered_directly() {
     let f = Fixture::new(vec![answer("One."), answer("Two.")]).await;
@@ -216,6 +220,7 @@ async fn mcp_tools_below_the_threshold_are_offered_directly() {
 /// and after a search and a call, a search finds by keyword and by name, a call runs the tool it
 /// names under that tool's approvals, arguments are checked against its schema, a tool added by
 /// `tools/list_changed` is found at once, and the next message lists the new list.
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn deferred_mcp_tools_are_searched_and_called_through_fixed_tools() {
     let f = Fixture::new(vec![
@@ -373,6 +378,7 @@ async fn deferred_mcp_tools_are_searched_and_called_through_fixed_tools() {
 /// The conversation stays deferred when its tools shrink; a server switched off in the tools menu
 /// is left out of the next list, a call of its tool does not run, and a call of a server deleted
 /// since the request does not run either.
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_deferred_conversation_keeps_its_tools_when_servers_go() {
     let f = Fixture::new(vec![
@@ -635,6 +641,7 @@ async fn more_than_128_tools_defer_them_in_a_large_window() {
 /// After a compaction the summary leaves the list out, so the next message lists the tools again,
 /// although they did not change. The Compact request and a side question offer the
 /// conversation's tools, so they keep its prefix, and the side question lists nothing.
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_compaction_lists_the_tools_again_and_keeps_the_prefix() {
     let f = Fixture::new(vec![
@@ -683,6 +690,7 @@ fn answer_using(text: &str, prompt_tokens: u64) -> ResponseTemplate {
 
 /// The message that defers the MCP tools takes their definitions out of its requests, so the
 /// check for a compaction (AI-22) does not count them, though the last response's usage does.
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_message_that_defers_does_not_compact_for_the_tools_it_drops() {
     let f = Fixture::new(vec![answer_using("One.", 26_900), answer("Two.")]).await;
@@ -748,6 +756,7 @@ async fn turn_registered(f: &Fixture) {
 /// A message waits for the MCP servers before it is stored; a stop meanwhile stores nothing (an
 /// edit's message and the entries after it stay, and a new conversation, whose id the panel gets
 /// before the wait, is not created), and the lock meanwhile creates no conversation.
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_message_stopped_while_the_servers_start_is_not_stored() {
     use crate::dto::McpServerState;
@@ -885,6 +894,7 @@ fn anthropic_use(id: &str, name: &str, input: &Value) -> ResponseTemplate {
 /// AI-45 on Anthropic Messages: the same tools and system prompt (and the top-level
 /// `cache_control`) in every request, before and after a search and a call; the schema reaches
 /// the model in a `tool_result`.
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn deferred_mcp_tools_keep_the_anthropic_prefix() {
     let server = MockServer::start().await;

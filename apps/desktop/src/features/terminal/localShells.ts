@@ -2,6 +2,7 @@ import type { LocalShell } from "@/app/tabs";
 import type { MessageKey } from "@/i18n";
 import { api } from "@/ipc/api";
 import type { LocalShellView } from "@/ipc/types";
+import { hostCapabilities } from "@/lib/hostServices";
 
 /** The Windows shells' names in the app's language; WSL distributions and Unix shells keep their own. */
 const NAMES: Record<string, MessageKey> = {
@@ -19,6 +20,7 @@ export function shellName(shell: Pick<LocalShell, "id" | "name">, t: (key: Messa
 
 /** The shells this computer has now (LOCAL-02), the system default first. */
 export function loadLocalShells(): Promise<LocalShellView[]> {
+  if (!hostCapabilities().localTerminal) return Promise.resolve([]);
   return api.local_shells();
 }
 

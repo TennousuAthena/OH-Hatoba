@@ -1,7 +1,9 @@
-import { isTauri } from "@/ipc/api";
+import { isTauri, isHarmonyOS } from "@/ipc/api";
+import { hostService } from "./hostServices";
 
 /** Copy text through the Tauri clipboard plugin, or the browser clipboard when running in a plain browser. */
 export async function copyText(text: string): Promise<void> {
+  if (isHarmonyOS()) return hostService("clipboard_write", { text });
   if (isTauri()) {
     const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
     await writeText(text);
@@ -15,6 +17,7 @@ export async function copyText(text: string): Promise<void> {
  * dialog, so the suggested name is returned (the mock backend turns it into a download).
  */
 export async function pickSavePath(defaultName: string, filter: { name: string; extension: string }): Promise<string | null> {
+  if (isHarmonyOS()) return hostService("pick_save_path", { defaultName, extensions: [filter.extension] });
   if (!isTauri()) return defaultName;
   const { save } = await import("@tauri-apps/plugin-dialog");
   return save({ defaultPath: defaultName, filters: [{ name: filter.name, extensions: [filter.extension] }] });
@@ -28,6 +31,7 @@ export async function pickSavePath(defaultName: string, filter: { name: string; 
 export async function pickOpenPath(
   options: { title?: string; directory?: boolean; filter?: { name: string; extensions: string[] } },
 ): Promise<string | null> {
+  if (isHarmonyOS()) return hostService("pick_open_path", { ...options, extensions: options.filter?.extensions });
   if (!isTauri()) return options.directory ? "/demo/folder" : `/demo/export.${options.filter?.extensions[0] ?? "txt"}`;
   const { open } = await import("@tauri-apps/plugin-dialog");
   const path = await open({
@@ -41,6 +45,7 @@ export async function pickOpenPath(
 
 /** Whether the window has the focus; hidden to the tray (WIN-10) or minimized, it does not. A plain browser asks the page. */
 export async function windowFocused(): Promise<boolean> {
+  if (isHarmonyOS()) return hostService("window_focused");
   if (!isTauri()) return document.hasFocus();
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   return getCurrentWindow()

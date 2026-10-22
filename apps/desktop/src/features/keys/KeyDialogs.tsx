@@ -4,7 +4,8 @@ import { Dialog, FooterSpacer, PopupSelect, Sheet, SheetHeader, toast } from "@/
 import { errorMessage } from "@/app/errors";
 import { ErrorText, HintText } from "@/components/patterns";
 import { formatDate, useT } from "@/i18n";
-import { api, isTauri, toAppError } from "@/ipc/api";
+import { api, isTauri, isHarmonyOS, toAppError } from "@/ipc/api";
+import { pickOpenPath } from "@/lib/native";
 import type { HostView, KeyView } from "@/ipc/types";
 import { Field } from "./Field";
 import s from "./KeyDialogs.module.css";
@@ -19,6 +20,10 @@ interface PickedFile {
 }
 
 async function pickKeyFile(title: string): Promise<PickedFile | null> {
+  if (isHarmonyOS()) {
+    const path = await pickOpenPath({ title });
+    return path ? { path, text: null, label: path.split("/").pop() ?? path } : null;
+  }
   if (isTauri()) {
     const { open } = await import("@tauri-apps/plugin-dialog");
     const path = await open({ multiple: false, directory: false, title });

@@ -326,7 +326,7 @@ const MAX_REDIRECTS: usize = 5;
 /// followed only within the same origin.
 fn client_builder() -> reqwest::ClientBuilder {
     net::ensure_crypto_provider();
-    reqwest::Client::builder()
+    hatoba_net::client_builder()
         .connect_timeout(CONNECT_TIMEOUT)
         .read_timeout(READ_TIMEOUT)
         .user_agent(net::USER_AGENT)

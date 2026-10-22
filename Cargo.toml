@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/hatoba-ai", "crates/hatoba-cli", "crates/hatoba-core", "crates/hatoba-local", "crates/hatoba-ssh", "apps/desktop/src-tauri", "platform/harmonyos/rust"]
+members = ["crates/hatoba-ai", "crates/hatoba-cli", "crates/hatoba-core", "crates/hatoba-local", "crates/hatoba-net", "crates/hatoba-runtime", "crates/hatoba-ssh", "apps/desktop/src-tauri", "platform/harmonyos/rust"]
 
 [workspace.package]
 version = "0.6.0"
@@ -14,6 +14,7 @@ hatoba-ai = { path = "crates/hatoba-ai" }
 hatoba-cli = { path = "crates/hatoba-cli" }
 hatoba-core = { path = "crates/hatoba-core" }
 hatoba-local = { path = "crates/hatoba-local" }
+hatoba-net = { path = "crates/hatoba-net" }
 hatoba-ssh = { path = "crates/hatoba-ssh" }
 tokio = { version = "1.47", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs"] }
 tokio-util = "0.7"

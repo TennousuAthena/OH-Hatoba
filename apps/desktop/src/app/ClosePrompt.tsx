@@ -6,6 +6,7 @@ import { translate, useT } from "@/i18n";
 import { api } from "@/ipc/api";
 import { useApp } from "./store";
 import { useOfferedUpdate, useUpdate } from "./update";
+import { hostCapabilities } from "@/lib/hostServices";
 
 /**
  * WIN-10: the close button's question on Windows and Linux, whether to minimize Hatoba to the
@@ -71,6 +72,7 @@ export function useTrayMenu() {
   const version = useOfferedUpdate()?.version ?? null;
   const installing = useUpdate((st) => st.install !== null);
   useEffect(() => {
+    if (!hostCapabilities().tray) return;
     const label = (key: "tray.open" | "tray.lock" | "tray.quit") => translate(locale, key);
     api
       .tray_set_menu({

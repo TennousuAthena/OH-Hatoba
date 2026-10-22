@@ -2,6 +2,9 @@
 //! again with [`MOCK_ENV`] set, running only [`mock_stdio_server`]) and a mock Streamable HTTP
 //! server (wiremock). The turn tests in `crate::ai::tests` use the same mocks.
 
+// Some shared fixtures are used only by desktop stdio tests.
+#![cfg_attr(not(feature = "desktop-host"), allow(dead_code, unused_imports))]
+
 use std::io::{BufRead, Write};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -456,6 +459,7 @@ async fn eventually(what: &str, mut check: impl FnMut() -> bool) {
 
 // ───────────────────────── tests ─────────────────────────
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[test]
 fn device_defaults_enable_http_servers_only() {
     let mut device = DeviceState::default();
@@ -491,6 +495,7 @@ fn device_defaults_enable_http_servers_only() {
     assert_eq!(DeviceState::load(&v), DeviceState::default());
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[test]
 fn a_choice_made_for_http_does_not_hold_once_the_server_uses_stdio() {
     let vault = vault();
@@ -534,6 +539,7 @@ fn a_choice_made_for_http_does_not_hold_once_the_server_uses_stdio() {
     assert!(DeviceState::load(&vault.lock().unwrap()).enabled(&id, &changed.transport));
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn requests_start_servers_lazily_and_offer_their_tools() {
     let vault = vault();
@@ -639,6 +645,7 @@ fn offer_tool(mcp: &McpManager, name: &str) -> OfferedTool {
         .unwrap_or_else(|| panic!("no tool {name}"))
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_server_that_cannot_start_offers_nothing_and_its_calls_fail() {
     let vault = vault();
@@ -691,6 +698,7 @@ async fn a_server_that_cannot_start_offers_nothing_and_its_calls_fail() {
     assert!(content.contains("is not running"), "{content}");
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_changed_tool_list_is_listed_again_before_the_next_request() {
     let vault = vault();
@@ -721,6 +729,7 @@ async fn a_changed_tool_list_is_listed_again_before_the_next_request() {
     mcp.shutdown().await;
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn locking_stops_every_server_and_kills_the_process() {
     let vault = vault();
@@ -770,6 +779,7 @@ async fn locking_stops_every_server_and_kills_the_process() {
     assert!(status.stderr.is_empty() && status.tools.is_empty());
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_saved_configuration_restarts_a_running_server_and_explicit_starts_wait() {
     let vault = vault();
@@ -850,6 +860,7 @@ async fn a_saved_configuration_restarts_a_running_server_and_explicit_starts_wai
     mcp.shutdown().await;
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_server_deleted_elsewhere_is_stopped_by_the_next_request() {
     let vault = vault();
@@ -874,6 +885,7 @@ async fn a_server_deleted_elsewhere_is_stopped_by_the_next_request() {
     .await;
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_command_line_changed_elsewhere_stays_on_and_keeps_always_allow() {
     let vault = vault();
@@ -923,6 +935,7 @@ async fn a_command_line_changed_elsewhere_stays_on_and_keeps_always_allow() {
     mcp.shutdown().await;
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_called_name_resolves_through_its_conversations_offer() {
     let vault = vault();
@@ -970,6 +983,7 @@ async fn a_called_name_resolves_through_its_conversations_offer() {
     mcp.shutdown().await;
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn locking_aborts_a_start_in_flight_and_kills_its_process() {
     let vault = vault();
@@ -1039,6 +1053,7 @@ fn a_stdio_server_gets_the_default_path_unless_it_sets_one() {
     assert_eq!(with_default_path(remote.clone(), Some(default)), remote);
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_menus_start_servers_and_fetch_their_prompts_and_resources() {
     let vault = vault();

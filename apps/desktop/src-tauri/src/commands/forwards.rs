@@ -1,8 +1,8 @@
 //! Port forwarding rules: local (FWD-01), remote (FWD-03) and dynamic SOCKS (FWD-04), with
 //! auto-start (FWD-02), which run on the host's connection ([`crate::connection`], FWD-05).
 
+use crate::host::{AppHandle, State};
 use hatoba_core::model::{ForwardKind, Item, PortForward};
-use tauri::{AppHandle, State};
 use zeroize::Zeroizing;
 
 use super::hosts::MAX_NAME_CHARS;
@@ -27,8 +27,8 @@ fn view(id: &str, f: &PortForward) -> ForwardView {
 }
 
 /// Every host's forwards, by host and then by bind and destination port.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn forwards_list_all(state: State<'_, AppState>) -> AppResult<Vec<ForwardView>> {
     state.with_unlocked(|v| {
         let mut list: Vec<ForwardView> = v.forwards().iter().map(|(id, f)| view(id, f)).collect();
@@ -50,8 +50,8 @@ fn unbracketed(address: &str) -> &str {
         .unwrap_or(address)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn forward_save(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -120,8 +120,8 @@ pub fn forward_save(
 }
 
 /// Deletes the rule, and stops it where it runs.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn forward_delete(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
     let host_id = state.with_unlocked(|v| {
         let host_id = v
@@ -140,8 +140,8 @@ pub fn forward_delete(app: AppHandle, state: State<'_, AppState>, id: String) ->
 /// Starts the saved forward on the host's connection (SSH-16), which signs in with `options`
 /// when no tab or forward has it open, and returns the port it listens on (on the server for a
 /// remote forward).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn forward_start(
     app: AppHandle,
     host_id: String,
@@ -163,15 +163,15 @@ pub async fn forward_start(
 }
 
 /// Stops the forward; the host's connection closes when no tab or forward is left on it.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn forward_stop(app: AppHandle, host_id: String, forward_id: String) {
     connection::stop(&app, &host_id, &forward_id);
 }
 
 /// Every saved host's open connection, with the forwards on it.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn connections_list(state: State<'_, AppState>) -> ConnectionsEvent {
     connection::list(&state)
 }

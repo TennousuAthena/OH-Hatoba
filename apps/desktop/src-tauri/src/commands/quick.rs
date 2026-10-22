@@ -1,7 +1,7 @@
 //! Quick connect targets (HOST-12): validation and the device-local recent list.
 
+use crate::host::State;
 use hatoba_core::vault::Vault;
-use tauri::State;
 
 use crate::dto::QuickTarget;
 use crate::error::{AppError, AppResult};
@@ -84,15 +84,15 @@ pub fn remember(v: &mut Vault, target: &QuickTarget) -> AppResult<()> {
 }
 
 /// The recent quick-connect targets on this device, newest first.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn recent_targets_list(state: State<'_, AppState>) -> AppResult<Vec<QuickTarget>> {
     state.with_unlocked(|v| load(v))
 }
 
 /// Forgets one recent target and returns what is left.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn recent_target_remove(
     state: State<'_, AppState>,
     target: QuickTarget,

@@ -3,12 +3,12 @@
 use std::collections::{BTreeMap, HashSet};
 use std::time::Duration;
 
+use crate::host::{AppHandle, State};
 use hatoba_core::model::{
     EnvVar, Group, Host, HostAuth, HostProxy, Item, MAX_HOST_AI_NOTES_BYTES,
     MAX_ITEM_PLAINTEXT_BYTES, check_host_env,
 };
 use hatoba_core::vault::Vault;
-use tauri::{AppHandle, State};
 use zeroize::Zeroizing;
 
 use crate::convert::{group_view, host_view};
@@ -156,8 +156,8 @@ pub fn host_from_input(
     })
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn hosts_list(state: State<'_, AppState>) -> AppResult<Vec<HostView>> {
     state.with_unlocked(|v| {
         let mut hosts: Vec<HostView> = v
@@ -170,14 +170,14 @@ pub fn hosts_list(state: State<'_, AppState>) -> AppResult<Vec<HostView>> {
     })
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn host_get(state: State<'_, AppState>, id: String) -> AppResult<HostView> {
     state.with_unlocked(|v| Ok(host_view(&id, &find_host(v, &id)?, v)))
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn host_save(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -214,8 +214,8 @@ pub(crate) fn too_large_to_sync(vault: &Vault, item: &Item) -> AppResult<bool> {
     Ok(vault.sync_config()?.is_some() && item.plaintext_len()? > MAX_ITEM_PLAINTEXT_BYTES)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn host_delete(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
     state.with_unlocked(|v| {
         find_host(v, &id)?;
@@ -229,8 +229,8 @@ pub fn host_delete(app: AppHandle, state: State<'_, AppState>, id: String) -> Ap
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn host_duplicate(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -258,8 +258,8 @@ pub fn host_duplicate(
     Ok(view)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn host_set_favorite(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -279,8 +279,8 @@ pub fn host_set_favorite(
 }
 
 /// Turns the resource usage in a host's terminals on or off on this device (TERM-12).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn host_set_show_stats(state: State<'_, AppState>, id: String, on: bool) -> AppResult<()> {
     state.with_unlocked(|v| {
         find_host(v, &id)?;
@@ -289,8 +289,8 @@ pub fn host_set_show_stats(state: State<'_, AppState>, id: String, on: bool) -> 
 }
 
 /// Leaves a host or a group out of the dashboard on this device, or brings it back (HOST-14).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn dashboard_set_shown(state: State<'_, AppState>, id: String, shown: bool) -> AppResult<()> {
     state.with_unlocked(|v| {
         match v.get(&id) {
@@ -301,8 +301,8 @@ pub fn dashboard_set_shown(state: State<'_, AppState>, id: String, shown: bool) 
     })
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn groups_list(state: State<'_, AppState>) -> AppResult<Vec<GroupView>> {
     state.with_unlocked(|v| {
         let mut groups: Vec<GroupView> = v
@@ -315,8 +315,8 @@ pub fn groups_list(state: State<'_, AppState>) -> AppResult<Vec<GroupView>> {
     })
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn group_save(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -358,8 +358,8 @@ pub fn group_save(
     Ok(view)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn group_delete(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
     state.with_unlocked(|v| {
         v.get(&id)
@@ -373,8 +373,8 @@ pub fn group_delete(app: AppHandle, state: State<'_, AppState>, id: String) -> A
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn tags_list(state: State<'_, AppState>) -> AppResult<Vec<TagCount>> {
     state.with_unlocked(|v| {
         let mut counts: BTreeMap<String, u32> = BTreeMap::new();
@@ -412,8 +412,8 @@ fn probe_targets(v: &Vault, ids: &[String]) -> Vec<(String, Option<ProbeTarget>)
 }
 
 /// HOST-10: TCP connect only (no authentication), 3 s timeout, probed concurrently.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn hosts_probe(
     state: State<'_, AppState>,
     ids: Vec<String>,
@@ -440,10 +440,13 @@ pub async fn hosts_probe(
 /// SEC-08: copies a saved host password to the clipboard from Rust (it never reaches the WebView)
 /// and clears it after the device's delay (90 s by default; 0 never clears it) if the clipboard
 /// still holds it.
-#[tauri::command]
-#[specta::specta]
-pub fn host_copy_password(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
-    use tauri_plugin_clipboard_manager::ClipboardExt;
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
+pub async fn host_copy_password(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> AppResult<()> {
     let (password, prefs) = state.with_unlocked(|v| match find_host(v, &id)?.auth {
         HostAuth::Password { password } if !password.is_empty() => Ok((password, v.local_prefs()?)),
         _ => Err(AppError::invalid(
@@ -455,20 +458,17 @@ pub fn host_copy_password(app: AppHandle, state: State<'_, AppState>, id: String
         .map(|json| LocalPrefs::from_stored(&json))
         .unwrap_or_default()
         .clipboard_clear_secs;
-    app.clipboard()
-        .write_text(password.as_str())
-        .map_err(|e| AppError::internal(e.to_string()))?;
+    crate::host::clipboard::write_text(&app, password.as_str()).await?;
     if clear_secs == 0 {
         return Ok(());
     }
-    tauri::async_runtime::spawn(async move {
+    crate::host::async_runtime::spawn(async move {
         tokio::time::sleep(Duration::from_secs(clear_secs.into())).await;
-        let clipboard = app.clipboard();
-        if clipboard
-            .read_text()
+        if crate::host::clipboard::read_text(&app)
+            .await
             .is_ok_and(|current| Zeroizing::new(current).as_str() == password.as_str())
         {
-            let _ = clipboard.write_text(String::new());
+            let _ = crate::host::clipboard::write_text(&app, "").await;
         }
     });
     Ok(())

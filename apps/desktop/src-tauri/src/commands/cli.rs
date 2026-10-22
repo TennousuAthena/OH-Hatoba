@@ -2,9 +2,9 @@
 //! command itself (Settings → General), whose own commands other programs use the saved hosts
 //! with (HOST-15).
 
+use crate::host::{AppHandle, State};
 use hatoba_core::Vault;
 use serde_json::Value;
-use tauri::{AppHandle, State};
 
 use crate::commands::settings::stored_prefs;
 use crate::dto::{CliActivity, CliCommandView};
@@ -22,21 +22,21 @@ const ACCESS_PREF: &str = "cli_access";
 
 /// The arguments of the launches the window has not handled yet, oldest first. Each is taken
 /// once, and only while the vault is unlocked: a launch during a lock waits for the unlock.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn launch_take(state: State<'_, AppState>) -> AppResult<Vec<Vec<String>>> {
     state.with_unlocked(|_| Ok(launch::QUEUE.take()))
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn cli_command_get(state: State<'_, AppState>) -> AppResult<CliCommandView> {
     view(&state.vault())
 }
 
 /// Adds or removes the command. On macOS this may wait for an administrator's password.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn cli_command_set(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -58,8 +58,8 @@ pub async fn cli_command_set(
 /// HOST-15: lets other programs use the saved hosts through the command, or stops them. Turning it
 /// on puts the launcher in place again, so one from before HOST-15 runs the command's own
 /// commands; on macOS that may wait for an administrator's password.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn cli_access_set(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -74,14 +74,14 @@ pub async fn cli_access_set(
 }
 
 /// What other programs did through the command since the unlock, newest first (HOST-15).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn cli_activity_list(state: State<'_, AppState>) -> AppResult<Vec<CliActivity>> {
     state.with_unlocked(|_| Ok(state.cli.activity()))
 }
 
 async fn blocking(f: impl FnOnce() -> AppResult<()> + Send + 'static) -> AppResult<()> {
-    tauri::async_runtime::spawn_blocking(f)
+    crate::host::async_runtime::spawn_blocking(f)
         .await
         .map_err(|e| AppError::internal(e.to_string()))?
 }

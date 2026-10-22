@@ -22,5 +22,6 @@ with ZipFile(hap) as archive:
     library = archive.read("libs/arm64-v8a/libhatoba.so")
     assert library[:6] == b"\x7fELF\x02\x01", "Native host must be a 64-bit little-endian ELF"
     assert struct.unpack_from("<H", library, 18)[0] == 183, "Native host must be AArch64"
-    assert "resources/rawfile/web/harmonyos-probe.html" in archive.namelist(), "Packaged web entry missing"
+    for entry in ("harmonyos-app.html", "harmonyos-probe.html"):
+        assert f"resources/rawfile/web/{entry}" in archive.namelist(), f"Packaged {entry} missing"
 print(f"HAP checked: ARM64, min API20, target API26, 2in1 + tablet ({hap.stat().st_size:,} bytes)")

@@ -5,13 +5,13 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
+use crate::host::{AppHandle, State};
 use hatoba_core::model::{
     EnvVar, EnvVarError, Group, Host, HostAuth, HostProxy, Item, MAX_HOST_ENV_BYTES,
     MAX_HOST_ENV_VARS, Proxy, ProxyKind, SshKey, check_env_var,
 };
 use hatoba_core::vault::Vault;
 use hatoba_ssh::ParsedKey;
-use tauri::{AppHandle, State};
 use zeroize::Zeroizing;
 
 use crate::commands::hosts::{MAX_NAME_CHARS, too_large_to_sync};
@@ -51,8 +51,8 @@ fn unbracketed(address: &str) -> &str {
         .map_or(address, |(inner, _)| inner)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn hosts_import_preview(
     state: State<'_, AppState>,
     source: ImportSource,
@@ -120,8 +120,8 @@ pub async fn hosts_import_preview(
 /// confirmed. A host whose key file is not among them (the sessions or the files changed after
 /// the preview) asks how to sign in, with a warning. With no `key_files`, no private key file is
 /// read.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn hosts_import(
     app: AppHandle,
     state: State<'_, AppState>,

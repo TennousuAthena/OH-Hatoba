@@ -2,6 +2,9 @@
 //! without Tauri. Approval, edit, rejection, stop, lock and the cancelled results of calls left
 //! without one, and side questions (AI-42).
 
+// Some shared fixtures are used only by desktop stdio tests.
+#![cfg_attr(not(feature = "desktop-host"), allow(dead_code, unused_imports))]
+
 use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
@@ -2170,6 +2173,7 @@ fn without_messages(body: &Value) -> Value {
 /// it: the same system prompt, built-in and MCP tools (without the server the conversation
 /// switched off) and messages, `raw` replayed, and no `tool_choice`. So the provider's prompt
 /// cache serves everything before the instruction.
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_compact_request_is_the_next_request_with_the_instruction_after_it() {
     use crate::mcp::tests::{put_server, set_enabled, stdio_server};
@@ -2986,6 +2990,7 @@ async fn deleting_a_conversation_stops_its_turn() {
     assert!(lock(&f.vault).ai_entries(&conv).unwrap().is_empty());
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn without_a_tab_every_tool_but_the_terminal_ones_is_offered_and_runs() {
     use crate::mcp::tests::{put_server, set_enabled, stdio_server};
@@ -3317,6 +3322,7 @@ fn summaries(sink: &Sink) -> Vec<AiEntryView> {
         .collect()
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_turn_offers_mcp_tools_and_runs_their_calls() {
     use crate::dto::McpServerState;
@@ -4424,6 +4430,7 @@ async fn calls_stored_with_a_shared_id_run_each_with_its_own_arguments() {
     assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_running_call_is_not_run_or_answered_again() {
     use crate::mcp::tests::{put_server, set_enabled, stdio_server};
@@ -4480,6 +4487,7 @@ async fn a_running_call_is_not_run_or_answered_again() {
     f.mcp.shutdown().await;
 }
 
+#[cfg(feature = "desktop-host")] // Uses the desktop stdio fixture.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_call_of_a_server_deleted_elsewhere_does_not_run() {
     use crate::mcp::tests::{put_server, set_enabled, stdio_server};
@@ -7478,7 +7486,9 @@ fn a_note_names_a_target_or_a_single_host() {
     );
 }
 
+#[path = "tests/deferred.rs"]
 mod deferred;
+#[path = "tests/judge.rs"]
 mod judge;
 
 #[test]

@@ -1,23 +1,38 @@
 //! `~/.ssh/config` (`%USERPROFILE%\.ssh\config` on Windows), SSH-11.
 
 use hatoba_ssh::SshConfigHost;
+use std::path::Path;
 
 use super::{Entry, Jump, Source};
 use crate::error::{AppError, AppResult};
 
-pub(super) fn read() -> AppResult<Source> {
-    let home = dirs::home_dir().ok_or_else(|| AppError::not_found("home directory"))?;
-    let path = home.join(".ssh").join("config");
-    let text = match std::fs::read_to_string(&path) {
-        Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(e) => return Err(AppError::io(e)),
+pub(super) fn read(selected: Option<&Path>) -> AppResult<Source> {
+    let home = if selected.is_none() {
+        dirs::home_dir()
+    } else {
+        None
     };
-    let home = home.to_string_lossy();
+    let path = match selected {
+        Some(path) => path.to_owned(),
+        None => home
+            .as_ref()
+            .ok_or_else(|| AppError::not_found("home directory"))?
+            .join(".ssh")
+            .join("config"),
+    };
+    let text = match super::text::read_file(&path) {
+        Ok(bytes) => super::text::decode(&bytes),
+        Err(error) if selected.is_none() && !path.exists() => {
+            let _ = error;
+            String::new()
+        }
+        Err(error) => return Err(error),
+    };
+    let home = home.as_deref().map(|home| home.to_string_lossy());
     Ok(Source {
         location: Some(path.to_string_lossy().into_owned()),
         encrypted: false,
-        entries: hatoba_ssh::config::parse_ssh_config_with_home(&text, Some(&home))
+        entries: hatoba_ssh::config::parse_ssh_config_with_home(&text, home.as_deref())
             .into_iter()
             .map(entry)
             .collect(),
@@ -37,5 +52,22 @@ fn entry(host: SshConfigHost) -> Entry {
         skipped_proxy: host.proxy_command.map(|c| format!("ProxyCommand {c}")),
         set_env: host.set_env,
         ..Entry::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn selected_config_uses_only_the_selected_file_and_keeps_foreign_identity_paths() {
+        let path =
+            std::env::temp_dir().join(format!("hatoba-selected-config-{}", uuid::Uuid::new_v4()));
+        std::fs::write(&path, "Host generated\n HostName 127.0.0.1\n User fixture\n Port 22222\n IdentityFile ~/.ssh/foreign-key\n").unwrap();
+        let source = read(Some(&path)).unwrap();
+        assert_eq!(source.entries.len(), 1);
+        assert_eq!(source.entries[0].address, "127.0.0.1");
+        assert_eq!(source.entries[0].port, 22222);
+        assert_eq!(source.entries[0].identity_files, ["~/.ssh/foreign-key"]);
+        std::fs::remove_file(path).unwrap();
     }
 }

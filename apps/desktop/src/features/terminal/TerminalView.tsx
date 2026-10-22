@@ -26,6 +26,7 @@ import { StatsPopover } from "./StatsPopover";
 import { StatusBar } from "./StatusBar";
 import { useTermSettings, useTerminalChrome } from "./theme";
 import s from "./TerminalView.module.css";
+import { TerminalKeys } from "./TerminalKeys";
 
 /** One terminal session (design §03 / §03b). Inactive tabs stay mounted so their sessions keep running. */
 export function TerminalView({ tab, active }: { tab: SessionTab; active: boolean }) {
@@ -286,6 +287,7 @@ function TerminalBody({ tab, active, session }: { tab: SessionTab; active: boole
           <SftpPanel key={tab.sessionId} sessionId={tab.sessionId} hostName={host?.name ?? tab.title} active={active} />
         )}
       </div>
+      {platform === "harmonyos" && <TerminalKeys session={session} connected={connected} />}
       {forwardsMenu.anchor && tab.hostId && connected && (
         <ForwardsPopover
           anchor={forwardsMenu.anchor}

@@ -2,8 +2,8 @@
 //! domains `fetch_url` may fetch. The frontend decides with them which calls ask; this module only
 //! keeps them, sealed in the vault's meta table and never synced.
 
+use crate::host::State;
 use hatoba_core::vault::Vault;
-use tauri::State;
 
 use crate::dto::{AiAllowance, AiAllowanceKind};
 use crate::error::{AppError, AppResult};
@@ -96,15 +96,15 @@ fn remove(v: &mut Vault, allowance: &AiAllowance) -> AppResult<Vec<AiAllowance>>
 }
 
 /// The AI approvals saved on this device, oldest first.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn ai_allowances_list(state: State<'_, AppState>) -> AppResult<Vec<AiAllowance>> {
     state.with_unlocked(|v| load(v))
 }
 
 /// Saves an approval on this device and returns them all.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn ai_allowance_add(
     state: State<'_, AppState>,
     allowance: AiAllowance,
@@ -113,8 +113,8 @@ pub fn ai_allowance_add(
 }
 
 /// Removes a saved approval and returns what is left.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn ai_allowance_remove(
     state: State<'_, AppState>,
     allowance: AiAllowance,

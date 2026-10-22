@@ -5,6 +5,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::host::AppHandle;
+use crate::host::Event;
 use async_trait::async_trait;
 use hatoba_core::model::{Host, HostAuth, HostProxy, Item, KnownHost, ProxyKind as CoreProxyKind};
 use hatoba_core::vault::Vault;
@@ -12,8 +14,6 @@ use hatoba_ssh::{
     AuthMethod, ConnectConfig, HostKeyInfo, HostKeyVerifier, JumpHop, KeyboardInteractive,
     PromptRequest, ProxyConfig, ProxyKind, SftpClient, ShellHandle, SshSession, StatsHandle,
 };
-use tauri::AppHandle;
-use tauri_specta::Event;
 use tokio::sync::{OnceCell, oneshot};
 use tokio_util::sync::CancellationToken;
 use zeroize::Zeroizing;
@@ -235,7 +235,13 @@ fn auth_method(
                 passphrase,
             }
         }
-        HostAuth::Agent => AuthMethod::Agent,
+        HostAuth::Agent if crate::host::supports_local_processes() => AuthMethod::Agent,
+        HostAuth::Agent => {
+            return Err(AppError::invalid(
+                "auth",
+                "SSH agent authentication is unavailable on this device",
+            ));
+        }
     })
 }
 

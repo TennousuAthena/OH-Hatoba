@@ -174,6 +174,7 @@ impl AppError {
     }
 
     /// A local terminal (§7.5) failed.
+    #[cfg(feature = "desktop-host")]
     pub fn local(err: hatoba_local::LocalError) -> Self {
         match err {
             hatoba_local::LocalError::UnknownShell(_) => Self::not_found("shell"),
@@ -196,6 +197,7 @@ impl From<std::io::Error> for AppError {
     }
 }
 
+#[cfg(feature = "desktop-host")]
 impl From<tauri::Error> for AppError {
     fn from(e: tauri::Error) -> Self {
         Self::internal(e.to_string())

@@ -3,8 +3,8 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Duration;
 
-use tauri::AppHandle;
-use tauri_specta::Event;
+use crate::host::AppHandle;
+use crate::host::Event;
 
 use crate::dto::{LocalPrefs, LockReason, VaultLockedEvent};
 use crate::state::{AppState, state};
@@ -98,6 +98,7 @@ pub async fn lock_vault(app: &AppHandle, reason: LockReason) {
     crate::dashboard::forget_secret_hashes();
     // HOST-15: what other programs run through the `hatoba` command stops, and its connections
     // close.
+    #[cfg(feature = "desktop-host")]
     state.cli.lock(app);
     let disconnect = async {
         if disconnects_on_lock(&state) {
@@ -105,6 +106,7 @@ pub async fn lock_vault(app: &AppHandle, reason: LockReason) {
             let sessions = state.ssh.take_all();
             // SSH-16: and the hosts' connections, which close once the tabs on them did.
             let connections = state.connections.take_all();
+            #[cfg(feature = "desktop-host")]
             let locals = state.local.take_all();
             let ssh = futures::future::join_all(sessions.into_iter().map(|(id, live)| {
                 let ai = &state.ai;
@@ -114,6 +116,7 @@ pub async fn lock_vault(app: &AppHandle, reason: LockReason) {
                     live.close().await;
                 }
             }));
+            #[cfg(feature = "desktop-host")]
             let local = futures::future::join_all(locals.into_iter().map(|(id, live)| {
                 let ai = &state.ai;
                 async move {
@@ -121,7 +124,10 @@ pub async fn lock_vault(app: &AppHandle, reason: LockReason) {
                     live.close();
                 }
             }));
+            #[cfg(feature = "desktop-host")]
             futures::join!(ssh, local);
+            #[cfg(not(feature = "desktop-host"))]
+            ssh.await;
             futures::future::join_all(connections.iter().map(|c| c.close())).await;
             crate::connection::changed(app);
         }
@@ -130,10 +136,25 @@ pub async fn lock_vault(app: &AppHandle, reason: LockReason) {
     futures::join!(state.mcp.stop_all(&state.vault), disconnect);
 }
 
+/// Native screen-lock and resume signals use the common policy.
+/// Opening the OAuth browser is not a system sleep signal.
+pub async fn on_system_sleep(app: &AppHandle) {
+    let state = state(app);
+    if locks_on_sleep(&state) && state.vault().is_unlocked() {
+        lock_vault(app, LockReason::Sleep).await;
+    }
+}
+#[cfg(not(feature = "desktop-host"))]
+pub async fn on_resume(app: &AppHandle, idle_before_resume: Duration) {
+    if idle_lock_due(&state(app), idle_before_resume) {
+        lock_vault(app, LockReason::Idle).await;
+    }
+}
+
 /// Background watchers for idle timeout and system sleep.
 pub fn spawn_watchers(app: AppHandle) {
     let idle_app = app.clone();
-    tauri::async_runtime::spawn(async move {
+    crate::host::async_runtime::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(15)).await;
             let state = state(&idle_app);
@@ -142,13 +163,10 @@ pub fn spawn_watchers(app: AppHandle) {
             }
         }
     });
-    tauri::async_runtime::spawn(async move {
+    crate::host::async_runtime::spawn(async move {
         let mut sleeps = crate::platform::power::watch_sleep();
         while sleeps.recv().await.is_some() {
-            let state = state(&app);
-            if locks_on_sleep(&state) && state.vault().is_unlocked() {
-                lock_vault(&app, LockReason::Sleep).await;
-            }
+            on_system_sleep(&app).await;
         }
     });
 }

@@ -1,8 +1,8 @@
 //! AI memory commands (AI-53, spec §13.12): Settings → AI lists, edits and deletes the memories
 //! the assistant keeps, under the rules its `memory` tool follows ([`crate::ai::memory`]).
 
+use crate::host::{AppHandle, State};
 use hatoba_core::model::{AiMemory, Item};
-use tauri::{AppHandle, State};
 
 use crate::ai::memory;
 use crate::dto::{AiMemoryInput, AiMemoryView};
@@ -22,8 +22,8 @@ fn view(id: String, m: AiMemory) -> AiMemoryView {
 }
 
 /// Every memory, oldest first, of every scope.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_memories_list(state: State<'_, AppState>) -> AppResult<Vec<AiMemoryView>> {
     state.with_unlocked(|v| {
         Ok(v.ai_memories()
@@ -37,8 +37,8 @@ pub async fn ai_memories_list(state: State<'_, AppState>) -> AppResult<Vec<AiMem
 /// the edited memory already belongs to) or a computer's: `id` replaces that one, which moves it
 /// there when it was elsewhere, together with the others of its name there when the edit keeps
 /// both ([`memory::edited`]); none adds one.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_memory_save(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -77,8 +77,8 @@ pub async fn ai_memory_save(
 }
 
 /// Deletes a memory.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_memory_delete(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -95,8 +95,8 @@ pub async fn ai_memory_delete(
 }
 
 /// Deletes every memory.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn ai_memories_delete_all(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> {
     let deleted = state.with_unlocked(|v| Ok(v.ai_memories_delete_all()?))?;
     tracing::info!(deleted, "AI memories deleted");

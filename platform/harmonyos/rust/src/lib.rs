@@ -6,6 +6,10 @@ use std::ffi::{CString, c_char};
 use hatoba_core::crypto::{open, random_key, seal};
 use serde::Serialize;
 
+mod files;
+pub mod network_probe;
+pub mod runtime;
+
 /// This version describes the native host protocol, independently of the upstream app version.
 pub const HOST_PROTOCOL: u32 = 1;
 
@@ -136,3 +140,5 @@ mod tests {
         unsafe { hatoba_string_free(std::ptr::null_mut()) };
     }
 }
+
+mod document_probe;

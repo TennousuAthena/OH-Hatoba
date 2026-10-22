@@ -1,0 +1,25 @@
+.keys { display: none; }
+@media (any-pointer: coarse) {
+  .keys {
+    display: flex;
+    flex: none;
+    gap: var(--space-6);
+    padding: 6px 10px max(6px, env(safe-area-inset-bottom));
+    overflow-x: auto;
+    background: var(--win);
+    border-top: 1px solid var(--line2);
+    touch-action: pan-x;
+  }
+  .keys button {
+    flex: none;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px;
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-sm);
+    background: var(--side);
+    color: var(--fg);
+    font: inherit;
+  }
+  .keys button:disabled { opacity: .5; }
+}

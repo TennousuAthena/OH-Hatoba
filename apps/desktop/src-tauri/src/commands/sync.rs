@@ -3,15 +3,15 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::host::{AppHandle, State};
 use hatoba_core::model::{EnvVar, HostAuth, HostProxy, Item};
-use hatoba_core::platform::{SecretStore, secret_keys};
+use hatoba_core::platform::secret_keys;
 use hatoba_core::sync::{
     ConflictEntry, D1Backend, Resolution, SyncBackend, SyncConfig, WorkerBackend, clear_session,
     d1, flows, save_session,
 };
-use tauri::{AppHandle, State};
 
-use tauri_specta::Event;
+use crate::host::Event;
 
 use crate::dto::{
     ConflictAction, ConflictField, ConflictResolution, ConflictView, D1Database, DeviceView,
@@ -73,15 +73,15 @@ pub(crate) fn persist(
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn sync_status(app: AppHandle) -> SyncStatus {
     sync::status(&app)
 }
 
 /// Wizard "Test connection": Worker `/v1/health`, or (D1 mode) token check + database list.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sync_test(config: SyncConfigInput) -> AppResult<SyncTestResult> {
     let started = Instant::now();
     let result = match &config {
@@ -141,8 +141,8 @@ pub async fn sync_test(config: SyncConfigInput) -> AppResult<SyncTestResult> {
 }
 
 /// Flow A (§6.6): initialise the remote with this vault, sign in and push everything.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sync_configure(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -175,8 +175,8 @@ pub async fn sync_configure(
 
 /// Flow C (§6.6): connect this device's vault to a remote that already holds a vault, then run
 /// the first round, which pulls the remote's items and uploads this device's.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sync_join(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -251,15 +251,15 @@ pub(crate) async fn joined_remote(
     let _ = sync::run_round(app).await;
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sync_now(app: AppHandle) -> AppResult<()> {
     sync::run_round(&app).await
 }
 
 /// Re-authenticate after "认证失效" (session expired or revoked).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sync_login(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -296,15 +296,15 @@ pub async fn sync_login(
 }
 
 /// The sync status page opened: reads the Worker's `/v1/health` (§6.7, Upgrades).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sync_check_worker(app: AppHandle) {
     sync::recheck_worker(&app).await;
 }
 
 /// Hides "Worker update available" until the app bundles a newer Worker version.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn sync_dismiss_worker_update(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> {
     if let Some(bundled) = sync::bundled_version() {
         state.vault().set_worker_update_dismissed(&bundled)?;
@@ -313,8 +313,8 @@ pub fn sync_dismiss_worker_update(app: AppHandle, state: State<'_, AppState>) ->
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn sync_set_auto(app: AppHandle, state: State<'_, AppState>, enabled: bool) {
     state.sync.set_auto(enabled);
     sync::emit_status(&app);
@@ -330,8 +330,8 @@ pub fn sync_set_auto(app: AppHandle, state: State<'_, AppState>, enabled: bool) 
 /// (spec §6.3). Each setting is cleared even if clearing another fails, so a failed credential
 /// store cannot keep the sync configuration that would reconnect at the next unlock; the first
 /// error is returned.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sync_disconnect(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> {
     let round = state.sync.end_connection().await;
     let cleared = [
@@ -347,8 +347,8 @@ pub async fn sync_disconnect(app: AppHandle, state: State<'_, AppState>) -> AppR
         .map_err(AppError::from)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sync_devices(state: State<'_, AppState>) -> AppResult<Vec<DeviceView>> {
     let backend = state.sync.require_backend()?;
     let devices = flows::devices(&state.vault, backend.as_ref()).await?;
@@ -367,8 +367,8 @@ pub async fn sync_devices(state: State<'_, AppState>) -> AppResult<Vec<DeviceVie
         .collect())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sync_revoke_device(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -588,8 +588,8 @@ fn conflict_view(c: &ConflictEntry, hosts: &dyn Fn(&str) -> Option<String>) -> C
 }
 
 /// §6.4: conflicts are resolved automatically; this lists the unreviewed ones (P1).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn sync_conflicts(state: State<'_, AppState>) -> AppResult<Vec<ConflictView>> {
     state.with_unlocked(|v| {
         // Hosts name their jump host and proxy by id.
@@ -607,8 +607,8 @@ pub fn sync_conflicts(state: State<'_, AppState>) -> AppResult<Vec<ConflictView>
     })
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn sync_conflict_resolve(
     app: AppHandle,
     state: State<'_, AppState>,

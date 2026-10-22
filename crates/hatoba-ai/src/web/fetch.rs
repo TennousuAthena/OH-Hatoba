@@ -242,11 +242,11 @@ impl Fetcher {
     fn client(&self, targets: &Arc<Mutex<HashSet<String>>>) -> Result<reqwest::Client, AiError> {
         net::ensure_crypto_provider();
         let builder = match &self.proxy {
-            Proxy::System => reqwest::Client::builder(),
+            Proxy::System => hatoba_net::client_builder(),
             #[cfg(test)]
-            Proxy::None => reqwest::Client::builder().no_proxy(),
+            Proxy::None => hatoba_net::client_builder().no_proxy(),
             #[cfg(test)]
-            Proxy::At(url) => reqwest::Client::builder()
+            Proxy::At(url) => hatoba_net::client_builder()
                 .proxy(reqwest::Proxy::all(url).map_err(|e| AiError::Network(e.to_string()))?),
         };
         builder

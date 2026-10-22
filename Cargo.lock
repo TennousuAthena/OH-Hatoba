@@ -2295,6 +2295,7 @@ dependencies = [
  "encoding_rs",
  "flate2",
  "futures",
+ "hatoba-net",
  "htmd",
  "markup5ever_rcdom",
  "process-wrap",
@@ -2338,6 +2339,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "getrandom 0.4.3",
+ "hatoba-net",
  "hkdf 0.13.0",
  "reqwest",
  "rusqlite",
@@ -2437,15 +2439,67 @@ dependencies = [
 ]
 
 [[package]]
+name = "hatoba-net"
+version = "0.6.0"
+dependencies = [
+ "reqwest",
+ "rustls-native-certs",
+]
+
+[[package]]
 name = "hatoba-ohos"
 version = "0.6.0"
 dependencies = [
+ "async-trait",
+ "futures",
  "hatoba-ai",
  "hatoba-core",
+ "hatoba-net",
+ "hatoba-runtime",
  "hatoba-ssh",
+ "russh",
+ "russh-sftp",
  "serde",
  "serde_json",
  "tokio",
+ "tokio-util",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
+name = "hatoba-runtime"
+version = "0.6.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "dirs 6.0.0",
+ "encoding_rs",
+ "futures",
+ "hatoba-ai",
+ "hatoba-core",
+ "hatoba-ssh",
+ "quick-xml 0.42.0",
+ "quote",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "specta",
+ "specta-typescript",
+ "syn 2.0.119",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "wiremock",
+ "zeroize",
+ "zip",
 ]
 
 [[package]]

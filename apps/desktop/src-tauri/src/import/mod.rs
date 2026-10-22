@@ -118,7 +118,7 @@ pub struct Source {
 /// keeps its sessions on this device. Nothing there is not an error: the source is empty.
 pub fn read(source: ImportSource, path: Option<&Path>) -> AppResult<Source> {
     match source {
-        ImportSource::SshConfig => ssh_config::read(),
+        ImportSource::SshConfig => ssh_config::read(path),
         ImportSource::Xshell => xshell::read(path),
         ImportSource::Finalshell => finalshell::read(path),
         ImportSource::Mobaxterm => mobaxterm::read(path),

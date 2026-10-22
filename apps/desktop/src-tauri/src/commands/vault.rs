@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use hatoba_core::platform::{SecretStore, secret_keys};
+use crate::host::{AppHandle, State};
+use hatoba_core::platform::secret_keys;
 use hatoba_core::sync::{SyncConfig, flows, save_session};
-use tauri::{AppHandle, State};
 use zeroize::Zeroizing;
 
 use crate::commands::settings::adopt_legacy_prefs_after_unlock;
@@ -97,8 +97,8 @@ fn after_unlock(app: &AppHandle, state: &AppState) {
     sync::on_unlock(app);
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn vault_status(app: AppHandle, state: State<'_, AppState>) -> VaultStatus {
     let vault = state.vault();
     let info = vault.status();
@@ -139,8 +139,8 @@ pub fn vault_status(app: AppHandle, state: State<'_, AppState>) -> VaultStatus {
 }
 
 /// VAULT-01/02: creates the vault and returns the recovery code (shown exactly once).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn vault_create(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -161,8 +161,8 @@ pub async fn vault_create(
 }
 
 /// VAULT-03 / SEC-06: wrong passwords are throttled with increasing delays (persisted).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn vault_unlock(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -183,8 +183,8 @@ pub async fn vault_unlock(
 
 /// SEC-07 (P1), SEC-10: Windows Hello or Touch ID. An enrolment that no longer opens, or that holds
 /// another vault's key, is removed, so the switch reads off and the lock screen stops offering it.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn vault_unlock_biometric(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> {
     let unlocked = match biometric::unlock(&app, state.secrets.as_ref()).await {
         Ok(key) => state
@@ -212,8 +212,8 @@ pub async fn vault_unlock_biometric(app: AppHandle, state: State<'_, AppState>) 
 
 /// SEC-11: unlocks with the PIN. After a restart, a PIN kept for that unwraps its copy in the OS
 /// credential store, which the last wrong PIN removes.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn vault_unlock_pin(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -245,14 +245,14 @@ pub async fn vault_unlock_pin(
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn vault_lock(app: AppHandle) {
     lock::lock_vault(&app, LockReason::Manual).await;
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn vault_verify_password(
     state: State<'_, AppState>,
     password: String,
@@ -270,8 +270,8 @@ pub async fn vault_verify_password(
 
 /// VAULT-05: re-wraps only the vault key (no item is re-encrypted); with sync, the server copy is
 /// updated atomically and other devices' sessions are revoked.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn vault_change_password(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -308,8 +308,8 @@ pub async fn vault_change_password(
 }
 
 /// VAULT-06: resets the master password with the recovery code. Works offline when sync is off.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn vault_recover(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -349,8 +349,8 @@ pub async fn vault_recover(
 }
 
 /// Flow B (§6.6): first launch on a new device — download the vault from the cloud.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn vault_restore_from_cloud(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -376,15 +376,15 @@ pub async fn vault_restore_from_cloud(
 }
 
 /// VAULT-07: single-file encrypted backup in the same envelope format.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn vault_export_backup(state: State<'_, AppState>, path: String) -> AppResult<()> {
     state.with_unlocked(|v| Ok(v.export_backup(std::path::Path::new(&path))?))
 }
 
 /// Issues a new recovery code (the old one stops working everywhere once synced).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn vault_rotate_recovery(
     state: State<'_, AppState>,
     password: String,
@@ -417,8 +417,8 @@ pub async fn vault_rotate_recovery(
 
 /// SEC-07 (P1), SEC-10: enrol Windows Hello or Touch ID. Requires the master password as a fresh
 /// confirmation.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn biometric_enable(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -434,8 +434,8 @@ pub async fn biometric_enable(
     biometric::enroll(&app, state.secrets.as_ref(), &key).await
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn biometric_disable(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> {
     biometric::remove(&app, state.secrets.as_ref())
 }
@@ -443,8 +443,8 @@ pub fn biometric_disable(app: AppHandle, state: State<'_, AppState>) -> AppResul
 /// SEC-11: sets or replaces the PIN. Requires the master password as a fresh confirmation, like
 /// Windows Hello. A new PIN needs the master password after a restart until [`pin_set_persist`]
 /// says otherwise, so setting it needs nothing from the OS credential store.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn pin_enable(
     state: State<'_, AppState>,
     password: String,
@@ -472,8 +472,8 @@ pub async fn pin_enable(
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn pin_disable(state: State<'_, AppState>) -> AppResult<()> {
     state.vault().clear_pin()?;
     forget_stored_pin(&state);
@@ -482,8 +482,8 @@ pub fn pin_disable(state: State<'_, AppState>) -> AppResult<()> {
 
 /// SEC-11: whether the PIN also works after a restart. On, the vault key it wraps goes to the OS
 /// credential store; off, it is removed there.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn pin_set_persist(state: State<'_, AppState>, persist: bool) -> AppResult<()> {
     let wrapped = state.vault().set_pin_persist(persist)?;
     match wrapped {

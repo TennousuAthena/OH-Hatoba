@@ -11,6 +11,8 @@
 
 use std::collections::HashSet;
 
+use crate::host::Event;
+use crate::host::{AppHandle, State};
 use hatoba_ai::AiError;
 use hatoba_ai::mcp::McpError;
 use hatoba_ai::mcp::config::{ImportReport, export_json, parse_import};
@@ -18,8 +20,6 @@ use hatoba_ai::provider::validate_base_url;
 use hatoba_core::Vault;
 use hatoba_core::model::{Item, McpServer, McpTransport};
 use reqwest::header::{HeaderName, HeaderValue};
-use tauri::{AppHandle, State};
-use tauri_specta::Event;
 use zeroize::Zeroizing;
 
 use crate::dto::{
@@ -458,15 +458,15 @@ pub(crate) fn export(v: &Vault) -> String {
 
 // ───────────────────────── commands ─────────────────────────
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_servers_list(state: State<'_, AppState>) -> AppResult<Vec<McpServerView>> {
     state.with_unlocked(|v| Ok(servers_list(v)))
 }
 
 /// Saves a server; a running one restarts when its name or transport changed.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_server_save(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -492,8 +492,8 @@ pub async fn mcp_server_save(
     Ok(saved.view)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_server_delete(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -507,8 +507,8 @@ pub async fn mcp_server_delete(
 }
 
 /// On this device only (AI-29). Disabling stops a running server.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_server_set_enabled(
     state: State<'_, AppState>,
     id: String,
@@ -521,8 +521,8 @@ pub async fn mcp_server_set_enabled(
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_server_status(
     state: State<'_, AppState>,
     id: String,
@@ -535,8 +535,8 @@ pub async fn mcp_server_status(
 }
 
 /// Starts (or restarts) the server now and lists its tools.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_server_start(
     state: State<'_, AppState>,
     id: String,
@@ -548,8 +548,8 @@ pub async fn mcp_server_start(
     Ok(state.mcp.start_now(&state.vault, &id, &name, config).await)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_server_stop(state: State<'_, AppState>, id: String) -> AppResult<()> {
     state.with_unlocked(|v| find_server(v, &id).map(drop))?;
     state.mcp.stop(&state.vault, &id).await;
@@ -558,8 +558,8 @@ pub async fn mcp_server_stop(state: State<'_, AppState>, id: String) -> AppResul
 
 /// AI-31 Always allow on this device: one tool (the server's own name), or every tool with `tool`
 /// null.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_set_always_allow(
     state: State<'_, AppState>,
     server_id: String,
@@ -574,8 +574,8 @@ pub async fn mcp_set_always_allow(
 /// The MCP tool behind a name the model called in the conversation: from the offer of the
 /// conversation's latest request, as `ai_tool_run` resolves it, else from the running servers.
 /// Null when neither has it, or its server was deleted; the panel then asks in either mode.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_tool_info(
     state: State<'_, AppState>,
     conversation_id: String,
@@ -609,8 +609,8 @@ pub(crate) fn proxy_info(
 }
 
 /// The MCP tool a `call_mcp_tool` call names (AI-45), for its approval card.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_proxy_info(
     state: State<'_, AppState>,
     conversation_id: String,
@@ -623,8 +623,8 @@ pub async fn mcp_proxy_info(
 /// AI-50, AI-51: the panel's `/` or `@` menu opened. Starts the servers a conversation with
 /// `disabled_mcp_servers` switched off uses, as its next message would, and lists their prompts
 /// and resources again after a `list_changed`; `ai://mcp-status` brings them. Returns at once.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_warm(
     state: State<'_, AppState>,
     disabled_mcp_servers: Vec<String>,
@@ -636,8 +636,8 @@ pub async fn mcp_warm(
 
 /// AI-50: gets the prompt `name` (its name on the server) of a server with `arguments`, for a
 /// `/` command, as the text the message attaches. Fails with `ai` and the reason.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_prompt_get(
     state: State<'_, AppState>,
     server_id: String,
@@ -658,8 +658,8 @@ pub async fn mcp_prompt_get(
 
 /// AI-51: reads the resource at `uri` of a server, for an `@` mention, as the text the message
 /// attaches. Fails with `ai` and the reason, such as a resource with only binary content.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_resource_read(
     state: State<'_, AppState>,
     server_id: String,
@@ -673,8 +673,8 @@ pub async fn mcp_resource_read(
 }
 
 /// AI-33: what pasted `mcpServers` / VS Code `servers` JSON would add.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_import_preview(
     state: State<'_, AppState>,
     json: String,
@@ -685,8 +685,8 @@ pub async fn mcp_import_preview(
 }
 
 /// Adds every importable server; env and header values move into the vault.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_import(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -701,11 +701,12 @@ pub async fn mcp_import(
 }
 
 /// `mcpServers` JSON with placeholders in place of env and header values.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn mcp_export(state: State<'_, AppState>) -> AppResult<String> {
     state.with_unlocked(|v| Ok(export(v)))
 }
 
 #[cfg(test)]
+#[path = "mcp/tests.rs"]
 mod tests;

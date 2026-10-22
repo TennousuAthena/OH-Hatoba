@@ -1,13 +1,14 @@
+import { hostCapabilities } from "@/lib/hostServices";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge, Button, Icon, IconButton, Switch } from "@/components/controls";
 import { layoutStyles } from "@/components/layout";
 import { Menu, confirm, toast, useMenu } from "@/components/overlay";
 import { HintText } from "@/components/patterns";
 import { useT } from "@/i18n";
-import { api, isTauri } from "@/ipc/api";
+import { api, isTauri, isHarmonyOS } from "@/ipc/api";
 import type { BuiltinSkillView, SkillView } from "@/ipc/types";
 import { cx } from "@/lib/cx";
-import { pickSavePath } from "@/lib/native";
+import { pickSavePath, pickOpenPath } from "@/lib/native";
 import { aiErrorMessage } from "./aiShared";
 import { BuiltinSkillDialog } from "./BuiltinSkillDialog";
 import { SkillDialog } from "./SkillDialog";
@@ -22,6 +23,7 @@ const BROWSER_FOLDER = "~/skills/docker-compose";
 const BROWSER_ZIP = "~/Downloads/nginx-ops.zip";
 
 async function pickSource(kind: "folder" | "zip", title: string): Promise<string | null> {
+  if (isHarmonyOS()) return pickOpenPath({ title, directory: kind === "folder", filter: kind === "zip" ? { name: "Zip", extensions: ["zip"] } : undefined });
   if (!isTauri()) return kind === "folder" ? BROWSER_FOLDER : BROWSER_ZIP;
   const { open } = await import("@tauri-apps/plugin-dialog");
   const picked = await open(
@@ -156,7 +158,7 @@ export function SkillsSection({ builtin }: { builtin: BuiltinSwitch | null }) {
           anchor={importMenu.anchor}
           onClose={importMenu.close}
           entries={[
-            { label: t("aiSettings.skills.import.folder"), icon: "folder-open", onSelect: () => void chooseSource("folder") },
+            { label: t("aiSettings.skills.import.folder"), disabled: !hostCapabilities().folderPicker, icon: "folder-open", onSelect: () => void chooseSource("folder") },
             { label: t("aiSettings.skills.import.zip"), icon: "file-zip", onSelect: () => void chooseSource("zip") },
           ]}
         />

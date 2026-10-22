@@ -2,9 +2,9 @@
 
 use std::path::PathBuf;
 
+use crate::host::Event;
+use crate::host::{AppHandle, State};
 use hatoba_ssh::{SftpClient, TransferProgress};
-use tauri::{AppHandle, State};
-use tauri_specta::Event;
 use tokio_util::sync::CancellationToken;
 
 use crate::dto::{FileEntry, TransferDirection, TransferProgressEvent, TransferState};
@@ -45,14 +45,14 @@ fn validate_name(name: &str) -> AppResult<()> {
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sftp_home(state: State<'_, AppState>, session_id: String) -> AppResult<String> {
     Ok(client(&state, &session_id).await?.home().await?)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sftp_list(
     state: State<'_, AppState>,
     session_id: String,
@@ -62,8 +62,8 @@ pub async fn sftp_list(
     Ok(entries.into_iter().map(entry).collect())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sftp_rename(
     state: State<'_, AppState>,
     session_id: String,
@@ -79,8 +79,8 @@ pub async fn sftp_rename(
         .await?)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sftp_remove(
     state: State<'_, AppState>,
     session_id: String,
@@ -102,8 +102,8 @@ pub async fn sftp_remove(
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sftp_mkdir(
     state: State<'_, AppState>,
     session_id: String,
@@ -181,7 +181,8 @@ fn spawn_transfer(
         name,
         last: std::sync::Mutex::new(zero),
     });
-    tauri::async_runtime::spawn(async move {
+    crate::host::async_runtime::spawn(async move {
+        crate::host::transfer_active(&transfer.app, &transfer.id, true).await;
         transfer.progress(zero);
         let result = run(transfer.clone(), token.clone()).await;
         match result {
@@ -190,13 +191,14 @@ fn spawn_transfer(
             Err(e) => transfer.finish(TransferState::Failed, Some(e.message)),
         }
         app_state(&transfer.app).ssh.finish_transfer(&transfer.id);
+        crate::host::transfer_active(&transfer.app, &transfer.id, false).await;
     });
     id
 }
 
 /// SFTP-02 download. `local_path` comes from the native save dialog.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sftp_download(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -211,6 +213,7 @@ pub async fn sftp_download(
         .unwrap_or(&remote_path)
         .to_owned();
     let local = PathBuf::from(local_path);
+    let export_app = app.clone();
     Ok(spawn_transfer(
         app,
         session_id,
@@ -222,15 +225,22 @@ pub async fn sftp_download(
                     let t = t.clone();
                     move |p: TransferProgress| t.progress(p)
                 };
-                sftp.download(&remote_path, &local, progress, token).await
+                let result = async { sftp.download(&remote_path, &local, progress, token.clone())
+                    .await?;
+                tokio::select! {
+                    () = token.cancelled() => Err(hatoba_ssh::SshError::new(hatoba_ssh::SshErrorKind::Cancelled, "Transfer cancelled")),
+                    result = crate::host::commit_output(&export_app, &local) => result.map_err(|_| hatoba_ssh::SshError::new(hatoba_ssh::SshErrorKind::Io, "Could not save the selected document")),
+                } }.await;
+                crate::host::release_document(&export_app, &local).await;
+                result
             })
         },
     ))
 }
 
 /// SFTP-02 upload into `remote_dir` (file picker or drag & drop).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn sftp_upload(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -240,12 +250,10 @@ pub async fn sftp_upload(
 ) -> AppResult<String> {
     let sftp = client(&state, &session_id).await?;
     let local = PathBuf::from(&local_path);
-    let name = local
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .ok_or_else(|| AppError::invalid("local_path", "not a file"))?;
+    let name = crate::host::input_name(&app, &local).await?;
     validate_name(&name)?;
     let remote = join_remote(&remote_dir, &name);
+    let import_app = app.clone();
     Ok(spawn_transfer(
         app,
         session_id,
@@ -257,14 +265,16 @@ pub async fn sftp_upload(
                     let t = t.clone();
                     move |p: TransferProgress| t.progress(p)
                 };
-                sftp.upload(&local, &remote, progress, token).await
+                let result = sftp.upload(&local, &remote, progress, token).await;
+                crate::host::release_document(&import_app, &local).await;
+                result
             })
         },
     ))
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn transfer_cancel(state: State<'_, AppState>, transfer_id: String) {
     state.ssh.cancel_transfer(&transfer_id);
 }

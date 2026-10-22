@@ -1,3 +1,4 @@
+import { hostCapabilities } from "@/lib/hostServices";
 import { useEffect, useId, useState } from "react";
 import { errorMessage } from "@/app/errors";
 import { Button, IconButton, LinkButton, Segmented, Switch, TextField } from "@/components/controls";
@@ -74,7 +75,10 @@ export function McpServerDialog({
   const t = useT();
   const ids = { form: useId(), name: useId(), command: useId(), url: useId(), rows: useId() };
   const fromTemplate = server ? null : template;
-  const [form, setForm] = useState<McpForm>(() => (fromTemplate ? templateMcpForm(fromTemplate, otherNames) : initialMcpForm(server)));
+  const [form, setForm] = useState<McpForm>(() => {
+    const initial = fromTemplate ? templateMcpForm(fromTemplate, otherNames) : initialMcpForm(server);
+    return !server && !hostCapabilities().stdioMcp ? { ...initial, kind: "http" } : initial;
+  });
   const [tokenLink] = useState<TokenLink | null>(() => {
     const row = fromTemplate && form.headers[0];
     return row ? { uid: row.uid, label: TOKEN_LINK[fromTemplate.id], url: fromTemplate.tokenUrl } : null;
@@ -199,12 +203,12 @@ export function McpServerDialog({
                 ariaLabel={t("aiSettings.mcp.f.transport")}
                 value={form.kind}
                 options={[
-                  { value: "stdio", label: t("aiSettings.mcp.transport.stdio") },
+                  { value: "stdio", label: t("aiSettings.mcp.transport.stdio"), disabled: !hostCapabilities().stdioMcp },
                   { value: "http", label: t("aiSettings.mcp.transport.http") },
                 ]}
                 onChange={(kind) => patch({ kind })}
               />
-              <HintText>{t(form.kind === "stdio" ? "aiSettings.mcp.transport.stdioHint" : "aiSettings.mcp.transport.httpHint")}</HintText>
+              <HintText>{form.kind === "stdio" && !hostCapabilities().stdioMcp ? t("host.localUnavailable") : t(form.kind === "stdio" ? "aiSettings.mcp.transport.stdioHint" : "aiSettings.mcp.transport.httpHint")}</HintText>
             </div>
           </FormRow>
           {form.kind === "stdio" ? (

@@ -17,10 +17,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
+use crate::host::AppHandle;
 use hatoba_core::model::{Host, HostAuth, Item};
 use hatoba_core::vault::Vault;
 use hatoba_ssh::{ConnectConfig, ProxyConfig, SshSession};
-use tauri::AppHandle;
 use tokio::sync::{Notify, OnceCell, OwnedSemaphorePermit, Semaphore};
 use tokio_util::sync::CancellationToken;
 
@@ -156,7 +156,7 @@ fn lock(inner: &Mutex<Inner>) -> MutexGuard<'_, Inner> {
 
 /// Closes a connection without waiting for it.
 fn close(session: SshSession) {
-    tauri::async_runtime::spawn(async move { session.disconnect().await });
+    crate::host::async_runtime::spawn(async move { session.disconnect().await });
 }
 
 impl Dashboard {
@@ -195,7 +195,7 @@ impl Dashboard {
                     cancel: CancellationToken::new(),
                     retry: Arc::new(Notify::new()),
                 };
-                tauri::async_runtime::spawn(read_host(
+                crate::host::async_runtime::spawn(read_host(
                     app.clone(),
                     host_id.to_owned(),
                     reader_id,
@@ -436,7 +436,7 @@ impl Dashboard {
         };
         let inner = Arc::clone(&self.inner);
         let host_id = host_id.to_owned();
-        tauri::async_runtime::spawn(async move {
+        crate::host::async_runtime::spawn(async move {
             tokio::time::sleep(LINGER).await;
             let own = {
                 let mut inner = lock(&inner);

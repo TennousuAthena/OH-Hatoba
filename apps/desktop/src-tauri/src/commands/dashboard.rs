@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use tauri::ipc::Channel;
-use tauri::{AppHandle, State};
+use crate::host::ipc::Channel;
+use crate::host::{AppHandle, State};
 
 use crate::dto::DashboardEvent;
 use crate::error::{AppError, AppResult};
@@ -13,8 +13,8 @@ use crate::state::AppState;
 /// in place of the page's earlier watch, until `dashboard_unwatch` with the returned id or the
 /// lock. What happens to each host streams on `channel`. Hosts both watches read keep their
 /// connections.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn dashboard_watch(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -31,15 +31,15 @@ pub fn dashboard_watch(
 
 /// Stops the watch `watch_id`; the connections close a minute later unless the page watches
 /// their hosts again.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn dashboard_unwatch(state: State<'_, AppState>, watch_id: u64) {
     state.dashboard.unwatch(watch_id);
 }
 
 /// **Retry**: signs in to a held host again, and tries an offline or failed one now.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn dashboard_retry(state: State<'_, AppState>, host_id: String) {
     state.dashboard.retry(&host_id);
 }

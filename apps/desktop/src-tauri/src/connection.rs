@@ -12,13 +12,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
+use crate::host::AppHandle;
+use crate::host::Event;
 use hatoba_core::model::{ForwardKind, Item, PortForward};
 use hatoba_core::vault::Vault;
 use hatoba_ssh::{
     ConnectConfig, DynamicForward, ForwardHandle, LocalForward, RemoteForward, SshSession,
 };
-use tauri::AppHandle;
-use tauri_specta::Event;
 
 use crate::dto::{
     ConnectionsEvent, FailedForwardView, ForwardsLostEvent, HostConnectionView, RunningForwardView,
@@ -177,7 +177,7 @@ impl Connection {
         };
         if close {
             let session = self.session.clone();
-            tauri::async_runtime::spawn(async move { session.disconnect().await });
+            crate::host::async_runtime::spawn(async move { session.disconnect().await });
         }
     }
 
@@ -437,7 +437,7 @@ pub async fn start(
         let conn = Arc::clone(&starting.0);
         // In a task of its own: a server that takes the request late listens until it is told to
         // stop, which the task does once it is answered.
-        let mut opening = tauri::async_runtime::spawn({
+        let mut opening = crate::host::async_runtime::spawn({
             let (app, conn, id) = (app.clone(), Arc::clone(&conn), forward_id.to_owned());
             async move { open_forward(&crate::state::state(&app), &conn, &id).await }
         });
@@ -454,7 +454,7 @@ pub async fn start(
             Err(_) => {
                 conn.mark_stale();
                 let (app, id) = (app.clone(), forward_id.to_owned());
-                tauri::async_runtime::spawn(async move {
+                crate::host::async_runtime::spawn(async move {
                     let _ = opening.await;
                     // The start went on elsewhere: the forward or failure it left here goes.
                     if conn.stop_forward(&id) {
@@ -796,7 +796,7 @@ async fn open(
 /// Waits for the connection to end. One that ends while still registered ended on its own or
 /// closed with nothing left on it; the lock (SEC-03) and quitting take it out first.
 fn watch(app: AppHandle, conn: Arc<Connection>) {
-    tauri::async_runtime::spawn(async move {
+    crate::host::async_runtime::spawn(async move {
         let err = conn.session.closed().await;
         let state = state(&app);
         let removed = state.connections.remove(&conn);

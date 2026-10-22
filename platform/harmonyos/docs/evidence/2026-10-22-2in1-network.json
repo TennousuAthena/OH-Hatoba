@@ -1,0 +1,56 @@
+{
+  "verifiedAt": "2026-10-22T12:32:04.804726+00:00",
+  "device": "HUAWEI MateBook Pro (2in1)",
+  "system": "HarmonyOS 7 / API26",
+  "webReceivedAndRendered": true,
+  "sharedBusinessSmoke": true,
+  "native": {
+    "host_protocol": 1,
+    "upstream_version": "0.6.0",
+    "upstream_commit": "96fd9edb83d78ddedbf70895669f7a0121c8f74b",
+    "architecture": "aarch64",
+    "target_os": "linux",
+    "target_env": "ohos"
+  },
+  "checks": [
+    {
+      "name": "random_aead_and_tamper_rejection",
+      "passed": true
+    },
+    {
+      "name": "sqlite_schema",
+      "passed": true
+    },
+    {
+      "name": "ssh_ed25519_roundtrip",
+      "passed": true
+    },
+    {
+      "name": "tokio_runtime",
+      "passed": true
+    },
+    {
+      "name": "ai_provider_url_validation",
+      "passed": true
+    }
+  ],
+  "scope": "Real OHOS native TLS trust/rejection, SSH authentication/host-key rejection/exec/PTY binary Unicode/resize, SFTP upload/download through descriptor grants with byte comparison and cancellation, local/remote/dynamic forwards, AI streaming and cancellation, HTTP MCP, OAuth PKCE/state callback and cancellation, descriptor-based config/skill imports and grant revocation, plus shared business IPC smoke. Controlled generated-data fixtures; does not validate actual picker interaction, UI/IME, external account sign-in, or lifecycle recovery.",
+  "networkChecks": {
+    "aiHttpModels": true,
+    "aiStreamingUnicodeAndCancellation": true,
+    "documentConfigSkillZipFolderAndGrantRevocation": true,
+    "dynamicForward": true,
+    "localForward": true,
+    "mcpHttpInitializeListCallAndShutdown": true,
+    "oauthPkceStateCallbackAndCancellation": true,
+    "ptyBinaryUnicodeAndResize": true,
+    "remoteForward": true,
+    "sftpUploadDownloadDocumentGrantsAndCancel": true,
+    "sshExec": true,
+    "sshHandshakeAndAuthentication": true,
+    "sshHostKeyRejection": true,
+    "systemCaHttps": true,
+    "untrustedCertificateRejected": true
+  },
+  "webSshTerminalTransport": true
+}

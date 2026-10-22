@@ -1,37 +1,25 @@
 import { webview } from '@kit.ArkWeb';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import hatoba from 'libhatoba.so';
-import { LOCAL_ORIGIN, LOCAL_ENTRY, isLocalNavigation, resolveLocalAsset } from '../host/LocalResources';
-
-interface HostRequest {
-  v: number;
-  type: string;
-  id: number;
-  command: string;
-}
-
-interface HostFailure {
-  code: string;
-  detail: string;
-}
-
-interface HostReply {
-  v: number;
-  type: string;
-  id: number;
-  ok: boolean;
-  result?: Object;
-  error?: HostFailure;
-}
+import { common } from '@kit.AbilityKit';
+import { NativeHost } from '../host/NativeHost';
+import { ClipboardAccess } from '../host/ClipboardAccess';
+import { LOCAL_ENTRY, DIAGNOSTIC_ENTRY, isLocalNavigation, resolveLocalAsset } from '../host/LocalResources';
 
 @Entry
 @Component
 struct Index {
   private controller: webview.WebviewController = new webview.WebviewController();
-  private ports: webview.WebMessagePort[] = [];
-  private generation: number = 0;
-  private pending: Set<number> = new Set<number>();
+  private host?: NativeHost;
   @State private hostFailed: boolean = false;
+  @StorageLink('OH_HATOBA_DIAGNOSTICS') private diagnostics: boolean = false;
+  @StorageLink('OH_HATOBA_PASTE') private pasteRequested: boolean = false;
+
+  aboutToAppear(): void {
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    this.host = new NativeHost(this.controller, context, (failed: boolean) => { this.hostFailed = failed; });
+  }
+
+  aboutToDisappear(): void { this.host?.begin(); }
 
   private resource(url: string, method: string): WebResourceResponse {
     const response = new WebResourceResponse();
@@ -57,104 +45,52 @@ struct Index {
     return response;
   }
 
-  private closePorts(): void {
-    this.generation++;
-    this.pending.clear();
-    this.ports.forEach((port: webview.WebMessagePort) => {
-      try { port.close(); } catch (_) {}
-    });
-    this.ports = [];
-  }
-
-  aboutToDisappear(): void {
-    this.closePorts();
-  }
-
-  private connect(): void {
-    this.closePorts();
-    try {
-      this.ports = this.controller.createWebMessagePorts();
-      const generation: number = this.generation;
-      this.ports[0].onMessageEvent((message: webview.WebMessage) => {
-      if (typeof message !== 'string' || message.length > 1048576 || this.generation !== generation) return;
-      let request: HostRequest;
-      try {
-        request = JSON.parse(message) as HostRequest;
-      } catch (_) {
-        this.closePorts();
-        return;
-      }
-      if (!request || request.v !== 1) { this.closePorts(); return; }
-      if (request.type !== 'call' && request.type !== 'cancel') return;
-      if (!Number.isSafeInteger(request.id) || request.id < 1) { this.closePorts(); return; }
-      if (request.type === 'cancel') { this.pending.delete(request.id); return; }
-      if (request.type !== 'call' || this.pending.has(request.id)) return;
-      if (this.pending.size >= 64) { this.closePorts(); return; }
-      this.pending.add(request.id);
-      // P0 exposes a real dependency probe only. Business commands must be wired to the shared
-      // runtime before switching the packaged page to the full upstream UI.
-      if (request.command !== 'host_probe') {
-        const error: HostFailure = { code: 'invalid_input', detail: 'Command is not available in the P0 host' };
-        const reply: HostReply = { v: 1, type: 'reply', id: request.id, ok: false, error: error };
-        this.reply(reply, generation);
-        return;
-      }
-      hatoba.probe().then((json: string) => {
-        // This P0 report contains only build metadata and checks over generated test data.
-        hilog.info(0x0000, 'OH-Hatoba', 'P0 native probe: %{public}s', json);
-        const reply: HostReply = { v: 1, type: 'reply', id: request.id, ok: true, result: JSON.parse(json) as Object };
-        this.reply(reply, generation);
-      }).catch(() => {
-        const error: HostFailure = { code: 'internal', detail: 'Native probe failed' };
-        const reply: HostReply = { v: 1, type: 'reply', id: request.id, ok: false, error: error };
-        this.reply(reply, generation);
-      });
-      });
-      // Navigation is restricted to packaged resources below. There are no remote frames.
-      this.controller.postMessage('oh-hatoba-host/v1', [this.ports[1]], LOCAL_ORIGIN);
-      hilog.info(0x0000, 'OH-Hatoba', 'P0 host port offered');
-      this.hostFailed = false;
-    } catch (_) {
-      hilog.error(0x0000, 'OH-Hatoba', 'P0 host port connection failed');
-      this.hostFailed = true;
-      this.closePorts();
-    }
-  }
-
-  private reply(reply: HostReply, generation: number): void {
-    if (generation !== this.generation || !this.pending.delete(reply.id) || this.ports.length !== 2) return;
-    try {
-      this.ports[0].postMessageEvent(JSON.stringify(reply));
-    } catch (_) {
-      this.hostFailed = true;
-      this.closePorts();
-    }
-  }
-
   build() {
     Column() {
       if (this.hostFailed) {
         Text('原生宿主连接失败，请重新打开应用。').padding(16)
       }
-      Web({ src: LOCAL_ENTRY, controller: this.controller })
+      Web({ src: this.diagnostics ? DIAGNOSTIC_ENTRY : LOCAL_ENTRY, controller: this.controller })
         .javaScriptAccess(true)
+        .keyboardAvoidMode(WebKeyboardAvoidMode.RESIZE_CONTENT)
         .domStorageAccess(false)
         .fileAccess(false)
+        .onShowFileSelector((event) => {
+          if (!event || !this.host) return false;
+          const result = event.result;
+          const mode = event.fileSelector.getMode();
+          if (mode !== FileSelectorMode.FileOpenMode && mode !== FileSelectorMode.FileOpenMultipleMode) { result.handleFileList([]); return true; }
+          this.host.selectForWeb(mode === FileSelectorMode.FileOpenMultipleMode).then((uris: string[]) => result.handleFileList(uris));
+          return true;
+        })
         .mixedMode(MixedMode.None)
         .onInterceptRequest((event) => this.resource(event?.request.getRequestUrl() ?? '', event?.request.getRequestMethod() ?? ''))
         .onPageBegin(() => {
           hilog.info(0x0000, 'OH-Hatoba', 'P0 page loading');
-          this.closePorts();
+          this.host?.begin();
         })
         .onPageEnd(() => {
           hilog.info(0x0000, 'OH-Hatoba', 'P0 page loaded');
-          this.connect();
+          this.host?.connect(this.diagnostics);
         })
         .onConsole((event) => {
+          if (event?.message.getMessage() === 'OH-Hatoba application boot completed') hilog.info(0x0000, 'OH-Hatoba', 'Application boot completed');
+          if (event?.message.getMessage() === 'OH-Hatoba application rendered') hilog.info(0x0000, 'OH-Hatoba', 'Application rendered');
+          if (event?.message.getMessage() === 'OH-Hatoba host handshake received') {
+            hilog.info(0x0000, 'OH-Hatoba', 'Web host handshake received');
+          }
           // Never forward arbitrary Web console data, which could contain future user data.
           if (event?.message.getMessage() === 'OH-Hatoba P0 probe rendered') {
             hilog.info(0x0000, 'OH-Hatoba', 'P0 Web received and rendered native probe');
           }
+          if (this.diagnostics && event?.message.getMessage() === 'OH-Hatoba shared business smoke rendered') {
+            hilog.info(0x0000, 'OH-Hatoba', 'Shared business smoke passed and rendered');
+          }
+          if (this.diagnostics && event?.message.getMessage() === 'OH-Hatoba network probe rendered') {
+            hilog.info(0x0000, 'OH-Hatoba', 'Network probe passed and rendered');
+          }
+          if (this.diagnostics && event?.message.getMessage() === 'OH-Hatoba Web SSH transport passed') hilog.info(0x0000, 'OH-Hatoba', 'Web SSH transport passed');
+          if (this.diagnostics && event?.message.getMessage() === 'OH-Hatoba diagnostic failed') hilog.error(0x0000, 'OH-Hatoba', 'Diagnostic failed');
           if (event?.message.getMessageLevel() === MessageLevel.Error) {
             hilog.error(0x0000, 'OH-Hatoba', 'P0 Web console error at line %{public}d', event.message.getLineNumber());
           }
@@ -169,7 +105,17 @@ struct Index {
           return !isLocalNavigation(url);
         })
         .width('100%')
-        .height('100%')
+        .layoutWeight(1)
+      if (this.pasteRequested) {
+        Row({ space: 16 }) {
+          Text('点击系统粘贴按钮继续').layoutWeight(1)
+          PasteButton().onClick((_event: ClickEvent, result: PasteButtonOnClickResult) => {
+            if (result === PasteButtonOnClickResult.SUCCESS) ClipboardAccess.paste();
+            else ClipboardAccess.cancel();
+          })
+          Button('取消').onClick(() => ClipboardAccess.cancel())
+        }.width('100%').padding(12)
+      }
     }.width('100%').height('100%')
   }
 }

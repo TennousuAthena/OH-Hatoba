@@ -22,7 +22,8 @@ jobs:
       - run: pnpm --filter @hatoba/desktop typecheck
       - run: pnpm --filter @hatoba/desktop exec vitest run src/ipc/tauri.test.ts src/ipc/harmonyos
       - run: pnpm --filter @hatoba/desktop exec vite build --mode harmonyos --config vite.harmonyos.config.ts
-      - run: cargo test -p hatoba-ohos --locked
+      - run: cargo test -p hatoba-ohos -p hatoba-runtime --lib --locked
+      - run: cargo clippy -p hatoba-ohos -p hatoba-runtime -p hatoba-net --all-targets --features hatoba-ohos/test-tools --locked -- -D warnings
       - run: node scripts/harmonyos/check-boundaries.mjs
       # Native cross-build/HAP require the separately installed HarmonyOS SDK. Run build-hap.sh
       # on the development/release host; do not claim this Linux job validates an OHOS device.

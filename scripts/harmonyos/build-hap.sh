@@ -7,6 +7,8 @@ export HATOBA_OHOS_NDK="${HATOBA_OHOS_NDK:-$DEVECO_SDK_HOME/default/openharmony/
 cd "$root"
 node scripts/harmonyos/contracts.mjs --check
 node scripts/harmonyos/check-boundaries.mjs
+# Build the same offline deployment package embedded by the desktop shell.
+pnpm worker:bundle
 scripts/harmonyos/build-native.sh --locked
 pnpm --filter @hatoba/desktop exec vite build --mode harmonyos --config vite.harmonyos.config.ts
 cd platform/harmonyos

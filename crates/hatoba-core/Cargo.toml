@@ -14,6 +14,7 @@ publish = false
 test-util = []
 
 [dependencies]
+hatoba-net.workspace = true
 # Shared with the rest of the workspace.
 tokio = { workspace = true }
 serde.workspace = true

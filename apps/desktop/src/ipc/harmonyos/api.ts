@@ -1,15 +1,15 @@
 import type { HatobaApi } from "../api";
 import { createCommandApi, type ApiTransport } from "../tauri";
-import { connectHost, type HostBridge } from "./bridge";
+import { harmonyBridge, type HostBridge } from "./bridge";
 import { commandContract } from "./commands.generated";
 
 /** Reuse upstream's complete command mapping; no parallel hand-written Harmony API table. */
 export async function createHarmonyApi(host?: HostBridge): Promise<HatobaApi> {
-  const bridge = host ?? await connectHost();
+  const bridge = host ?? await harmonyBridge();
 
   class NativeChannel<T> {
     readonly id: number;
-    onmessage: (payload: T) => void = () => {};
+    onmessage: (payload: T) => unknown = () => {};
     constructor() {
       this.id = bridge.channel((payload) => this.onmessage(payload as T));
     }

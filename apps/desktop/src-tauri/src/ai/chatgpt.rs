@@ -83,7 +83,7 @@ pub fn end_orphaned(state: &AppState) {
     if ids.is_empty() {
         return;
     }
-    tauri::async_runtime::spawn(async move {
+    crate::host::async_runtime::spawn(async move {
         for id in ids {
             let revoked = sessions()
                 .sign_out(&id, &tokio_util::sync::CancellationToken::new())

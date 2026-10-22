@@ -4,6 +4,8 @@ import { defineMessages } from "./define";
 export default defineMessages({
   "zh-CN": {
     "app.name": "Hatoba",
+    "host.localUnavailable": "此设备不支持本地进程，配置会保留并继续同步。",
+    "host.notificationPermission": "授权系统通知",
 
     "btn.cancel": "取消",
     "btn.save": "保存",
@@ -171,6 +173,8 @@ export default defineMessages({
   },
   en: {
     "app.name": "Hatoba",
+    "host.localUnavailable": "Local processes are unavailable on this device. This configuration stays saved and synced.",
+    "host.notificationPermission": "Allow system notifications",
 
     "btn.cancel": "Cancel",
     "btn.save": "Save",
@@ -344,6 +348,8 @@ export default defineMessages({
   },
   ja: {
     "app.name": "Hatoba",
+    "host.localUnavailable": "このデバイスではローカルプロセスを利用できません。設定は保存・同期されます。",
+    "host.notificationPermission": "システム通知を許可",
 
     "btn.cancel": "キャンセル",
     "btn.save": "保存",

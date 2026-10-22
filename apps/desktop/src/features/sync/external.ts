@@ -1,4 +1,5 @@
-import { isTauri } from "@/ipc/api";
+import { isTauri, isHarmonyOS } from "@/ipc/api";
+import { hostService } from "@/lib/hostServices";
 
 export const DEPLOY_URL =
   "https://deploy.workers.cloudflare.com/?url=https://github.com/scarletkc/Hatoba/tree/main/workers/sync";
@@ -10,6 +11,7 @@ export const DEPLOY_TOKEN_URL =
 
 /** Opens a link in the system browser (plugin-opener in the app, a new tab in a plain browser). */
 export async function openExternal(url: string): Promise<void> {
+  if (isHarmonyOS()) return hostService("open_url", { url });
   if (isTauri()) {
     const { openUrl } = await import("@tauri-apps/plugin-opener");
     await openUrl(url);

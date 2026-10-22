@@ -3,7 +3,7 @@ import capabilities from "../../../src-tauri/capabilities/default.json";
 import { openExternal } from "./clipboard";
 
 const native = vi.hoisted(() => ({ enabled: false, openUrl: vi.fn() }));
-vi.mock("@/ipc/api", () => ({ isTauri: () => native.enabled }));
+vi.mock("@/ipc/api", () => ({ isTauri: () => native.enabled, isHarmonyOS: () => false }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: native.openUrl }));
 
 beforeEach(() => {

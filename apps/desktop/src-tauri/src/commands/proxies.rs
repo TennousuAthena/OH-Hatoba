@@ -1,8 +1,8 @@
 //! Saved SOCKS5 and HTTP proxies, and the default proxy of this device (SSH-13).
 
+use crate::host::{AppHandle, State};
 use hatoba_core::model::{HostProxy, Item, Proxy, ProxyKind as CoreKind};
 use hatoba_core::vault::Vault;
-use tauri::{AppHandle, State};
 use zeroize::Zeroizing;
 
 use crate::convert::proxy_view;
@@ -99,8 +99,8 @@ pub fn proxy_from_input(input: &ProxyInput, existing: Option<&Proxy>) -> AppResu
     })
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn proxies_list(state: State<'_, AppState>) -> AppResult<Vec<ProxyView>> {
     state.with_unlocked(|v| {
         let mut proxies: Vec<ProxyView> = v
@@ -113,8 +113,8 @@ pub fn proxies_list(state: State<'_, AppState>) -> AppResult<Vec<ProxyView>> {
     })
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn proxy_save(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -133,8 +133,8 @@ pub fn proxy_save(
     Ok(view)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn proxy_delete(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
     state.with_unlocked(|v| remove(v, &id))?;
     sync::local_change(&app);

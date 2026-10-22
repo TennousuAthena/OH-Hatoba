@@ -6,7 +6,8 @@ import { Button, Checkbox, Icon, Spinner } from "@/components/controls";
 import { FooterSpacer, Sheet, SheetHeader, toast } from "@/components/overlay";
 import { ErrorText } from "@/components/patterns";
 import { useT } from "@/i18n";
-import { api, toAppError } from "@/ipc/api";
+import { hostCapabilities } from "@/lib/hostServices";
+import { api, toAppError, isHarmonyOS } from "@/ipc/api";
 import type { ImportPreview, ImportSource } from "@/ipc/types";
 import { cx } from "@/lib/cx";
 import { pickOpenPath } from "@/lib/native";
@@ -64,6 +65,7 @@ export function ImportDialog({ source, onClose }: { source: ImportSource; onClos
     // Ids and key files belong to the sessions they were read from.
     setPicked(new Set());
     setImportKeys(false);
+    if (isHarmonyOS() && !path) return;
     api
       .hosts_import_preview(source, path)
       .then((found) => {
@@ -81,7 +83,7 @@ export function ImportDialog({ source, onClose }: { source: ImportSource; onClos
 
   const items = preview?.candidates ?? null;
   // `~/.ssh/config` is named as on the user's system; another client's sessions where they were read.
-  const location = app ? preview?.location : platform === "windows" ? "%USERPROFILE%\\.ssh\\config" : "~/.ssh/config";
+  const location = isHarmonyOS() ? (path ? fileName(path) : undefined) : app ? preview?.location : platform === "windows" ? "%USERPROFILE%\\.ssh\\config" : "~/.ssh/config";
 
   const toggle = (id: string, on: boolean) =>
     setPicked((prev) => {
@@ -138,8 +140,8 @@ export function ImportDialog({ source, onClose }: { source: ImportSource; onClos
               {allPicked ? t("hosts.import.selectNone") : t("hosts.import.selectAll")}
             </Button>
           )}
-          {CHOOSE[source].map((choice) => (
-            <Button key={"directory" in choice ? "folder" : "file"} size="sm" disabled={busy} onClick={() => void chooseOther(choice)}>
+          {(isHarmonyOS() && source === "ssh_config" ? [{ extensions: [] }] : CHOOSE[source]).map((choice) => (
+            <Button key={"directory" in choice ? "folder" : "file"} size="sm" disabled={busy || ("directory" in choice && !hostCapabilities().folderPicker)} onClick={() => void chooseOther(choice)}>
               {"directory" in choice ? t("hosts.import.chooseFolder") : t("hosts.import.chooseFile")}
             </Button>
           ))}

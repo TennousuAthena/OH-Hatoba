@@ -1,1 +1,9 @@
 export const probe: () => Promise<string>;
+export const initialize: (config: string) => Promise<string>;
+export const submit: (message: string) => string;
+export const systemReply: (message: string) => string;
+export const grant: (fd: number, name: string, write: boolean) => string;
+export const drain: () => Array<string | ArrayBuffer>;
+export const drainSystem: () => string[];
+export const detach: () => void;
+export const lifecycle: (event: string) => string;

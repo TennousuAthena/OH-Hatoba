@@ -16,7 +16,8 @@ export class HostBridge {
   private channelSequence = 0;
   private closed = false;
   private pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: AppError) => void; timer: ReturnType<typeof setTimeout> }>();
-  private channels = new Map<number, (payload: unknown) => void>();
+  private channels = new Map<number, (payload: unknown) => unknown>();
+  private acknowledgements = new Map<number, Promise<void>>();
   private listeners = new Map<string, Set<(payload: unknown) => void>>();
 
   constructor(private readonly port: MessagePort, private readonly timeoutMs = 60_000) {
@@ -50,7 +51,7 @@ export class HostBridge {
     });
   }
 
-  channel(callback: (payload: unknown) => void): number {
+  channel(callback: (payload: unknown) => unknown): number {
     if (this.closed || this.channels.size >= MAX_CHANNELS) throw failure("HarmonyOS channel limit reached");
     const id = ++this.channelSequence;
     this.channels.set(id, callback);
@@ -59,6 +60,7 @@ export class HostBridge {
 
   releaseChannel(id: number) {
     this.channels.delete(id);
+    this.acknowledgements.delete(id);
   }
 
   listen<K extends keyof EventMap>(event: K, callback: (payload: EventMap[K]) => void): () => void {
@@ -82,6 +84,7 @@ export class HostBridge {
     }
     this.pending.clear();
     this.channels.clear();
+    this.acknowledgements.clear();
     this.listeners.clear();
   }
 
@@ -98,8 +101,14 @@ export class HostBridge {
       const id = new DataView(data).getUint32(0, true);
       const handler = this.channels.get(id);
       if (handler) {
-        handler(data.slice(4));
-        this.send({ v: HOST_PROTOCOL, type: "ack", channel: id, bytes: data.byteLength - 4 });
+        const consumed = handler(data.slice(4));
+        // xterm resolves after parsing the bytes. A slow renderer must hold native credits.
+        // Keep ACK order even if consumers resolve their promises out of order.
+        const tail = Promise.all([this.acknowledgements.get(id), consumed]).then(() => {
+          if (!this.closed && this.channels.has(id)) this.send({ v: HOST_PROTOCOL, type: "ack", channel: id, bytes: data.byteLength - 4 });
+        }).catch(() => { this.close("Terminal consumer failed"); });
+        this.acknowledgements.set(id, tail);
+        void tail.then(() => { if (this.acknowledgements.get(id) === tail) this.acknowledgements.delete(id); });
       }
       return;
     }
@@ -138,6 +147,7 @@ export function connectHost(timeoutMs = 10_000): Promise<HostBridge> {
   return new Promise((resolve, reject) => {
     const receive = (event: MessageEvent) => {
       if (event.data !== HANDSHAKE || event.ports.length !== 1) return;
+      console.info('OH-Hatoba host handshake received');
       clearTimeout(timer);
       window.removeEventListener("message", receive);
       const bridge = new HostBridge(event.ports[0]);
@@ -150,4 +160,10 @@ export function connectHost(timeoutMs = 10_000): Promise<HostBridge> {
     }, timeoutMs);
     window.addEventListener("message", receive);
   });
+}
+
+let sharedBridge: Promise<HostBridge> | undefined;
+/** Business API and system services share one native port and one handshake. */
+export function harmonyBridge(): Promise<HostBridge> {
+  return sharedBridge ??= connectHost();
 }

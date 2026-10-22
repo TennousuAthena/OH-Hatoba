@@ -1,3 +1,4 @@
+import { hostCapabilities } from "@/lib/hostServices";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Icon, IconButton, Switch } from "@/components/controls";
 import { layoutStyles } from "@/components/layout";
@@ -327,7 +328,7 @@ function ServerRow({
         </button>
         <div className={s.actions}>
           <span title={t("aiSettings.mcp.row.enableTip")}>
-            <Switch checked={server.enabled} label={t("aiSettings.mcp.row.enable", { name: server.name })} onChange={onEnabled} />
+            <Switch disabled={server.transport.kind === "stdio" && !hostCapabilities().stdioMcp} checked={server.enabled} label={t("aiSettings.mcp.row.enable", { name: server.name })} onChange={onEnabled} />
           </span>
           <IconButton icon="pencil-simple" label={t("aiSettings.mcp.row.edit", { name: server.name })} onClick={onEdit} />
           <IconButton icon="trash" label={t("aiSettings.mcp.row.delete", { name: server.name })} danger onClick={onDelete} />
@@ -370,7 +371,7 @@ function ServerDetails({
   const tools = status?.tools ?? [];
   const stderr = stderrText(status?.stderr ?? []);
   const starting = state === "starting" || working === "start";
-  const sentence = off
+  const sentence = server.transport.kind === "stdio" && !hostCapabilities().stdioMcp ? t("host.localUnavailable") : off
     ? t("aiSettings.mcp.status.off")
     : state === "running"
       ? t("aiSettings.mcp.status.running", { n: tools.length })
@@ -380,7 +381,7 @@ function ServerDetails({
     <div className={s.details}>
       <div className={s.statusBar}>
         <span className={s.statusText}>{sentence}</span>
-        {server.enabled && (
+        {server.enabled && (server.transport.kind !== "stdio" || hostCapabilities().stdioMcp) && (
           <div className={s.statusButtons}>
             <Button
               size="sm"

@@ -3,9 +3,9 @@
 
 use std::sync::Arc;
 
+use crate::host::ipc::Channel;
+use crate::host::{AppHandle, State};
 use hatoba_local::{LocalPty, PtyEvent, PtySize, Shell, ShellKind};
-use tauri::ipc::Channel;
-use tauri::{AppHandle, State};
 use tokio::sync::mpsc;
 
 use crate::commands::ssh::{FRAME_CLOSED, FRAME_DATA, TermFrame, emit_state};
@@ -30,8 +30,8 @@ pub(crate) fn shell_view(shell: &Shell, default: bool) -> LocalShellView {
 }
 
 /// The shells a local tab can run (LOCAL-02), the default one first.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn local_shells() -> AppResult<Vec<LocalShellView>> {
     let shells = tokio::task::spawn_blocking(hatoba_local::shells::detect)
         .await
@@ -45,8 +45,8 @@ pub async fn local_shells() -> AppResult<Vec<LocalShellView>> {
 
 /// Starts the shell `shell_id` in a new PTY for a local tab (LOCAL-01) and returns the session
 /// id. Its output streams on `channel` until it exits or `local_close`.
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn local_open(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -88,7 +88,7 @@ fn pump(
     mut events: mpsc::Receiver<PtyEvent>,
     channel: Channel<TermFrame>,
 ) {
-    tauri::async_runtime::spawn(async move {
+    crate::host::async_runtime::spawn(async move {
         while let Some(event) = events.recv().await {
             match event {
                 PtyEvent::Data(bytes) => {
@@ -117,8 +117,8 @@ fn pump(
     });
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn local_write(
     state: State<'_, AppState>,
     session_id: String,
@@ -128,8 +128,8 @@ pub async fn local_write(
 }
 
 /// Writes bytes as they are, for xterm's binary mouse reports (see `ssh_write_bytes`).
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn local_write_bytes(
     state: State<'_, AppState>,
     session_id: String,
@@ -151,8 +151,8 @@ fn write(state: &AppState, session_id: &str, data: Vec<u8>) -> AppResult<()> {
         .map_err(AppError::local)
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn local_resize(
     state: State<'_, AppState>,
     session_id: String,
@@ -167,8 +167,8 @@ pub async fn local_resize(
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn local_close(state: State<'_, AppState>, session_id: String) -> AppResult<()> {
     if let Some(live) = state.local.take(&session_id) {
         live.close();
