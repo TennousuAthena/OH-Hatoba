@@ -12,7 +12,15 @@ import { pickSavePath } from "@/lib/native";
 import { aiErrorMessage } from "./aiShared";
 import { McpImportDialog } from "./McpImportDialog";
 import { McpServerDialog } from "./McpServerDialog";
-import { annotationKeys, serverState, stderrText, toolAllowed, transportSummary, upsertServer, withAlwaysAllow } from "./mcpLogic";
+import {
+  annotationKeys,
+  serverState,
+  stderrText,
+  toolAllowed,
+  transportSummary,
+  upsertServer,
+  withAlwaysAllow,
+} from "./mcpLogic";
 import { MCP_TEMPLATES, type McpTemplate } from "./mcpTemplates";
 import { EmptyBlock, StatusRow } from "./sectionParts";
 import a from "./AiPane.module.css";
@@ -227,7 +235,11 @@ export function McpSection() {
           </StatusRow>
         )}
         {loaded && list.length === 0 && (
-          <EmptyBlock icon="plugs-connected" title={t("aiSettings.mcp.empty.title")} body={t("aiSettings.mcp.empty.body")}>
+          <EmptyBlock
+            icon="plugs-connected"
+            title={t("aiSettings.mcp.empty.title")}
+            body={t("aiSettings.mcp.empty.body")}
+          >
             <Button variant="primary" icon="plus" onClick={() => setEditing({ server: null })}>
               {t("aiSettings.mcp.add")}
             </Button>
@@ -311,11 +323,21 @@ function ServerRow({
   return (
     <div className={cx(s.server, open && s.open)}>
       <div className={s.row}>
-        <button type="button" className={s.main} aria-expanded={open} aria-label={t("aiSettings.mcp.row.details", { name: server.name })} onClick={onToggleOpen}>
+        <button
+          type="button"
+          className={s.main}
+          aria-expanded={open}
+          aria-label={t("aiSettings.mcp.row.details", { name: server.name })}
+          onClick={onToggleOpen}
+        >
           <Icon name="caret-right" className={cx(s.caret, open && s.caretOpen)} />
           <span className={s.text}>
             <span className={s.nameLine}>
-              <span className={s.dot} data-state={off ? "stopped" : state} style={{ background: STATE_COLOR[off ? "stopped" : state] }} />
+              <span
+                className={s.dot}
+                data-state={off ? "stopped" : state}
+                style={{ background: STATE_COLOR[off ? "stopped" : state] }}
+              />
               <span className={s.name}>{server.name}</span>
               <Chip mono>{t(`aiSettings.mcp.kind.${server.transport.kind}` as MessageKey)}</Chip>
               {server.always_ask && <Chip tone="warning">{t("aiSettings.mcp.alwaysAsk")}</Chip>}
@@ -328,10 +350,24 @@ function ServerRow({
         </button>
         <div className={s.actions}>
           <span title={t("aiSettings.mcp.row.enableTip")}>
-            <Switch disabled={server.transport.kind === "stdio" && !hostCapabilities().stdioMcp} checked={server.enabled} label={t("aiSettings.mcp.row.enable", { name: server.name })} onChange={onEnabled} />
+            <Switch
+              disabled={server.transport.kind === "stdio" && !hostCapabilities().stdioMcp}
+              checked={server.enabled}
+              label={t("aiSettings.mcp.row.enable", { name: server.name })}
+              onChange={onEnabled}
+            />
           </span>
-          <IconButton icon="pencil-simple" label={t("aiSettings.mcp.row.edit", { name: server.name })} onClick={onEdit} />
-          <IconButton icon="trash" label={t("aiSettings.mcp.row.delete", { name: server.name })} danger onClick={onDelete} />
+          <IconButton
+            icon="pencil-simple"
+            label={t("aiSettings.mcp.row.edit", { name: server.name })}
+            onClick={onEdit}
+          />
+          <IconButton
+            icon="trash"
+            label={t("aiSettings.mcp.row.delete", { name: server.name })}
+            danger
+            onClick={onDelete}
+          />
         </div>
       </div>
       {open && (
@@ -391,7 +427,13 @@ function ServerDetails({
             >
               {state === "running" || state === "failed" ? t("aiSettings.mcp.restart") : t("aiSettings.mcp.start")}
             </Button>
-            <Button size="sm" icon="stop" busy={working === "stop"} disabled={state === "stopped" || state === "failed"} onClick={() => onRun("stop")}>
+            <Button
+              size="sm"
+              icon="stop"
+              busy={working === "stop"}
+              disabled={state === "stopped" || state === "failed"}
+              onClick={() => onRun("stop")}
+            >
               {t("aiSettings.mcp.stop")}
             </Button>
           </div>
@@ -422,7 +464,11 @@ function ServerDetails({
           <span className={s.allowAllLabel}>{t("aiSettings.mcp.allowAll")}</span>
           <HintText>{t("aiSettings.mcp.allowAll.hint")}</HintText>
         </div>
-        <Switch checked={server.always_allow} label={t("aiSettings.mcp.allowAll")} onChange={(allow) => onAlwaysAllow(null, allow)} />
+        <Switch
+          checked={server.always_allow}
+          label={t("aiSettings.mcp.allowAll")}
+          onChange={(allow) => onAlwaysAllow(null, allow)}
+        />
       </div>
 
       <div className={s.toolsHead}>
@@ -448,7 +494,17 @@ function ServerDetails({
   );
 }
 
-function ToolItem({ tool, allowed, locked, onChange }: { tool: McpToolView; allowed: boolean; locked: boolean; onChange: (allow: boolean) => void }) {
+function ToolItem({
+  tool,
+  allowed,
+  locked,
+  onChange,
+}: {
+  tool: McpToolView;
+  allowed: boolean;
+  locked: boolean;
+  onChange: (allow: boolean) => void;
+}) {
   const t = useT();
   const keys = annotationKeys(tool.annotations);
   return (
@@ -458,16 +514,26 @@ function ToolItem({ tool, allowed, locked, onChange }: { tool: McpToolView; allo
           <span className={cx(s.toolName, "selectable")} title={tool.name}>
             {tool.tool}
           </span>
-          {tool.annotations.title && tool.annotations.title !== tool.tool && <span className={s.toolDisplay}>{tool.annotations.title}</span>}
+          {tool.annotations.title && tool.annotations.title !== tool.tool && (
+            <span className={s.toolDisplay}>{tool.annotations.title}</span>
+          )}
           {keys.map((key) => (
             <Chip key={key} tone={key === "destructive" ? "error" : "neutral"}>
               {t(`aiSettings.mcp.ann.${key}` as MessageKey)}
             </Chip>
           ))}
         </div>
-        <label className={cx(s.allow, locked && s.allowLocked)} title={locked ? t("aiSettings.mcp.allowAll") : undefined}>
+        <label
+          className={cx(s.allow, locked && s.allowLocked)}
+          title={locked ? t("aiSettings.mcp.allowAll") : undefined}
+        >
           <span>{t("aiSettings.mcp.allowTool")}</span>
-          <Switch checked={allowed} disabled={locked} label={t("aiSettings.mcp.allowToolLabel", { tool: tool.tool })} onChange={onChange} />
+          <Switch
+            checked={allowed}
+            disabled={locked}
+            label={t("aiSettings.mcp.allowToolLabel", { tool: tool.tool })}
+            onChange={onChange}
+          />
         </label>
       </div>
       <div className={cx(s.toolDescription, "selectable", !tool.description && s.toolNone)}>

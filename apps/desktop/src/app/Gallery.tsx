@@ -10,6 +10,7 @@ import {
   Segmented,
   Spinner,
   StatusDot,
+  Stepper,
   Switch,
   TextArea,
   TextField,
@@ -28,7 +29,19 @@ import {
   Tag,
   TagInput,
 } from "@/components/layout";
-import { ConfirmHost, Dialog, FooterSpacer, Menu, PopupSelect, Sheet, SheetHeader, ToastHost, confirm, toast, useMenu } from "@/components/overlay";
+import {
+  ConfirmHost,
+  Dialog,
+  FooterSpacer,
+  Menu,
+  PopupSelect,
+  Sheet,
+  SheetHeader,
+  ToastHost,
+  confirm,
+  toast,
+  useMenu,
+} from "@/components/overlay";
 import { Card, Chip, ErrorText, HintText, ListRow, StatusLine } from "@/components/patterns";
 import { applyPrefs, useApp } from "./store";
 import g from "./Gallery.module.css";
@@ -88,7 +101,12 @@ export function Gallery() {
       {mode === "both" ? (
         <div className={g.split}>
           {(["light", "dark"] as const).map((theme) => (
-            <iframe key={`${theme}-${density}`} title={theme} className={g.frame} src={`?gallery&embed&theme=${theme}&density=${density}`} />
+            <iframe
+              key={`${theme}-${density}`}
+              title={theme}
+              className={g.frame}
+              src={`?gallery&embed&theme=${theme}&density=${density}`}
+            />
           ))}
         </div>
       ) : (
@@ -218,6 +236,7 @@ function Choices() {
   const [on, setOn] = useState(true);
   const [checked, setChecked] = useState(true);
   const [pick, setPick] = useState("ed25519");
+  const [size, setSize] = useState(13);
   return (
     <Block title="Choices">
       <Line label="Segmented">
@@ -236,6 +255,10 @@ function Choices() {
         <Switch checked={!on} onChange={(v) => setOn(!v)} label="Off" />
         <Switch checked disabled onChange={() => {}} label="Disabled on" />
         <Switch checked={false} disabled onChange={() => {}} label="Disabled off" />
+      </Line>
+      <Line label="Stepper">
+        <Stepper value={size} min={10} max={24} downLabel="Smaller" upLabel="Larger" onChange={setSize} />
+        <Stepper value={24} min={10} max={24} downLabel="Smaller" upLabel="Larger" onChange={() => {}} />
       </Line>
       <Line label="Checkbox">
         <Checkbox checked={checked} onChange={setChecked}>
@@ -306,7 +329,8 @@ function Indicators() {
         <StatusLine tone="progress">Starting…</StatusLine>
         <StatusLine tone="warning">Host key changed</StatusLine>
         <StatusLine tone="error">
-          channel open failed: administratively prohibited: open failed (the server does not allow forwarding to this address)
+          channel open failed: administratively prohibited: open failed (the server does not allow forwarding to this
+          address)
         </StatusLine>
         <StatusLine>Not started</StatusLine>
       </Line>
@@ -401,7 +425,10 @@ function Patterns() {
           <ListRow status={<StatusLine tone="progress">Starting…</StatusLine>} trailing={actions}>
             <span className={g.mono}>127.0.0.1:3000 → grafana.internal:3000</span>
           </ListRow>
-          <ListRow status={<StatusLine tone="error">Address already in use (os error 10048)</StatusLine>} trailing={actions}>
+          <ListRow
+            status={<StatusLine tone="error">Address already in use (os error 10048)</StatusLine>}
+            trailing={actions}
+          >
             <span className={g.mono}>127.0.0.1:1080 SOCKS proxy</span>
           </ListRow>
         </Group>
@@ -468,7 +495,14 @@ function Overlays() {
         <Button onClick={() => setOpen("dialog")}>Open dialog</Button>
         <Button
           variant="danger"
-          onClick={() => void confirm({ title: "Delete prod-api-tokyo?", body: "This can't be undone.", confirmLabel: "Delete", danger: true })}
+          onClick={() =>
+            void confirm({
+              title: "Delete prod-api-tokyo?",
+              body: "This can't be undone.",
+              confirmLabel: "Delete",
+              danger: true,
+            })
+          }
         >
           confirm()
         </Button>

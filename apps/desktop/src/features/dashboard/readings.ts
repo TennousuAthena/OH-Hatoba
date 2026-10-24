@@ -17,7 +17,7 @@ export interface HostReadout {
   tab: boolean;
   hold: DashboardHold | null;
   error: AppError | null;
-  /** The system of a server that does not run Linux; empty when unknown. */
+  /** The system of a server that runs neither Linux nor macOS; empty when unknown. */
   system: string | null;
   /** The readings of the last few minutes, oldest first. They stay when the host stops answering. */
   history: StatsReading[];
@@ -46,7 +46,16 @@ export function applyEvent(prev: HostReadout | undefined, event: DashboardEvent,
     case "reset":
       return { ...r, os: null, history: [] };
     case "reading":
-      return { ...r, online: true, phase: "reading", os: event.os ?? r.os, tab: event.tab, hold: null, error: null, system: null };
+      return {
+        ...r,
+        online: true,
+        phase: "reading",
+        os: event.os ?? r.os,
+        tab: event.tab,
+        hold: null,
+        error: null,
+        system: null,
+      };
     case "stats":
       return { ...r, online: true, phase: "reading", history: appendReading(r.history, { ...event.stats, at: now }) };
     case "unsupported":

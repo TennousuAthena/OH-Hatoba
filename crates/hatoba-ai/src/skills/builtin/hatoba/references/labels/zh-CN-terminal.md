@@ -48,7 +48,7 @@ The labels that these files name in English, as the interface shows them in Simp
 | Network | 网络 |
 | Disk | 磁盘 |
 | Reading… | 正在读取… |
-| Resource usage is available only for Linux servers. | 资源占用只支持 Linux 服务器。 |
+| Resource usage is available only for Linux and macOS servers. | 资源占用只支持 Linux 和 macOS 服务器。 |
 
 ### Menus
 
@@ -59,11 +59,11 @@ The labels that these files name in English, as the interface shows them in Simp
 | Copy | 复制 |
 | Paste | 粘贴 |
 | Select All | 全选 |
-| Find… | 查找… |
+| Find | 查找 |
 | Ask AI | 询问 AI |
 | Clear Scrollback | 清除回滚缓冲 |
 | Edit Host | 编辑主机 |
-| Save as Host… | 保存为主机… |
+| Save as Host | 保存为主机 |
 
 ### Copy, paste, search and links
 
@@ -76,7 +76,7 @@ The labels that these files name in English, as the interface shows them in Simp
 | Next (Enter) | 下一个（Enter） |
 | Close find (Esc) | 关闭查找（Esc） |
 | Confirm before pasting multiple lines | 粘贴多行文本前确认 |
-| General | 通用 |
+| Terminal | 终端 |
 | Right-Click in Terminal | 终端中的右键 |
 | Copy if selected, otherwise paste | 有选中则复制，否则粘贴 |
 | Show context menu | 弹出菜单 |
@@ -94,14 +94,23 @@ The labels that these files name in English, as the interface shows them in Simp
 | Block | 方块 |
 | Bar | 竖线 |
 | Underline | 下划线 |
-| Scrollback | 回滚缓冲区 |
-| Appearance | 外观 |
-| Terminal Colors | 终端配色 |
+| Text and Cursor | 文字与光标 |
+| Colors | 配色 |
+| Behavior | 行为 |
+| Mode | 模式 |
 | Always Dark | 始终深色 |
 | Always Light | 始终浅色 |
 | Match Appearance | 跟随外观 |
 | In Dark Appearance | 深色外观时 |
 | In Light Appearance | 浅色外观时 |
+| Right-Click in Terminal | 终端中的右键 |
+| Copy if selected, otherwise paste | 有选中则复制，否则粘贴 |
+| Show context menu | 弹出菜单 |
+| Confirm before pasting multiple lines | 粘贴多行文本前确认 |
+| Scrollback | 回滚缓冲区 |
+| Local Terminal Shell | 本地终端的 shell |
+| General | 通用 |
+| Appearance | 外观 |
 
 ## `references/sftp.md`
 
@@ -133,12 +142,12 @@ The labels that these files name in English, as the interface shows them in Simp
 | en | zh-CN |
 |---|---|
 | Open | 打开 |
-| Download… | 下载… |
+| Download | 下载 |
 | Rename | 重命名 |
-| Delete… | 删除… |
+| Delete | 删除 |
 | Copy Path | 复制路径 |
 | New Folder | 新建文件夹 |
-| Upload Files… | 上传文件… |
+| Upload Files | 上传文件 |
 | The name can’t be empty or contain /. | 名称不能为空，也不能包含 /。 |
 | This file will be permanently deleted from the server. This can’t be undone. | 这个文件会从服务器上永久删除，无法撤销。 |
 | This folder and everything in it will be permanently deleted from the server. This can’t be undone. | 这个文件夹及其中的所有内容会从服务器上永久删除，无法撤销。 |
@@ -163,7 +172,7 @@ The labels that these files name in English, as the interface shows them in Simp
 |---|---|
 | Port Forwarding | 端口转发 |
 | No port forwards yet | 还没有端口转发 |
-| Add Forward… | 添加转发… |
+| Add Forward | 添加转发 |
 | Add Port Forward | 添加端口转发 |
 | Host | 主机 |
 | Choose a host. | 请选择主机。 |
@@ -196,7 +205,7 @@ The labels that these files name in English, as the interface shows them in Simp
 | Starting… | 启动中… |
 | Stop | 停止 |
 | Retry | 重试 |
-| Manage Port Forwarding… | 管理端口转发… |
+| Manage Port Forwarding | 管理端口转发 |
 | Can’t read the port forwards. | 无法读取端口转发。 |
 
 ### Keep running in the background
@@ -252,7 +261,7 @@ The labels that these files name in English, as the interface shows them in Simp
 | Key | 密钥 |
 | Ask Each Time | 每次询问 |
 | SSH Agent | SSH Agent |
-| Deploy to Host… | 部署到主机… |
+| Deploy to Host | 部署到主机 |
 
 ### Jump hosts (ProxyJump)
 

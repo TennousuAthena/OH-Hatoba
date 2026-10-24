@@ -48,7 +48,7 @@ The labels that these files name in English, as the interface shows them in Japa
 | Network | ネットワーク |
 | Disk | ディスク |
 | Reading… | 読み取り中… |
-| Resource usage is available only for Linux servers. | リソース使用状況は Linux サーバーでのみ表示できます。 |
+| Resource usage is available only for Linux and macOS servers. | リソース使用状況は Linux と macOS のサーバーでのみ表示できます。 |
 
 ### Menus
 
@@ -59,11 +59,11 @@ The labels that these files name in English, as the interface shows them in Japa
 | Copy | コピー |
 | Paste | 貼り付け |
 | Select All | すべて選択 |
-| Find… | 検索… |
+| Find | 検索 |
 | Ask AI | AI に質問 |
 | Clear Scrollback | スクロールバックを消去 |
 | Edit Host | ホストを編集 |
-| Save as Host… | ホストとして保存… |
+| Save as Host | ホストとして保存 |
 
 ### Copy, paste, search and links
 
@@ -76,7 +76,7 @@ The labels that these files name in English, as the interface shows them in Japa
 | Next (Enter) | 次へ（Enter） |
 | Close find (Esc) | 検索を閉じる（Esc） |
 | Confirm before pasting multiple lines | 複数行を貼り付ける前に確認 |
-| General | 一般 |
+| Terminal | ターミナル |
 | Right-Click in Terminal | ターミナルでの右クリック |
 | Copy if selected, otherwise paste | 選択があればコピー、なければ貼り付け |
 | Show context menu | コンテキストメニューを表示 |
@@ -94,14 +94,23 @@ The labels that these files name in English, as the interface shows them in Japa
 | Block | ブロック |
 | Bar | バー |
 | Underline | アンダーライン |
-| Scrollback | スクロールバック |
-| Appearance | 外観 |
-| Terminal Colors | ターミナルの配色 |
+| Text and Cursor | 文字とカーソル |
+| Colors | 配色 |
+| Behavior | 動作 |
+| Mode | モード |
 | Always Dark | 常にダーク |
 | Always Light | 常にライト |
 | Match Appearance | 外観に合わせる |
 | In Dark Appearance | ダーク外観のとき |
 | In Light Appearance | ライト外観のとき |
+| Right-Click in Terminal | ターミナルでの右クリック |
+| Copy if selected, otherwise paste | 選択があればコピー、なければ貼り付け |
+| Show context menu | コンテキストメニューを表示 |
+| Confirm before pasting multiple lines | 複数行を貼り付ける前に確認 |
+| Scrollback | スクロールバック |
+| Local Terminal Shell | ローカル ターミナルのシェル |
+| General | 一般 |
+| Appearance | 外観 |
 
 ## `references/sftp.md`
 
@@ -133,12 +142,12 @@ The labels that these files name in English, as the interface shows them in Japa
 | en | ja |
 |---|---|
 | Open | 開く |
-| Download… | ダウンロード… |
+| Download | ダウンロード |
 | Rename | 名前を変更 |
-| Delete… | 削除… |
+| Delete | 削除 |
 | Copy Path | パスをコピー |
 | New Folder | 新規フォルダ |
-| Upload Files… | ファイルをアップロード… |
+| Upload Files | ファイルをアップロード |
 | The name can’t be empty or contain /. | 名前を空にしたり、/ を含めたりすることはできません。 |
 | This file will be permanently deleted from the server. This can’t be undone. | このファイルはサーバーから完全に削除されます。元に戻せません。 |
 | This folder and everything in it will be permanently deleted from the server. This can’t be undone. | このフォルダとその中身はすべてサーバーから完全に削除されます。元に戻せません。 |
@@ -163,7 +172,7 @@ The labels that these files name in English, as the interface shows them in Japa
 |---|---|
 | Port Forwarding | ポートフォワーディング |
 | No port forwards yet | ポートフォワーディングがまだありません |
-| Add Forward… | 転送を追加… |
+| Add Forward | 転送を追加 |
 | Add Port Forward | ポートフォワーディングを追加 |
 | Host | ホスト |
 | Choose a host. | ホストを選択してください。 |
@@ -196,7 +205,7 @@ The labels that these files name in English, as the interface shows them in Japa
 | Starting… | 開始中… |
 | Stop | 停止 |
 | Retry | 再試行 |
-| Manage Port Forwarding… | ポートフォワーディングを管理… |
+| Manage Port Forwarding | ポートフォワーディングを管理 |
 | Can’t read the port forwards. | ポートフォワーディングを読み込めません。 |
 
 ### Keep running in the background
@@ -252,7 +261,7 @@ The labels that these files name in English, as the interface shows them in Japa
 | Key | 鍵 |
 | Ask Each Time | 毎回入力 |
 | SSH Agent | SSH Agent |
-| Deploy to Host… | ホストに配置… |
+| Deploy to Host | ホストに配置 |
 
 ### Jump hosts (ProxyJump)
 

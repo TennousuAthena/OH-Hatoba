@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { create } from "zustand";
 import { useT } from "@/i18n";
@@ -55,11 +47,14 @@ export function useExitAnimation(ref: RefObject<HTMLElement | null>, shown = tru
         ghost.style.opacity = opacity;
         for (const el of [ghost, ...ghost.querySelectorAll("[id]")]) el.removeAttribute("id");
         // No longer a layer: code that counts the open dialogs and menus by role passes over it.
-        for (const el of [ghost, ...ghost.querySelectorAll("[role]")]) if (LAYER_ROLES.has(el.getAttribute("role") ?? "")) el.removeAttribute("role");
+        for (const el of [ghost, ...ghost.querySelectorAll("[role]")])
+          if (LAYER_ROLES.has(el.getAttribute("role") ?? "")) el.removeAttribute("role");
         ghost.setAttribute("data-closing", "");
         parent.insertBefore(ghost, next?.parentNode === parent ? next : null);
         // Not the ones that loop, such as a spinner inside it: they never finish.
-        const animations = ghost.getAnimations({ subtree: true }).filter((a) => Number.isFinite(a.effect?.getComputedTiming().endTime));
+        const animations = ghost
+          .getAnimations({ subtree: true })
+          .filter((a) => Number.isFinite(a.effect?.getComputedTiming().endTime));
         if (!animations.length) ghost.remove();
         else void Promise.allSettled(animations.map((a) => a.finished)).then(() => ghost.remove());
       });
@@ -123,11 +118,14 @@ export interface MenuAnchor {
 /**
  * The part of the viewport that menus and popovers stay inside. While Linux paints its own window
  * chrome (`:root[data-floating]`), the viewport also covers the transparent margin around the window
- * surface (`--win-pad`), where clicks pass through to the desktop or start a resize.
+ * surface (`--win-pad`), where clicks pass through to the desktop or start a resize. The margin is in
+ * window pixels, which the interface zoom divides into CSS pixels.
  */
 export function windowSurface(): { left: number; top: number; right: number; bottom: number } {
   const root = document.documentElement;
-  const pad = root.hasAttribute("data-floating") ? parseFloat(getComputedStyle(root).getPropertyValue("--win-pad")) || 0 : 0;
+  const css = getComputedStyle(root);
+  const zoom = parseFloat(css.getPropertyValue("--ui-zoom")) || 1;
+  const pad = root.hasAttribute("data-floating") ? (parseFloat(css.getPropertyValue("--win-pad-px")) || 0) / zoom : 0;
   return { left: pad, top: pad, right: window.innerWidth - pad, bottom: window.innerHeight - pad };
 }
 
@@ -152,7 +150,9 @@ export function Menu({
   const [pos, setPos] = useState({ left: 0, top: anchor.y, transformOrigin: "left top" });
   const [focus, setFocus] = useState(-1);
   // What the arrow keys move through: a disabled item is passed over, as in a native menu.
-  const items = entries.flatMap((e, i) => (e.kind === "separator" || e.kind === "header" || (isItem(e) && e.disabled) ? [] : [i]));
+  const items = entries.flatMap((e, i) =>
+    e.kind === "separator" || e.kind === "header" || (isItem(e) && e.disabled) ? [] : [i],
+  );
   const hasCheck = entries.some((x) => isItem(x) && x.checked !== undefined);
   const hasIcon = entries.some((x) => isItem(x) && x.icon !== undefined);
   const locked = useOverlaysLocked() && !whileLocked;
@@ -228,7 +228,12 @@ export function Menu({
 
   if (locked) return null;
   return createPortal(
-    <div ref={ref} role="menu" className={cx(o.menu, o.popIn, !hasCheck && o.menuNoCheck, hasIcon && o.menuIcons)} style={{ ...pos, minWidth }}>
+    <div
+      ref={ref}
+      role="menu"
+      className={cx(o.menu, o.popIn, !hasCheck && o.menuNoCheck, hasIcon && o.menuIcons)}
+      style={{ ...pos, minWidth }}
+    >
       {entries.map((e, i) => {
         if (e.kind === "separator") return <div key={i} className={o.menuSeparator} />;
         if (e.kind === "header")
@@ -258,7 +263,7 @@ export function Menu({
                     className={cx(o.menuChoiceOption, opt.value === e.value && o.menuChoiceOn)}
                     onClick={() => e.onChange(opt.value)}
                   >
-                    {opt.label}
+                    <span data-label={opt.label}>{opt.label}</span>
                   </button>
                 ))}
               </div>
@@ -301,7 +306,9 @@ export function useMenu() {
   const openBelow = useCallback((el: HTMLElement, alignRight = false) => {
     const r = el.getBoundingClientRect();
     setAnchor((cur) =>
-      cur?.trigger === el ? null : { x: alignRight ? r.right : r.left, y: r.bottom + 4, above: r.top - 4, alignRight, trigger: el },
+      cur?.trigger === el
+        ? null
+        : { x: alignRight ? r.right : r.left, y: r.bottom + 4, above: r.top - 4, alignRight, trigger: el },
     );
   }, []);
   const close = useCallback(() => setAnchor(null), []);

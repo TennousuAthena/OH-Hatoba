@@ -16,6 +16,7 @@ import { useVaultData } from "./data";
 import { useApp } from "./store";
 import { useTabDrag } from "./tabDrag";
 import { useTabs, type TabStatus } from "./tabs";
+import { useOfferedUpdate } from "./update";
 import s from "./TitleBar.module.css";
 
 /** Area that drags the window; double-click toggles maximize (handled by Tauri). */
@@ -62,7 +63,13 @@ export function WindowControls() {
 
   return (
     <div className={cx(s.caption, !focused && s.captionInactive)}>
-      <button type="button" className={s.captionButton} title={t("window.minimize")} aria-label={t("window.minimize")} onClick={() => void currentWindow().then((w) => w?.minimize())}>
+      <button
+        type="button"
+        className={s.captionButton}
+        title={t("window.minimize")}
+        aria-label={t("window.minimize")}
+        onClick={() => void currentWindow().then((w) => w?.minimize())}
+      >
         {glyph(s.glyphMin)}
       </button>
       <button
@@ -79,7 +86,13 @@ export function WindowControls() {
       >
         {maximized ? glyph(s.glyphRestore) : glyph(s.glyphMax)}
       </button>
-      <button type="button" className={cx(s.captionButton, s.captionClose)} title={t("window.close")} aria-label={t("window.close")} onClick={() => void currentWindow().then((w) => w?.close())}>
+      <button
+        type="button"
+        className={cx(s.captionButton, s.captionClose)}
+        title={t("window.close")}
+        aria-label={t("window.close")}
+        onClick={() => void currentWindow().then((w) => w?.close())}
+      >
         {glyph(s.glyphClose)}
       </button>
     </div>
@@ -141,7 +154,12 @@ function useLocalMenu(onNewTab: () => void) {
             onSelect: () => void openLocalTerminal(shell),
           }))),
     { kind: "separator" },
-    { label: t("tabs.hosts"), icon: "hard-drives", hint: shortcutLabel(platform, "Ctrl+Shift+T", "⌘T"), onSelect: onNewTab },
+    {
+      label: t("tabs.hosts"),
+      icon: "hard-drives",
+      hint: shortcutLabel(platform, "Ctrl+Shift+T", "⌘T"),
+      onSelect: onNewTab,
+    },
   ];
   return { menu, open, entries };
 }
@@ -153,8 +171,22 @@ function AiActivity({ slotId }: { slotId: string }) {
   if (activity === "idle") return null;
   const label = t(activity === "waiting" ? "ai.tabWaiting" : "ai.tabRunning");
   return (
-    <span className={cx(s.tabAi, activity === "waiting" ? s.tabAiWaiting : s.tabAiRunning)} title={label} aria-label={label} role="img">
+    <span
+      className={cx(s.tabAi, activity === "waiting" ? s.tabAiWaiting : s.tabAiRunning)}
+      title={label}
+      aria-label={label}
+      role="img"
+    >
       <Icon name={activity === "waiting" ? "hand-palm" : "sparkle"} fill={activity === "waiting"} />
+    </span>
+  );
+}
+
+/** The label, with a hidden copy at the selected weight that keeps the tab's width. */
+function TabLabel({ text }: { text: string }) {
+  return (
+    <span className={s.tabLabel} data-label={text}>
+      <span>{text}</span>
     </span>
   );
 }
@@ -177,22 +209,56 @@ function useOpenNewTabs(list: RefObject<HTMLDivElement | null>, tabs: { id: stri
     for (const id of ids) {
       if (before.has(id)) continue;
       const el = list.current.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(id)}"]`);
-      el?.animate?.([{ maxWidth: "0px", opacity: 0 }, { maxWidth: "200px", opacity: 1 }], { duration, easing });
+      el?.animate?.(
+        [
+          { maxWidth: "0px", opacity: 0 },
+          { maxWidth: "200px", opacity: 1 },
+        ],
+        { duration, easing },
+      );
     }
   }, [list, tabs]);
 }
 
+/**
+ * Lock and Settings, which act on the whole app, in the title bar every tab shares. Lock stays farthest from the
+ * AI button and the window controls, as it can end every session (SEC-03).
+ */
+function AppButtons() {
+  const t = useT();
+  const platform = useApp((st) => st.info.platform);
+  const updateAvailable = useOfferedUpdate() !== null;
+  const lockLabel = `${t("sidebar.lock")} (${shortcutLabel(platform, "Ctrl+Shift+L", "⌘L")})`;
+  const settingsLabel = `${updateAvailable ? t("sidebar.settingsUpdate") : t("sidebar.settings")} (${shortcutLabel(platform, "Ctrl+,", "⌘,")})`;
+  return (
+    <>
+      <button
+        type="button"
+        className={s.barButton}
+        title={lockLabel}
+        aria-label={lockLabel}
+        onClick={() => void useApp.getState().lock()}
+      >
+        <Icon name="lock-simple" size={16} />
+      </button>
+      <button
+        type="button"
+        className={s.barButton}
+        title={settingsLabel}
+        aria-label={settingsLabel}
+        onClick={() => useApp.getState().openSettings(true, updateAvailable ? "about" : undefined)}
+      >
+        <Icon name="gear-six" size={16} />
+        {updateAvailable && <span className={s.updateDot} />}
+      </button>
+    </>
+  );
+}
+
 /** Tab bar merged with the title bar (design TabBar + WIN-01). */
-export function TabBar({ homeLabel, homeIcon, onNewTab, onCloseTab }: {
-  homeLabel: string;
-  homeIcon: string;
-  onNewTab: () => void;
-  onCloseTab: (id: string) => void;
-}) {
+export function TabBar({ onNewTab, onCloseTab }: { onNewTab: () => void; onCloseTab: (id: string) => void }) {
   const t = useT();
   const { tabs, active, activate } = useTabs();
-  const collapsed = useApp((st) => st.sidebarCollapsed);
-  const platform = useApp((st) => st.info.platform);
   const local = useLocalMenu(onNewTab);
   const drag = useTabDrag(tabs);
   const list = useRef<HTMLDivElement>(null);
@@ -200,22 +266,17 @@ export function TabBar({ homeLabel, homeIcon, onNewTab, onCloseTab }: {
 
   return (
     <div className={s.tabbar} data-tauri-drag-region>
-      {collapsed && platform === "macos" && <span style={{ width: 70, flex: "none" }} data-tauri-drag-region />}
-      {collapsed && (
-        <button type="button" className={s.newTab} title={t("window.toggleSidebar")} aria-label={t("window.toggleSidebar")} onClick={() => useApp.getState().toggleSidebar()}>
-          <Icon name="sidebar-simple" size={16} />
-        </button>
-      )}
       <div ref={list} className={s.tabs} role="tablist">
         <button
           type="button"
           role="tab"
           aria-selected={active === "home"}
-          className={cx(s.tab, active === "home" && s.tabActive)}
+          aria-label={t("tabs.home")}
+          title={t("tabs.home")}
+          className={cx(s.tab, s.homeTab, active === "home" && s.tabActive)}
           onClick={() => activate("home")}
         >
-          <Icon name={homeIcon} className={s.tabIcon} />
-          <span className={s.tabLabel}>{homeLabel}</span>
+          <Icon name="house" className={s.tabIcon} />
           <AiActivity slotId="home" />
         </button>
         {tabs.length > 0 && <span className={s.sep} />}
@@ -235,7 +296,7 @@ export function TabBar({ homeLabel, homeIcon, onNewTab, onCloseTab }: {
             title={tab.title}
           >
             <TabOsIcon hostId={tab.hostId} local={!!tab.local} status={tab.status} />
-            <span className={s.tabLabel}>{tab.title}</span>
+            <TabLabel text={tab.title} />
             <AiActivity slotId={tab.id} />
             <span
               role="button"
@@ -253,7 +314,13 @@ export function TabBar({ homeLabel, homeIcon, onNewTab, onCloseTab }: {
           </button>
         ))}
       </div>
-      <button type="button" className={s.newTab} title={t("tabs.newTab")} aria-label={t("tabs.newTab")} onClick={onNewTab}>
+      <button
+        type="button"
+        className={s.newTab}
+        title={t("tabs.newTab")}
+        aria-label={t("tabs.newTab")}
+        onClick={onNewTab}
+      >
         <Icon name="plus" />
       </button>
       <button
@@ -267,8 +334,11 @@ export function TabBar({ homeLabel, homeIcon, onNewTab, onCloseTab }: {
       >
         <Icon name="caret-down" size={12} />
       </button>
-      {local.menu.anchor && <Menu anchor={local.menu.anchor} entries={local.entries} onClose={local.menu.close} minWidth={220} />}
+      {local.menu.anchor && (
+        <Menu anchor={local.menu.anchor} entries={local.entries} onClose={local.menu.close} minWidth={220} />
+      )}
       <div className={s.drag} data-tauri-drag-region />
+      <AppButtons />
       <AiPanelButton className={s.aiButton} activeClassName={s.aiButtonOn} dotClassName={s.aiDot} />
       <WindowControls />
     </div>

@@ -16,7 +16,7 @@ import { countsLine, deviceIcon, isStale, refreshSyncStatus, type T } from "./sy
 import { UpgradeDialog } from "./UpgradeDialog";
 import s from "./Sync.module.css";
 
-/** Icon, tint and copy for each sync state; titles reuse the sidebar footer strings. */
+/** Icon, tint and copy for each sync state; titles reuse the rail's Sync strings. */
 function present(t: T, st: SyncStatus) {
   if (st.state === "syncing")
     return {
@@ -51,10 +51,17 @@ function present(t: T, st: SyncStatus) {
       title: t(st.worker_update?.kind === "app_required" ? "sync.footer.appUpdate" : "sync.footer.workerUpdate"),
       sub: st.pending > 0 ? t("sync.footer.paused_sub", { n: st.pending }) : t("sync.footer.paused_sub_none"),
     };
-  const last = st.last_synced_at ? t("sync.sub.last", { time: formatRelative(t.locale, st.last_synced_at) }) : t("sync.sub.never");
+  const last = st.last_synced_at
+    ? t("sync.sub.last", { time: formatRelative(t.locale, st.last_synced_at) })
+    : t("sync.sub.never");
   const sub = st.counts ? `${last} · ${countsLine(t, st.counts)}` : last;
   if (st.conflicts > 0)
-    return { icon: "warning-circle", color: "var(--orange)", title: t("sync.footer.conflict", { n: st.conflicts }), sub };
+    return {
+      icon: "warning-circle",
+      color: "var(--orange)",
+      title: t("sync.footer.conflict", { n: st.conflicts }),
+      sub,
+    };
   return { icon: "cloud-check", color: "var(--green)", title: t("sync.footer.synced"), sub };
 }
 
@@ -104,7 +111,12 @@ export function SyncStatusView({ status, onReview }: { status: SyncStatus; onRev
               <div className={s.title}>{view.title}</div>
               <div className={s.sub}>{view.sub}</div>
             </div>
-            <Button icon="arrows-clockwise" busy={syncing} disabled={status.state === "auth_failed"} onClick={() => void syncNow()}>
+            <Button
+              icon="arrows-clockwise"
+              busy={syncing}
+              disabled={status.state === "auth_failed"}
+              onClick={() => void syncNow()}
+            >
               {t("sync.syncNow")}
             </Button>
           </div>
@@ -208,7 +220,7 @@ function TooLargeNotice({ item }: { item: TooLargeItem }) {
   if (item.item_type === "host") {
     text = t("sync.tooLarge.host", { name: item.item_name });
     action = (
-      <LinkButton onClick={() => navigate({ kind: "host-edit", hostId: item.item_id, groupId: null, back: { kind: "all" } })}>
+      <LinkButton onClick={() => navigate({ kind: "host-edit", hostId: item.item_id, groupId: null, back: null })}>
         {t("hosts.editHost")}
       </LinkButton>
     );

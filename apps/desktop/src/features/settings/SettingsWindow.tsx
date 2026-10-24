@@ -77,7 +77,8 @@ export function SettingsWindow({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key === "Escape")
-        escapeBlocked.current = document.querySelectorAll('[role="dialog"],[role="alertdialog"],[role="menu"]').length > 1;
+        escapeBlocked.current =
+          document.querySelectorAll('[role="dialog"],[role="alertdialog"],[role="menu"]').length > 1;
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -139,8 +140,8 @@ export function SettingsWindow({ onClose }: { onClose: () => void }) {
           <IconButton icon="x" label={t("btn.close")} className={s.close} onClick={() => closeRef.current()} />
         </div>
         <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`} className={s.content}>
-          {tab === "general" && <GeneralPane {...pane} />}
-          {tab === "appearance" && <AppearancePane {...pane} />}
+          {tab === "general" && <GeneralPane />}
+          {tab === "appearance" && <AppearancePane />}
           {tab === "terminal" && <TerminalPane {...pane} />}
           {tab === "proxies" && <ProxiesPane />}
           {tab === "security" && <SecurityPane />}

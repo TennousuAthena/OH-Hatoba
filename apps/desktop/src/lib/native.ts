@@ -16,7 +16,10 @@ export async function copyText(text: string): Promise<void> {
  * Native "save as" dialog; resolves to the chosen path or `null` when cancelled. In a plain browser there is no
  * dialog, so the suggested name is returned (the mock backend turns it into a download).
  */
-export async function pickSavePath(defaultName: string, filter: { name: string; extension: string }): Promise<string | null> {
+export async function pickSavePath(
+  defaultName: string,
+  filter: { name: string; extension: string },
+): Promise<string | null> {
   if (isHarmonyOS()) return hostService("pick_save_path", { defaultName, extensions: [filter.extension] });
   if (!isTauri()) return defaultName;
   const { save } = await import("@tauri-apps/plugin-dialog");
@@ -28,9 +31,11 @@ export async function pickSavePath(defaultName: string, filter: { name: string; 
  * path or `null` when cancelled. In a plain browser there is no dialog, so a made-up path is returned (the mock
  * backend does not read it).
  */
-export async function pickOpenPath(
-  options: { title?: string; directory?: boolean; filter?: { name: string; extensions: string[] } },
-): Promise<string | null> {
+export async function pickOpenPath(options: {
+  title?: string;
+  directory?: boolean;
+  filter?: { name: string; extensions: string[] };
+}): Promise<string | null> {
   if (isHarmonyOS()) return hostService("pick_open_path", { ...options, extensions: options.filter?.extensions });
   if (!isTauri()) return options.directory ? "/demo/folder" : `/demo/export.${options.filter?.extensions[0] ?? "txt"}`;
   const { open } = await import("@tauri-apps/plugin-dialog");

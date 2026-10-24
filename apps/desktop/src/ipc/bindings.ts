@@ -12,6 +12,11 @@ export const commands = {
 	/**  Opens the Windows 11 Snap Layouts flyout (hovering the custom maximize button, WIN-01). */
 	windowSnapOverlay: () => __TAURI_INVOKE<void>("window_snap_overlay"),
 	/**
+	 *  Zooms the interface (TERM-13) to the step nearest `percent`, no more than the screen the window
+	 *  is on allows, and says what applies. The device-local preference is saved by `prefs_save`.
+	 */
+	windowZoom: (percent: number) => __TAURI_INVOKE<ZoomView>("window_zoom", { percent }),
+	/**
 	 *  Whether the Linux main window shows its painted chrome: false while maximized, fullscreen
 	 *  or tiled, false without a compositor, and false on other platforms.
 	 */
@@ -320,7 +325,7 @@ export const commands = {
 	/**  Readable while locked: the unlock screen needs the language. */
 	prefsGet: () => __TAURI_INVOKE<LocalPrefs>("prefs_get"),
 	prefsSave: (prefs: LocalPrefs) => __TAURI_INVOKE<null>("prefs_save", { prefs }),
-	/**  The sidebar's star prompt (spec §9). The first read records when this device started waiting. */
+	/**  The home tab's star prompt (spec §9). The first read records when this device started waiting. */
 	starPromptGet: () => __TAURI_INVOKE<StarPrompt>("star_prompt_get"),
 	/**  The user starred, opened the bug report form, or closed the prompt: it never shows again. */
 	starPromptDone: () => __TAURI_INVOKE<null>("star_prompt_done"),
@@ -589,6 +594,7 @@ export const events = {
 	vaultLocked: makeEvent<VaultLockedEvent>("vault://locked"),
 	windowChrome: makeEvent<WindowChromeEvent>("window://chrome"),
 	windowClosePrompt: makeEvent<ClosePromptEvent>("window://close-prompt"),
+	windowZoom: makeEvent<ZoomView>("window://zoom"),
 };
 
 /* Types */
@@ -1065,6 +1071,8 @@ export type AiSettingsPatch = {
 	send_terminal_screen?: boolean | null,
 	judge_model?: AiModelRef | null,
 	memory?: boolean | null,
+	/**  Kept within 11 to 24. */
+	text_size?: number | null,
 };
 
 /**  The synced `Settings.ai` (§5.1). */
@@ -1094,6 +1102,8 @@ export type AiSettingsView = {
 	judge_model: AiModelRef | null,
 	/**  Conversations start with the memories, and the assistant saves them (AI-53). */
 	memory: boolean,
+	/**  The AI panel's conversation and input text size in px, 11 to 24 (TERM-13). */
+	text_size: number,
 };
 
 /**  The answer to a side question (AI-42), which nothing stores. */
@@ -1472,8 +1482,8 @@ export type DashboardEvent =
 /**  A reading, one per interval. */
 { kind: "stats"; host_id: string; stats: ServerStatsView } | 
 /**
- *  The server does not run Linux, so only its online status shows. `system` is its name,
- *  or empty when unknown.
+ *  The server runs neither Linux nor macOS, so only its online status shows. `system` is
+ *  its name, or empty when unknown.
  */
 { kind: "unsupported"; host_id: string; system: string } | 
 /**
@@ -1498,8 +1508,6 @@ export type DashboardHold =
 "host_key_changed" | 
 /**  The server rejected the saved credentials. Not tried again until **Retry**. */
 "sign_in_failed";
-
-export type DashboardLayout = "cards" | "table";
 
 export type Density = "regular" | "compact";
 
@@ -1829,6 +1837,8 @@ export type HostView = {
 	env: HostEnvVar[],
 };
 
+export type HostsView = "list" | "cards";
+
 /**  A host an import can create. */
 export type ImportCandidate = {
 	/**  Identifies it within the source, for `hosts_import`. */
@@ -1933,6 +1943,11 @@ export type LocalPrefs = {
 	language: Language,
 	appearance: Appearance,
 	density: Density,
+	/**
+	 *  TERM-13: the interface zoom in percent, one of [`crate::platform::window::ZOOM_STEPS`]. Kept
+	 *  per device, since the right size depends on the screen.
+	 */
+	ui_zoom: number,
 	host_probe: boolean,
 	/**
 	 *  Check GitHub for a newer release once after the first unlock of each launch (spec §11).
@@ -1962,9 +1977,14 @@ export type LocalPrefs = {
 	lock_disconnects_sessions: boolean,
 	/**  SEC-08: seconds until a copied password is cleared from the clipboard; 0 never clears it. */
 	clipboard_clear_secs: number,
-	/**  HOST-14: the dashboard shows cards or a table. */
-	dashboard_layout: DashboardLayout,
-	/**  HOST-14: the table columns turned off. */
+	/**  HOST-05: the hosts page lists the hosts or shows them as cards. */
+	hosts_view: HostsView,
+	/**
+	 *  HOST-14: the hosts page shows resource usage, which reads the listed hosts in the
+	 *  background.
+	 */
+	hosts_stats: boolean,
+	/**  HOST-14: the resource usage columns turned off. */
 	dashboard_hidden_columns: string[],
 	/**  HOST-14: seconds between readings, 1 to 60. */
 	dashboard_interval_secs: number,
@@ -2415,7 +2435,7 @@ export type SshErrorKind = "dns" | "refused" | "timeout" | "unreachable" | "auth
 /**  SSH-13: the host or the device default names a proxy that was deleted. */
 "proxy_missing" | "other";
 
-/**  Device-local state of the sidebar's GitHub star prompt (spec §9; never synced). */
+/**  Device-local state of the home tab's GitHub star prompt (spec §9; never synced). */
 export type StarPrompt = {
 	/**  When this device first read the state, Unix ms. The prompt waits a day from then. */
 	first_seen_at: number,
@@ -2428,8 +2448,8 @@ export type StatsEvent =
 /**  A reading, one per interval. */
 { kind: "stats"; stats: ServerStatsView } | 
 /**
- *  The server does not run Linux; the last event. `system` is its name, such as `FreeBSD`,
- *  or empty when unknown.
+ *  The server runs neither Linux nor macOS; the last event. `system` is its name, such as
+ *  `FreeBSD`, or empty when unknown.
  */
 { kind: "unsupported"; system: string } | 
 /**  Sampling stopped on its own (the script failed or the connection ended); the last event. */
@@ -2685,6 +2705,17 @@ export type WorkerUpdateKind =
 "required" | 
 /**  A newer `api` than this app speaks: sync is paused until Hatoba is updated. */
 "app_required";
+
+/**
+ *  The interface zoom in effect (TERM-13). Also sent as `window://zoom` when the window moves to a
+ *  screen that changes it.
+ */
+export type ZoomView = {
+	/**  The zoom applied, in percent. */
+	zoom: number,
+	/**  The largest step the screen the window is on allows. */
+	max: number,
+};
 
 /* Tauri Specta runtime */
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;

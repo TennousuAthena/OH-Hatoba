@@ -490,8 +490,8 @@ pub struct MountView {
 pub enum StatsEvent {
     /// A reading, one per interval.
     Stats { stats: Box<ServerStatsView> },
-    /// The server does not run Linux; the last event. `system` is its name, such as `FreeBSD`,
-    /// or empty when unknown.
+    /// The server runs neither Linux nor macOS; the last event. `system` is its name, such as
+    /// `FreeBSD`, or empty when unknown.
     Unsupported { system: String },
     /// Sampling stopped on its own (the script failed or the connection ended); the last event.
     Ended { error: crate::error::AppError },
@@ -540,8 +540,8 @@ pub enum DashboardEvent {
         host_id: String,
         stats: Box<ServerStatsView>,
     },
-    /// The server does not run Linux, so only its online status shows. `system` is its name,
-    /// or empty when unknown.
+    /// The server runs neither Linux nor macOS, so only its online status shows. `system` is
+    /// its name, or empty when unknown.
     Unsupported { host_id: String, system: String },
     /// The connection needs the user; the dashboard waits for **Retry**, a change to the host,
     /// or a tab on it. `error` is the server's answer, when there was one.
@@ -1035,6 +1035,9 @@ pub struct LocalPrefs {
     pub language: Language,
     pub appearance: Appearance,
     pub density: Density,
+    /// TERM-13: the interface zoom in percent, one of [`crate::platform::window::ZOOM_STEPS`]. Kept
+    /// per device, since the right size depends on the screen.
+    pub ui_zoom: u32,
     pub host_probe: bool,
     /// Check GitHub for a newer release once after the first unlock of each launch (spec §11).
     /// On by default; the request carries no identifier.
@@ -1060,9 +1063,12 @@ pub struct LocalPrefs {
     pub lock_disconnects_sessions: bool,
     /// SEC-08: seconds until a copied password is cleared from the clipboard; 0 never clears it.
     pub clipboard_clear_secs: u32,
-    /// HOST-14: the dashboard shows cards or a table.
-    pub dashboard_layout: DashboardLayout,
-    /// HOST-14: the table columns turned off.
+    /// HOST-05: the hosts page lists the hosts or shows them as cards.
+    pub hosts_view: HostsView,
+    /// HOST-14: the hosts page shows resource usage, which reads the listed hosts in the
+    /// background.
+    pub hosts_stats: bool,
+    /// HOST-14: the resource usage columns turned off.
     pub dashboard_hidden_columns: Vec<String>,
     /// HOST-14: seconds between readings, 1 to 60.
     pub dashboard_interval_secs: u32,
@@ -1084,6 +1090,7 @@ impl Default for LocalPrefs {
             language: Language::System,
             appearance: Appearance::System,
             density: Density::Regular,
+            ui_zoom: 100,
             host_probe: true,
             auto_update_check: true,
             ai_permission_mode: AiPermissionMode::Manual,
@@ -1096,7 +1103,8 @@ impl Default for LocalPrefs {
             lock_on_sleep: true,
             lock_disconnects_sessions: false,
             clipboard_clear_secs: 90,
-            dashboard_layout: DashboardLayout::Cards,
+            hosts_view: HostsView::List,
+            hosts_stats: false,
             dashboard_hidden_columns: Vec::new(),
             dashboard_interval_secs: 3,
             dashboard_cpu_alert: 90,
@@ -1106,6 +1114,17 @@ impl Default for LocalPrefs {
             local_shell: None,
         }
     }
+}
+
+/// The interface zoom in effect (TERM-13). Also sent as `window://zoom` when the window moves to a
+/// screen that changes it.
+#[derive(Debug, Clone, Copy, Serialize, Type, PartialEq, Eq, tauri_specta::Event)]
+#[tauri_specta(event_name = "window://zoom")]
+pub struct ZoomView {
+    /// The zoom applied, in percent.
+    pub zoom: u32,
+    /// The largest step the screen the window is on allows.
+    pub max: u32,
 }
 
 /// WIN-10: the window's close button asks, hides the window to the system tray, or quits.
@@ -1120,9 +1139,9 @@ pub enum CloseAction {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum DashboardLayout {
+pub enum HostsView {
+    List,
     Cards,
-    Table,
 }
 
 impl LocalPrefs {
@@ -1149,7 +1168,7 @@ impl LocalPrefs {
     }
 }
 
-/// Device-local state of the sidebar's GitHub star prompt (spec §9; never synced).
+/// Device-local state of the home tab's GitHub star prompt (spec §9; never synced).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct StarPrompt {
     /// When this device first read the state, Unix ms. The prompt waits a day from then.
@@ -1749,6 +1768,8 @@ pub struct AiSettingsView {
     pub judge_model: Option<AiModelRef>,
     /// Conversations start with the memories, and the assistant saves them (AI-53).
     pub memory: bool,
+    /// The AI panel's conversation and input text size in px, 11 to 24 (TERM-13).
+    pub text_size: u32,
 }
 
 /// What `ai_settings_save` changes in `Settings.ai`, like [`SettingsPatch`]: a field left out keeps
@@ -1770,6 +1791,8 @@ pub struct AiSettingsPatch {
     #[specta(type = Option<AiModelRef>)]
     pub judge_model: Clearable<AiModelRef>,
     pub memory: Option<bool>,
+    /// Kept within 11 to 24.
+    pub text_size: Option<u32>,
 }
 
 /// A patch field that `null` clears.

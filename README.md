@@ -15,7 +15,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Mentioned in Awesome Rust](https://img.shields.io/badge/mentioned%20in-Awesome%20Rust-FC60A8?logo=awesomelists&logoColor=white)](https://github.com/rust-unofficial/awesome-rust#applications)
 
-https://github.com/user-attachments/assets/2bd36c2f-6b4a-4fef-a1ac-c964ac5a83f8
+https://github.com/user-attachments/assets/cd33e989-36e3-4e17-bc7f-74d472c96078
 
 </div>
 
@@ -40,12 +40,13 @@ account.
   status, `~/.ssh/config` import, ProxyJump, and SOCKS5 and HTTP proxies. Type
   `ssh user@host` in the search box to connect without saving a host, or run
   `hatoba user@host` in a terminal once the `hatoba` command is on in Settings.
-- **Dashboard**: the online status, CPU, memory, disks, network, load, and
-  uptime of every saved host on one page, as cards or a table, read over SSH
-  without installing anything on the servers.
+- **Resource usage**: the online status, CPU, memory, disks, network, load,
+  and uptime of every saved host, on the hosts page as a list or cards, read
+  over SSH without installing anything on the servers.
 - **Terminal**: tabs, 256 colors and truecolor, CJK wide characters and input
   methods, confirmation before multi-line paste, search, clickable links, and
-  the CPU, memory, and network usage of Linux servers in the status bar.
+  the CPU, memory, and network usage of Linux and macOS servers in the status
+  bar.
 - **Local terminal**: tabs for the shells of your own computer, such as
   PowerShell, Command Prompt, Git Bash, and WSL distributions on Windows, or
   your login shell on macOS and Linux, beside the SSH tabs.

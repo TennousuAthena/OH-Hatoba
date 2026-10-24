@@ -1,7 +1,7 @@
 import type { LocalPrefs } from "../types";
 import { PREFS } from "./data";
 
-type ChoicePref = "language" | "appearance" | "density" | "ai_permission_mode" | "dashboard_layout" | "close_action";
+type ChoicePref = "language" | "appearance" | "density" | "ai_permission_mode" | "hosts_view" | "close_action";
 
 /** The values this build knows for each pref that is one of a set; the record keys keep them complete. */
 const CHOICES: { [K in ChoicePref]: Record<LocalPrefs[K], true> } = {
@@ -9,7 +9,7 @@ const CHOICES: { [K in ChoicePref]: Record<LocalPrefs[K], true> } = {
   appearance: { system: true, light: true, dark: true },
   density: { regular: true, compact: true },
   ai_permission_mode: { manual: true, auto: true, bypass: true },
-  dashboard_layout: { cards: true, table: true },
+  hosts_view: { list: true, cards: true },
   close_action: { ask: true, tray: true, quit: true },
 };
 
@@ -20,7 +20,8 @@ function fits(key: keyof LocalPrefs, value: unknown): boolean {
   if (key === "dashboard_hidden_columns") return Array.isArray(value) && value.every((v) => typeof v === "string");
   const fallback = PREFS[key];
   // Rust stores the numbers as u32.
-  if (typeof fallback === "number") return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 0xffff_ffff;
+  if (typeof fallback === "number")
+    return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 0xffff_ffff;
   return typeof value === typeof fallback;
 }
 

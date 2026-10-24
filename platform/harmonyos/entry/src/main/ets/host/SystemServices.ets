@@ -12,6 +12,7 @@ interface NotificationTarget { tab?: string | null; conversation_id?: string | n
 
 interface HostArgs {
   background?: string;
+  percent?: number;
   text?: string;
   url?: string;
   directory?: boolean;
@@ -39,10 +40,14 @@ interface Capabilities {
   updater: boolean;
   folderPicker: boolean;
 }
+interface ZoomResult { zoom: number; max: number; }
 
 /** Runs only in ArkTS. Native system requests use a separate queue from Web messages. */
 export class SystemServices {
   private static notificationId: number = 10;
+  private static zoomSteps: number[] = [67, 75, 80, 90, 100, 110, 125, 150, 175, 200];
+  private webview?: webview.WebviewController;
+  private zoom: number = 100;
   static authTypes(): userAuth.UserAuthType[] {
     const supported: userAuth.UserAuthType[] = [];
     for (const type of [userAuth.UserAuthType.FINGERPRINT, userAuth.UserAuthType.FACE]) {
@@ -54,6 +59,8 @@ export class SystemServices {
   private current: () => boolean;
   private pickerBusy: boolean = false;
   constructor(context: common.UIAbilityContext, current: () => boolean) { this.context = context; this.current = current; }
+
+  setWebview(controller: webview.WebviewController): void { this.webview = controller; }
 
   async process(encoded: string): Promise<string> {
     let id: number = 0;
@@ -95,6 +102,7 @@ export class SystemServices {
         try { await mainWindow.setWindowSystemBarProperties({ navigationBarColor: background, navigationBarContentColor: foreground }); } catch (_) {}
         return background;
       }
+      case 'window_zoom': return this.zoomTo(args.percent);
       case 'clipboard_write': {
         if (typeof args.text !== 'string' || args.text.length > 1048576) throw new Error('Invalid clipboard text');
         await pasteboard.getSystemPasteboard().setData(pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, args.text));
@@ -140,6 +148,17 @@ export class SystemServices {
       case 'app_quit': await this.context.terminateSelf(); return null;
       default: throw new Error('Unsupported native service');
     }
+  }
+
+  private zoomTo(percent?: number): ZoomResult {
+    if (!this.webview) throw new Error('Web view unavailable');
+    const requested = Number.isInteger(percent) && percent !== undefined ? percent : 100;
+    if (requested < 1 || requested > 10000) throw new Error('Invalid zoom');
+    const target = SystemServices.zoomSteps.reduce((nearest: number, step: number) =>
+      Math.abs(step - requested) < Math.abs(nearest - requested) ? step : nearest, 100);
+    this.webview.zoom(target / this.zoom);
+    this.zoom = target;
+    return { zoom: target, max: SystemServices.zoomSteps[SystemServices.zoomSteps.length - 1] };
   }
 
   private async authenticate(args: HostArgs): Promise<number[]> {

@@ -219,7 +219,8 @@ export function createCommandApi({ commands, Channel, listen: tauriListen }: Api
     ai_file_preview: (conversationId, toolCallId, sessionId, editedArguments) =>
       commands.aiFilePreview(conversationId, toolCallId, sessionId, editedArguments),
     ai_file_changes: (conversationId) => commands.aiFileChanges(conversationId),
-    ai_file_change_diff: (conversationId, responseId, toolCallId) => commands.aiFileChangeDiff(conversationId, responseId, toolCallId),
+    ai_file_change_diff: (conversationId, responseId, toolCallId) =>
+      commands.aiFileChangeDiff(conversationId, responseId, toolCallId),
     ai_file_revert: (conversationId, responseId, toolCallId, sessionId, restore) =>
       commands.aiFileRevert(conversationId, responseId, toolCallId, sessionId, restore),
     ai_session_server: (sessionId) => commands.aiSessionServer(sessionId),
@@ -281,6 +282,7 @@ export function createCommandApi({ commands, Channel, listen: tauriListen }: Api
 
     window_snap_overlay: () => commands.windowSnapOverlay(),
     window_floating: () => commands.windowFloating(),
+    window_zoom: (percent) => commands.windowZoom(percent),
     window_hide_to_tray: () => commands.windowHideToTray(),
     app_quit: () => commands.appQuit(),
     tray_set_menu: (menu) => commands.traySetMenu(menu),

@@ -73,6 +73,7 @@ export class NativeHost {
       if (generation !== this.generation) return;
       if (!initialized.ok) throw new Error('Native initialization failed');
       const services = new SystemServices(this.context, () => generation === this.generation);
+      services.setWebview(this.controller);
       this.services = services;
       this.ports = this.controller.createWebMessagePorts();
       this.ports[0].onMessageEvent((message: webview.WebMessage) => {

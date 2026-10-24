@@ -26,7 +26,6 @@ export async function collectCredentials(host: HostView): Promise<Credentials | 
   return password === null ? null : { password, passphrase: null };
 }
 
-
 /** Open a new terminal tab for a host and connect (HOST-07, TERM-01: the same host may have several tabs). */
 export async function connectHost(hostId: string): Promise<void> {
   startSessionListeners();
@@ -49,7 +48,8 @@ export async function connectHost(hostId: string): Promise<void> {
  */
 export async function connectTarget(typed: { address: string; port: number; username: string | null }): Promise<void> {
   startSessionListeners();
-  const username = typed.username ?? (useApp.getState().info.local_user || (await askUsername(formatTarget(typed)))?.trim());
+  const username =
+    typed.username ?? (useApp.getState().info.local_user || (await askUsername(formatTarget(typed)))?.trim());
   if (!username) return;
   const target: QuickTarget = { address: typed.address, port: typed.port, username };
   useTabs.getState().openSession({ hostId: null, target }, `${username}@${target.address}`);
@@ -82,7 +82,7 @@ export async function openLocalTerminal(shell?: LocalShellView): Promise<void> {
 export async function reconnectSession(tabId: string): Promise<void> {
   const session = getSession(tabId);
   if (!session || session.status === "connecting") return;
-  // A quick connection saved as a host since (Save as Host…) reconnects as that host.
+  // A quick connection saved as a host since (Save as Host) reconnects as that host.
   if (session.local) {
     await session.reconnect(async () => NONE);
     return;
@@ -104,12 +104,12 @@ export async function closeSessionTab(tabId: string): Promise<void> {
 export function editSessionHost(hostId: string | null) {
   const host = hostById(hostId);
   if (!host) return;
-  useApp.getState().navigate({ kind: "host-edit", hostId: host.id, groupId: host.group_id, back: { kind: "all" } });
+  useApp.getState().navigate({ kind: "host-edit", hostId: host.id, groupId: host.group_id, back: null });
   useTabs.getState().activate("home");
 }
 
-/** "Save as Host…" for a quick connection: a new host, filled in with its target (HOST-12). */
+/** "Save as Host" for a quick connection: a new host, filled in with its target (HOST-12). */
 export function saveTargetAsHost(target: QuickTarget) {
-  useApp.getState().navigate({ kind: "host-edit", hostId: null, groupId: null, back: { kind: "all" }, prefill: target });
+  useApp.getState().navigate({ kind: "host-edit", hostId: null, groupId: null, back: null, prefill: target });
   useTabs.getState().activate("home");
 }

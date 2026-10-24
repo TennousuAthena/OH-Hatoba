@@ -56,6 +56,7 @@ struct Index {
         .javaScriptAccess(true)
         .backgroundColor(this.surfaceBackground)
         .keyboardAvoidMode(WebKeyboardAvoidMode.RESIZE_CONTENT)
+        .zoomAccess(true)
         .domStorageAccess(false)
         .fileAccess(false)
         .onShowFileSelector((event) => {

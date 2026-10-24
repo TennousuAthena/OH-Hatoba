@@ -253,6 +253,39 @@
   background: var(--fill);
 }
 
+/* A reply's first line until something streams: the reasoning header's height, text and icon place. */
+.pending {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  height: 22px;
+  color: var(--fg2);
+  font-size: var(--text-sm);
+}
+
+.pendingDot {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+}
+
+.pendingDot::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pending 1.2s var(--ease-in-out) infinite;
+}
+
+@keyframes pending {
+  50% {
+    opacity: 0.25;
+  }
+}
+
 .reasoningBody {
   padding: 2px 0 2px 10px;
   border-left: 2px solid var(--line2);
@@ -498,6 +531,7 @@
 
 .lineBreak {
   color: var(--fg3);
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -511,7 +545,9 @@
 .approval {
   gap: var(--space-8);
   padding: 10px 11px 11px;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--orange) 60%, transparent), 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--orange) 60%, transparent),
+    0 1px 3px rgba(0, 0, 0, 0.05);
   background: color-mix(in srgb, var(--orange) 5%, var(--win));
 }
 
@@ -842,6 +878,27 @@
   }
   to {
     background-position: -100% 0;
+  }
+}
+
+@keyframes shimmer-fade {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* The shimmer and the pending dot stand in for the spinner and keep going with reduced motion, as it
+   does (base.css), but only as fades: the shimmer's sweep becomes a pulse of the plain text. */
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    background: none;
+    color: var(--fg2);
+    animation: shimmer-fade 1.6s var(--ease-in-out) infinite !important;
+  }
+
+  .pendingDot::before {
+    animation-duration: 1.2s !important;
+    animation-iteration-count: infinite !important;
   }
 }
 
