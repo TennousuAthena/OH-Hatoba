@@ -595,11 +595,12 @@ let impl: Promise<HatobaApi> | null = null;
 
 /** Cached promise so concurrent first calls share one backend instance. */
 function load(): Promise<HatobaApi> {
-  impl ??= import.meta.env.MODE === "harmonyos"
-    ? import("./harmonyos/api").then((m) => m.createHarmonyApi())
-    : isTauri()
-    ? import("./tauri").then((m) => m.createTauriApi())
-    : import("./mock").then((m) => m.createMockApi());
+  impl ??=
+    import.meta.env.MODE === "harmonyos"
+      ? import("./harmonyos/api").then((m) => m.createHarmonyApi())
+      : isTauri()
+        ? import("./tauri").then((m) => m.createTauriApi())
+        : import("./mock").then((m) => m.createMockApi());
   return impl;
 }
 

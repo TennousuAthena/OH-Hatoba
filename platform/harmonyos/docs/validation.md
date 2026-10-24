@@ -1,16 +1,39 @@
 # 验证记录
 
-更新日期：2026-10-23。上游基线：`96fd9edb83d78ddedbf70895669f7a0121c8f74b`（0.6.0）。
+更新日期：2026-10-24。上游基线：`e1c7d171f1a7ee85c08f3d3d01a7c12f8b4c3d22`（0.7.1）。
 目标：HarmonyOS 6/API20 起，ARM64，`2in1` 与 `tablet`。当前真机均为 HarmonyOS 7/API26。
 
 ## 实现状态
 
-默认入口为完整的上游 React 应用。183 个共享 Rust 处理函数通过生成分发器接入，
-前端共用上游 200 命令 facade；本地进程等宿主专属命令不提供。生产宿主缺失时明确失败，
+默认入口为完整的上游 React 应用。184 个共享 Rust 处理函数通过生成分发器接入，
+前端共用上游 201 命令 facade；本地进程等宿主专属命令不提供。生产宿主缺失时明确失败，
 不存在 mock 数据或桌面路径回退。保险库、SSH/SFTP、同步/部署、AI、Skills、HTTP MCP 和 OAuth
 复用上游源文件。系统能力实现与其人工验收状态分开记录。
 
 ## 构建及本机回归
+
+### 2026-10-24 / 上游 v0.7.1
+
+- 候选提交为 tag `v0.7.1`（`e1c7d171f1a7ee85c08f3d3d01a7c12f8b4c3d22`）。只读审计发现
+  新增 `windowZoom` 命令与 `window://zoom` 事件，新增 `HostsView`、`ZoomView`，
+  删除 `DashboardLayout`，并扩展 AI 设置与本机偏好 DTO。合约重新生成后为 201 个命令、
+  184 个共享处理函数，人工复核无其他命令形状漂移。
+- 新的界面缩放在鸿蒙侧接入 ArkWeb：Webview 打开受控 `zoomAccess`，按上游 10 档
+  67%–200% 取最近值，监听实际缩放比例换算目标倍率，启动时沿用 `ui_zoom` 并保存结果；
+  共享 Rust 分发器走宿主服务白名单，不复制桌面 Tauri 实现。`ZoomView` 在非桌面宿主
+  可反序列化，桌面事件属性仍由 `desktop-host` 控制。
+- workspace TypeScript、ESLint、Prettier、桌面 1057 项与站点 31 项测试通过；
+  IPC/合约/边界检查通过。完整 Rust workspace 的 Clippy、rustfmt、注释宽度检查通过，
+  测试在本宿主排除两项依赖本机 shell/运行环境指标的上游测试后完成：
+  `stats::tests::the_script_reads_this_machine`（本环境未报告 uptime）与
+  `platform::login_shell::tests::shell::what_the_shell_started_is_killed_with_it`
+  （本环境缺少其 shell fixture 路径）。两者均为未修改的上游测试；此前单独重跑的
+  SOCKS 不可达断言通过。签名 OHOS HAP 构建和包结构检查通过，摘要见
+  [升级验证记录](evidence/2026-10-24-upstream-071-validation.json)。
+- 两台 API26 真机尚未完成 v0.7.1 复验：保存的无线调试端口均已失效，重连失败且当前
+  没有 USB 目标。已完成的本机验证不能替代安装后的诊断与普通入口检查。
+
+### 2026-10-22 / 初始基线
 
 - macOS ARM64，Rust 1.97.0；DevEco Studio 26.0.0.851，Native SDK 26.0.0.105。
 - 锁定依赖的 OHOS ARM64 交叉编译、C++ Node-API/Asset 链接、ArkTS 编译及专用调试签名通过。

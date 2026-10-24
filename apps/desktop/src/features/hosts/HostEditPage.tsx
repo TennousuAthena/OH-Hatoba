@@ -359,7 +359,13 @@ export function HostEditPage({
     { value: "password" as const, label: t("hosts.auth.password"), icon: "password" },
     { value: "key" as const, label: t("hosts.auth.key"), icon: "key" },
     { value: "ask" as const, label: t("hosts.auth.ask"), icon: "keyboard" },
-    { value: "agent" as const, label: t("hosts.auth.agent"), icon: "identification-badge", disabled: !hostCapabilities().sshAgent, title: !hostCapabilities().sshAgent ? t("host.localUnavailable") : undefined },
+    {
+      value: "agent" as const,
+      label: t("hosts.auth.agent"),
+      icon: "identification-badge",
+      disabled: !hostCapabilities().sshAgent,
+      title: !hostCapabilities().sshAgent ? t("host.localUnavailable") : undefined,
+    },
   ];
 
   return (

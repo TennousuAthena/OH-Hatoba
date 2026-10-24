@@ -98,9 +98,11 @@ export function GeneralPane() {
         </SettingRow>
       </Section>
 
-      <Section title={hostCapabilities().desktopCli ? t("settings.section.cli") : undefined}>
-        <CliCommandRows />
-      </Section>
+      {hostCapabilities().desktopCli && (
+        <Section title={t("settings.section.cli")}>
+          <CliCommandRows />
+        </Section>
+      )}
 
       <Section title={t("settings.section.monitoring")}>
         <SettingRow label={t("settings.probe")} hint={t("settings.probe.hint")}>

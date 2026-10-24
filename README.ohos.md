@@ -7,7 +7,7 @@ Hatoba 的原生 HarmonyOS 适配，目标为 HarmonyOS 6.0/API20 起的 ARM64 *
 ## 当前进度
 
 默认入口已经是完整的 Hatoba React 应用。鸿蒙宿主编译同一份 Rust 业务源文件，
-通过生成的分发器接入 183 个处理函数；前端仍共用上游的 200 命令 facade。
+通过生成的分发器接入 184 个处理函数；前端仍共用上游的 201 命令 facade。
 
 - SSH、PTY、SFTP、三类端口转发、保险库、同步/Worker 部署、远程 AI、Skills、HTTP MCP 和 OAuth
   使用上游实现，没有建立鸿蒙业务副本。

@@ -83,7 +83,15 @@ export function ImportDialog({ source, onClose }: { source: ImportSource; onClos
 
   const items = preview?.candidates ?? null;
   // `~/.ssh/config` is named as on the user's system; another client's sessions where they were read.
-  const location = isHarmonyOS() ? (path ? fileName(path) : undefined) : app ? preview?.location : platform === "windows" ? "%USERPROFILE%\\.ssh\\config" : "~/.ssh/config";
+  const location = isHarmonyOS()
+    ? path
+      ? fileName(path)
+      : undefined
+    : app
+      ? preview?.location
+      : platform === "windows"
+        ? "%USERPROFILE%\\.ssh\\config"
+        : "~/.ssh/config";
 
   const toggle = (id: string, on: boolean) =>
     setPicked((prev) => {

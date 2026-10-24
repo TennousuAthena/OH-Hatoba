@@ -219,7 +219,11 @@ export function McpServerDialog({
                 ariaLabel={t("aiSettings.mcp.f.transport")}
                 value={form.kind}
                 options={[
-                  { value: "stdio", label: t("aiSettings.mcp.transport.stdio"), disabled: !hostCapabilities().stdioMcp },
+                  {
+                    value: "stdio",
+                    label: t("aiSettings.mcp.transport.stdio"),
+                    disabled: !hostCapabilities().stdioMcp,
+                  },
                   { value: "http", label: t("aiSettings.mcp.transport.http") },
                 ]}
                 onChange={(kind) => patch({ kind })}
@@ -227,7 +231,11 @@ export function McpServerDialog({
               <HintText>
                 {form.kind === "stdio" && !hostCapabilities().stdioMcp
                   ? t("host.localUnavailable")
-                  : t(form.kind === "stdio" ? "aiSettings.mcp.transport.stdioHint" : "aiSettings.mcp.transport.httpHint")}
+                  : t(
+                      form.kind === "stdio"
+                        ? "aiSettings.mcp.transport.stdioHint"
+                        : "aiSettings.mcp.transport.httpHint",
+                    )}
               </HintText>
             </div>
           </FormRow>

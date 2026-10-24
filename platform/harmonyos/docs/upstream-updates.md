@@ -24,7 +24,7 @@ SSH、保险库、同步、AI 或 React 页面实现。
 `crates/hatoba-runtime/build.rs` 读取实际命令函数的 Rust AST 和生成的 bindings 合约，
 生成参数反序列化、AppHandle/State 注入、channel 绑定及 async 调用。返回值和单位值由函数类型推导。
 命令不再维护第二份手写表。桌面命令宏使用 `desktop-host` 条件属性，原 Tauri 入口和测试保持可用。
-当前 183 个处理函数进入鸿蒙运行层；本地进程、CLI 等宿主专属命令明确不可用。
+当前 184 个处理函数进入鸿蒙运行层；本地进程、CLI 等宿主专属命令明确不可用。
 
 保险库格式、SSH 算法、同步协议、AI 工具执行和 React 页面均直接复用原实现。
 `hatoba-net` 只隔离 HTTP 客户端的系统信任根来源。`platform/harmonyos` 承担 Node-API、

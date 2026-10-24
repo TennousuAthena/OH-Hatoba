@@ -477,7 +477,10 @@ export class LiveSession {
           }
           return new Promise<void>((resolve) => {
             this.consumedWrites.add(resolve);
-            this.term.write(data, () => { this.consumedWrites.delete(resolve); resolve(); });
+            this.term.write(data, () => {
+              this.consumedWrites.delete(resolve);
+              resolve();
+            });
           });
         }
         break;

@@ -10,6 +10,13 @@ export const commandContract = {
     "parameters": [],
     "channels": []
   },
+  "windowZoom": {
+    "command": "window_zoom",
+    "parameters": [
+      "percent"
+    ],
+    "channels": []
+  },
   "windowFloating": {
     "command": "window_floating",
     "parameters": [],

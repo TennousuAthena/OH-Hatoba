@@ -23,7 +23,12 @@ const BROWSER_FOLDER = "~/skills/docker-compose";
 const BROWSER_ZIP = "~/Downloads/nginx-ops.zip";
 
 async function pickSource(kind: "folder" | "zip", title: string): Promise<string | null> {
-  if (isHarmonyOS()) return pickOpenPath({ title, directory: kind === "folder", filter: kind === "zip" ? { name: "Zip", extensions: ["zip"] } : undefined });
+  if (isHarmonyOS())
+    return pickOpenPath({
+      title,
+      directory: kind === "folder",
+      filter: kind === "zip" ? { name: "Zip", extensions: ["zip"] } : undefined,
+    });
   if (!isTauri()) return kind === "folder" ? BROWSER_FOLDER : BROWSER_ZIP;
   const { open } = await import("@tauri-apps/plugin-dialog");
   const picked = await open(

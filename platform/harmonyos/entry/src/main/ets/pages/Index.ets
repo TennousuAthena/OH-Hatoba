@@ -57,6 +57,10 @@ struct Index {
         .backgroundColor(this.surfaceBackground)
         .keyboardAvoidMode(WebKeyboardAvoidMode.RESIZE_CONTENT)
         .zoomAccess(true)
+        .onScaleChange((event) => {
+          const scale = event.newScale > 0 && event.newScale <= 3 ? event.newScale * 100 : event.newScale;
+          if (Number.isFinite(scale) && scale > 0) AppStorage.setOrCreate('OH_HATOBA_ZOOM', scale);
+        })
         .domStorageAccess(false)
         .fileAccess(false)
         .onShowFileSelector((event) => {

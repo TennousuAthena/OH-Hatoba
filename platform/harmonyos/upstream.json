@@ -1,7 +1,7 @@
 {
   "repository": "https://github.com/scarletkc/Hatoba.git",
-  "commit": "96fd9edb83d78ddedbf70895669f7a0121c8f74b",
-  "version": "0.6.0",
+  "commit": "e1c7d171f1a7ee85c08f3d3d01a7c12f8b4c3d22",
+  "version": "0.7.1",
   "hostProtocol": 1,
   "minimumApi": 20,
   "targetApi": 26

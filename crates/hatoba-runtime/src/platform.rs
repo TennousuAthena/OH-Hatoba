@@ -54,4 +54,16 @@ pub mod login_shell {
         None
     }
 }
+pub mod window {
+    /// The interface zoom levels in percent, kept in step with the desktop host.
+    pub const ZOOM_STEPS: [u32; 10] = [67, 75, 80, 90, 100, 110, 125, 150, 175, 200];
+
+    /// The zoom step nearest to `percent`.
+    pub fn zoom_step(percent: u32) -> u32 {
+        ZOOM_STEPS
+            .into_iter()
+            .min_by_key(|step| step.abs_diff(percent))
+            .unwrap_or(100)
+    }
+}
 pub mod biometric;

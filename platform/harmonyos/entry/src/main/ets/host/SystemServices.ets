@@ -4,6 +4,7 @@ import { userAuth } from '@kit.UserAuthenticationKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { picker, fileIo as fs, fileUri } from '@kit.CoreFileKit';
 import { window } from '@kit.ArkUI';
+import { webview } from '@kit.ArkWeb';
 import hatoba from 'libhatoba.so';
 import { ClipboardAccess } from './ClipboardAccess';
 import { BackgroundLease } from './BackgroundLease';
@@ -156,8 +157,11 @@ export class SystemServices {
     if (requested < 1 || requested > 10000) throw new Error('Invalid zoom');
     const target = SystemServices.zoomSteps.reduce((nearest: number, step: number) =>
       Math.abs(step - requested) < Math.abs(nearest - requested) ? step : nearest, 100);
-    this.webview.zoom(target / this.zoom);
+    const current = AppStorage.get<number>('OH_HATOBA_ZOOM') ?? this.zoom;
+    if (!Number.isFinite(current) || current <= 0) throw new Error('Invalid current zoom');
+    this.webview.zoom(target / current);
     this.zoom = target;
+    AppStorage.setOrCreate('OH_HATOBA_ZOOM', target);
     return { zoom: target, max: SystemServices.zoomSteps[SystemServices.zoomSteps.length - 1] };
   }
 

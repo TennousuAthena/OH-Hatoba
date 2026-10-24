@@ -162,66 +162,68 @@ export function AboutPane() {
         </button>
       </div>
 
-      {hostCapabilities().updater && <Group>
-        <SettingRow
-          label={t("settings.about.update")}
-          hint={
-            (status || manager) && (
-              <span className={s.progress}>
-                {status && (
-                  <span role="status">
-                    <StatusLine
-                      tone={status.tone}
-                      icon={status.icon}
-                      className={cx(s.status, status.icon && s.available)}
-                    >
-                      {status.text}
-                    </StatusLine>
-                  </span>
-                )}
-                {install && (
-                  <span
-                    className={s.track}
-                    role="progressbar"
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={percent ?? undefined}
-                  >
+      {hostCapabilities().updater && (
+        <Group>
+          <SettingRow
+            label={t("settings.about.update")}
+            hint={
+              (status || manager) && (
+                <span className={s.progress}>
+                  {status && (
+                    <span role="status">
+                      <StatusLine
+                        tone={status.tone}
+                        icon={status.icon}
+                        className={cx(s.status, status.icon && s.available)}
+                      >
+                        {status.text}
+                      </StatusLine>
+                    </span>
+                  )}
+                  {install && (
                     <span
-                      className={percent === null ? `${s.fill} ${s.fillUnknown}` : s.fill}
-                      style={percent === null ? undefined : { width: `${percent}%` }}
-                    />
-                  </span>
-                )}
-                {manager && <span>{managerText(t, manager)}</span>}
-              </span>
-            )
-          }
-        >
-          {update && !manager && (
-            <Button variant="primary" disabled={install !== null} onClick={() => void confirmInstall(t, update)}>
-              {t("settings.about.install")}
+                      className={s.track}
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={percent ?? undefined}
+                    >
+                      <span
+                        className={percent === null ? `${s.fill} ${s.fillUnknown}` : s.fill}
+                        style={percent === null ? undefined : { width: `${percent}%` }}
+                      />
+                    </span>
+                  )}
+                  {manager && <span>{managerText(t, manager)}</span>}
+                </span>
+              )
+            }
+          >
+            {update && !manager && (
+              <Button variant="primary" disabled={install !== null} onClick={() => void confirmInstall(t, update)}>
+                {t("settings.about.install")}
+              </Button>
+            )}
+            {update && manager === "scoop" && (
+              <Button variant="primary" onClick={() => void copy(SCOOP_UPDATE)}>
+                {t("settings.about.copyCommand")}
+              </Button>
+            )}
+            <Button disabled={spinning} onClick={() => void check()}>
+              {t("settings.about.check")}
             </Button>
-          )}
-          {update && manager === "scoop" && (
-            <Button variant="primary" onClick={() => void copy(SCOOP_UPDATE)}>
-              {t("settings.about.copyCommand")}
-            </Button>
-          )}
-          <Button disabled={spinning} onClick={() => void check()}>
-            {t("settings.about.check")}
-          </Button>
-        </SettingRow>
-        {!manager && (
-          <SettingRow label={t("settings.about.auto")} hint={t("settings.about.auto.hint")}>
-            <Switch
-              label={t("settings.about.auto")}
-              checked={prefs.auto_update_check}
-              onChange={(auto_update_check) => setPrefs({ auto_update_check })}
-            />
           </SettingRow>
-        )}
-      </Group>}
+          {!manager && (
+            <SettingRow label={t("settings.about.auto")} hint={t("settings.about.auto.hint")}>
+              <Switch
+                label={t("settings.about.auto")}
+                checked={prefs.auto_update_check}
+                onChange={(auto_update_check) => setPrefs({ auto_update_check })}
+              />
+            </SettingRow>
+          )}
+        </Group>
+      )}
 
       {update && (
         <Card role="region" className={s.notes} aria-label={t("settings.about.notes", { version: update.version })}>

@@ -1,6 +1,6 @@
 //! App info and window helpers.
 
-use crate::host::{ipc::Channel, AppHandle, State};
+use crate::host::{AppHandle, Manager, State, ipc::Channel};
 
 use crate::dto::{
     AppInfo, NotificationInput, TrayMenuInput, UpdateCheck, UpdateProgress, ZoomView,

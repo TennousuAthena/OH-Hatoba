@@ -15,6 +15,15 @@
       "signature": "",
       "result": "void"
     },
+    "windowZoom": {
+      "command": "window_zoom",
+      "parameters": [
+        "percent"
+      ],
+      "channels": [],
+      "signature": "percent: number",
+      "result": "ZoomView"
+    },
     "windowFloating": {
       "command": "window_floating",
       "parameters": [],
@@ -1845,6 +1854,7 @@
     "ssh://forwards-lost": "ForwardsLostEvent",
     "ai://mcp-status": "McpServerStatus",
     "window://chrome": "WindowChromeEvent",
+    "window://zoom": "ZoomView",
     "app://launch": "null",
     "window://close-prompt": "null",
     "app://notification-click": "NotificationTarget",
@@ -1889,8 +1899,8 @@
     "AiSearchHit": "b7e6c7f75d01a06b406e3521a4cd0c9c69713114b0ae788505ded1c84907f446",
     "AiSendInput": "d73043387c4fa245f698b36b6d2d46e1b991c4e69535c39ccbbefc6b678aec75",
     "AiSendStarted": "9fba51f8e87966e69d585479ea44b7b29b0c95c547dc1737f8d2f9605c12b970",
-    "AiSettingsPatch": "9e4ce389a38dae71575bfdeea851254de680e3c85d4679bc0911280545186321",
-    "AiSettingsView": "147ab3abeaf9c571d0bb067ea256f4f60bca5c7a4485f3c5850cdf4546a63c9f",
+    "AiSettingsPatch": "d0a24f37faf6cdc8d12fd807d4f219170a80a613e321a5ff6f6cd83f31415740",
+    "AiSettingsView": "e73c493aaf970213e5de722cd823c4cf6d4a1edeac957ce0ae09df06b53e24b5",
     "AiSideAnswer": "5058f4eacf07953f8939dce28f779133d4b6ac85a28d986a1e2bffcbe29dcedb",
     "AiSideEvent": "6a3e5d08fc1c102bc8883898ae25d29878326b2f94bf2e3e75b86c92d1e9db9c",
     "AiSideQuestionInput": "d38ebb8b105b4ff2ce1eedc3048e4db2195a993100c5bb3ae6a93e152a72fba7",
@@ -1932,7 +1942,6 @@
     "D1Database": "dd40d21ce051794a33f13b93e4d4838bd4b45e4c6a1beadd22a640d88832a17d",
     "DashboardEvent": "a26b6938972c7bd379e3366fd6ceaa56e03c8fa09258911e619963524fabf7a0",
     "DashboardHold": "200ce19f03b03da8adcb02a36534ae27c35b1a664065dfdaf30def2c06719006",
-    "DashboardLayout": "dc64850b14dee6b960adf90d69ad8025616cd48b0ccdbb87d84e9b406d4f75fd",
     "Density": "209f6e51c8a0b987239835a64f83a9dc25658a7ad62bfccca423f1b034f27ba2",
     "DeployDatabaseAction": "b82636ea64ccbdda1e2e087531a0e4eb7f886808ffae2f4523c49d3c2fa9c481",
     "DeployOutcome": "469c64b207c0c2123eae1f54bbfeb4c8cd1d7cf29da6f1a433c62acc32eedf1d",
@@ -1963,6 +1972,7 @@
     "HostKeyPrompt": "21aadd6bdae36ff3c6afafdefce85072e67828591c88253bf57b5e0634d21874",
     "HostKeyPromptKind": "bb461a54da27b64047d5431b6a21e128a34206e0af62efad67228412b88e09c0",
     "HostView": "8e8965a84aa2676a1a349db9dca3fc663d7e984f6180a3316102e076a8cc2343",
+    "HostsView": "8333176e11d7a1451b57d0afd2b51b24bde3e0639a6721336ba0248d4ea972c2",
     "ImportCandidate": "e2d00e71ee51de58c09446d70b3c3362dac31a16545fb6263b1000ab5300138c",
     "ImportPreview": "26c952c07be22cba36b051f1ddd8256096d16816b14bae1f7d792315c9067957",
     "ImportResult": "3ce6c08938be54b90f92380112b6212f93252c49909433bfe1aaf1e027a8375c",
@@ -1976,7 +1986,7 @@
     "Language": "257b75b2f21614d835f97887f517ca39fe5c2277ba1366ad40b73c8cd495d5b3",
     "LaunchEvent": "9ae0e8c72434ccaf3d67e46e24278ffbec4ca3642bb39090c60edec704a1c7dd",
     "LocalOpenOptions": "5f5ba9ae2d82a61db50f15be00481a6224bac700f4560344a9665f8c3461316d",
-    "LocalPrefs": "c78d5392b6d6563ed929db572209805ad0dfe3c3cbc9710c16cc08b996df9bd7",
+    "LocalPrefs": "ed1208b09dc7cc856c0c3f4884e624339d8c081cb20bdd1c2a95cc747f2d6723",
     "LocalShellKind": "58ff8a4b92881aa5102eea0953df87d49624c4e2a25bf8b4eebd122b8288315a",
     "LocalShellView": "6f106d7af5ca87bd8c1e2d781b510b680e11ba74017802a045a6890c221fb70c",
     "LockReason": "82d017280f2f9743a0adc01bae0fa928f7510ad01504df44c7c9c047d4e14348",
@@ -2058,6 +2068,7 @@
     "WindowChromeEvent": "a9e73038eeaca723228a9614f12f73a75bdcf7c0b88b846db12f81175e6e6c9a",
     "WorkerUpdate": "bf495bae5e1c6b3a799f45f976c11ecad84e4b3c363e307bb1b048f5b49798a8",
     "WorkerUpdateKind": "18ca60b893fd5aba8d2bcc9f5976b9d02129ee1ba0f519f7a729c2b26b730fc1",
+    "ZoomView": "77bd8158a451bb00e9d2418c8a42943cc48d8a30490d83a33d994b16da8f17a4",
     "EventEmit": "5934634084a50156fbe6b33604f94633b19620984b92e46b7bc7bf311647d9b6"
   }
 }

@@ -12,3 +12,10 @@ docs/design/
 # everyone to redeploy (scripts/ci/worker-version.mjs). Remove this line in the next pull request
 # that raises the Worker version.
 workers/sync/src/
+
+# HarmonyOS host files, generated contracts, and package metadata.
+apps/desktop/harmonyos-*.html
+apps/desktop/src/ipc/harmonyos/
+apps/desktop/vite.harmonyos.config.ts
+platform/harmonyos/
+scripts/harmonyos/

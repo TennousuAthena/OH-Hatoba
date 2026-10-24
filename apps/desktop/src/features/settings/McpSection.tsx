@@ -407,11 +407,14 @@ function ServerDetails({
   const tools = status?.tools ?? [];
   const stderr = stderrText(status?.stderr ?? []);
   const starting = state === "starting" || working === "start";
-  const sentence = server.transport.kind === "stdio" && !hostCapabilities().stdioMcp ? t("host.localUnavailable") : off
-    ? t("aiSettings.mcp.status.off")
-    : state === "running"
-      ? t("aiSettings.mcp.status.running", { n: tools.length })
-      : t(`aiSettings.mcp.status.${state}` as MessageKey);
+  const sentence =
+    server.transport.kind === "stdio" && !hostCapabilities().stdioMcp
+      ? t("host.localUnavailable")
+      : off
+        ? t("aiSettings.mcp.status.off")
+        : state === "running"
+          ? t("aiSettings.mcp.status.running", { n: tools.length })
+          : t(`aiSettings.mcp.status.${state}` as MessageKey);
 
   return (
     <div className={s.details}>

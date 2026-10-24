@@ -1,0 +1,38 @@
+{
+  "verifiedAt": "2026-10-24T08:17:00Z",
+  "environment": "macOS ARM64 / Rust 1.97.0 / DevEco Studio 26.0.0.851 / Native SDK 6.0.0.61",
+  "checks": {
+    "upstreamCandidate": "v0.7.1 (e1c7d171f1a7ee85c08f3d3d01a7c12f8b4c3d22)",
+    "workspaceTypecheck": true,
+    "workspaceLint": true,
+    "workspaceFrontendTestsPassed": 1088,
+    "formatCheck": true,
+    "contractCommands": 201,
+    "contractTestsPassed": 4,
+    "generatedPortableHandlers": 184,
+    "ipcTestsPassed": 12,
+    "productionBoundary": true,
+    "rustWorkspaceTests": "passed except two host-environment tests",
+    "rustWorkspaceEnvironmentExclusions": [
+      "hatoba-ssh stats::tests::the_script_reads_this_machine (this container reports no uptime)",
+      "hatoba-desktop platform::login_shell::tests::shell::what_the_shell_started_is_killed_with_it (missing host fixture path)"
+    ],
+    "allWorkspaceClippy": true,
+    "rustfmt": true,
+    "commentWidth": true,
+    "ohosSignedBuild": true
+  },
+  "artifact": {
+    "name": "entry-default-signed.hap",
+    "sha256": "1238843cd50e23194f3f3970ce5172438e7e80c7b5995392cac392bfd1594a75",
+    "bytes": 54758754,
+    "minimumApi": 20,
+    "targetApi": 26,
+    "architecture": "arm64-v8a",
+    "deviceTypes": [
+      "2in1",
+      "tablet"
+    ]
+  },
+  "scope": "Local upgrade validation for upstream v0.7.1. The two excluded upstream tests depend on host shell/metrics rather than this port; the unchanged SOCKS unreachable test passes in isolation. Device revalidation was blocked because both saved wireless debugging endpoints expired and no USB target was connected."
+}

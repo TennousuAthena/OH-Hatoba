@@ -2440,7 +2440,7 @@ dependencies = [
 
 [[package]]
 name = "hatoba-net"
-version = "0.6.0"
+version = "0.7.1"
 dependencies = [
  "reqwest",
  "rustls-native-certs",
@@ -2448,7 +2448,7 @@ dependencies = [
 
 [[package]]
 name = "hatoba-ohos"
-version = "0.6.0"
+version = "0.7.1"
 dependencies = [
  "async-trait",
  "futures",
@@ -2469,7 +2469,7 @@ dependencies = [
 
 [[package]]
 name = "hatoba-runtime"
-version = "0.6.0"
+version = "0.7.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",

@@ -13,7 +13,10 @@ use std::sync::Arc;
 struct Services;
 #[async_trait::async_trait]
 impl SystemServices for Services {
-    async fn call(&self, _: &str, _: Value) -> crate::error::AppResult<Value> {
+    async fn call(&self, method: &str, _: Value) -> crate::error::AppResult<Value> {
+        if method == "window_zoom" {
+            return Ok(json!({"zoom": 125, "max": 200}));
+        }
         Err(crate::error::AppError::internal(
             "No OS services in this test",
         ))
@@ -37,6 +40,12 @@ async fn generated_dispatch_uses_real_vault_commands_and_preserves_agent_configu
     assert_eq!(
         dispatch(&app, "app_info", json!({})).await.unwrap()["platform"],
         "harmonyos"
+    );
+    assert_eq!(
+        dispatch(&app, "window_zoom", json!({"percent": 127}))
+            .await
+            .unwrap(),
+        json!({"zoom": 125, "max": 200})
     );
     assert_eq!(
         dispatch(&app, "vault_status", json!({})).await.unwrap()["state"],

@@ -1,4 +1,6 @@
-.keys { display: none; }
+.keys {
+  display: none;
+}
 @media (any-pointer: coarse) {
   .keys {
     display: flex;
@@ -21,5 +23,7 @@
     color: var(--fg);
     font: inherit;
   }
-  .keys button:disabled { opacity: .5; }
+  .keys button:disabled {
+    opacity: 0.5;
+  }
 }

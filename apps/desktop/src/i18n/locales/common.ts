@@ -173,7 +173,8 @@ export default defineMessages({
   },
   en: {
     "app.name": "Hatoba",
-    "host.localUnavailable": "Local processes are unavailable on this device. This configuration stays saved and synced.",
+    "host.localUnavailable":
+      "Local processes are unavailable on this device. This configuration stays saved and synced.",
     "host.notificationPermission": "Allow system notifications",
 
     "btn.cancel": "Cancel",
