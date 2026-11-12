@@ -12,6 +12,21 @@
 
 ## 构建及本机回归
 
+### 2026-11-13 / MateBook Pro（2in1）端到端加严复验
+
+- 在 MateBook Pro/API26 安装与平板加严复验**完全相同的 v0.8.5 签名包**，SHA-256 为
+  `1ba632f307d274fb5caa629442cfc903601d0cdfb0d916b67e183a3e7b877731`。
+  [2in1 端到端证据](evidence/2026-11-13-2in1-upstream-085-e2e.json)记录本次独立启动标识和实际安装摘要。
+- 隔离保险库、SSH/Telnet 主机和历史 CRUD，以及 15 项原生网络/文件检查全部通过；
+  包括 TLS 信任/拒绝、SSH 认证和主机密钥拒绝、SFTP FD 传输及取消、三类转发、AI/MCP/OAuth 协议链路。
+- Web SSH 与 Telnet 各通过 8 × 96 KiB（768 KiB）逐字节回显、xterm 消费和额度回收，
+  同时完成 resize/close 调用。真实 AI typed facade 的发送、Unicode 流、会话保存、中途取消、
+  空闲状态和本轮测试记录清理全部通过，结果与平板一致。
+- [2in1 普通入口证据](evidence/2026-11-13-2in1-upstream-085-e2e-startup.json)确认同一安装包
+  正常启动、React 渲染和原生背景同步。当前两类 API26 设备均完成此版本的自动化复验。
+- 本轮没有修改应用实现或重建安装包。结束后已回到普通入口，移除四个临时映射并停止生成数据服务。
+  未投屏；窗口布局、触控/中文 IME、真实选择器、生物识别与系统恢复仍需人工验收，API20 仍缺真机证据。
+
 ### 2026-11-13 / 平板端到端加严复验
 
 - 同一上游 v0.8.5 基线，重新构建并安装含加强诊断的签名包；
@@ -59,7 +74,8 @@
   覆盖 15 项原生检查、Web SSH/Telnet 数据与消费确认，以及隔离保险库业务；
   [普通入口](evidence/2026-11-13-tablet-upstream-085-startup.json)确认 React 渲染和原生窗口背景同步。
   安装包摘要与测试记录一致；本轮没有投屏，未将日志标记作为触控/IME/视觉验收。
-  MateBook 与 API20 设备未在本轮复验。测试完成后已移除四个反向端口并停止生成数据服务。
+  初始升级验证时 MateBook 与 API20 设备尚未复验；后续 MateBook 结果见上方 2in1 加严复验记录，
+  API20 仍未验证。该轮测试完成后已移除四个反向端口并停止生成数据服务。
 
 ### 2026-10-24 / 上游 v0.7.1
 
@@ -112,6 +128,7 @@
 
 | 设备 | 证据 | 已验证的范围 |
 | --- | --- | --- |
+| MateBook Pro / 2in1 / API26 / v0.8.5 加严复验 | [端到端](evidence/2026-11-13-2in1-upstream-085-e2e.json)、[普通入口](evidence/2026-11-13-2in1-upstream-085-e2e-startup.json) | 与平板相同签名包；15 项原生检查、SSH/Telnet 各 768 KiB 与额度回收、真实 AI 生命周期、业务 CRUD、启动与背景同步 |
 | MatePad Pro / tablet / API26 / v0.8.5 加严复验 | [端到端](evidence/2026-11-13-tablet-upstream-085-e2e.json)、[普通入口](evidence/2026-11-13-tablet-upstream-085-e2e-startup.json) | SSH/Telnet 各 768 KiB 与额度回收、真实 AI 业务发送/保存/取消、既有 15 项原生检查与业务检查 |
 | MatePad Pro / tablet / API26 / v0.8.5 | [网络与业务](evidence/2026-11-13-tablet-upstream-085-network.json)、[普通入口](evidence/2026-11-13-tablet-upstream-085-startup.json) | 最终签名包的 15 项原生检查、Web SSH/Telnet、主机/历史 CRUD、普通入口与背景同步 |
 | MateBook Pro / 2in1 / API26 | [业务 IPC](evidence/2026-10-22-2in1-business.json) | typed facade、保险库创建/重开、主机 CRUD、Agent 配置保留、锁事件、锁定拒读与解锁 |

@@ -19,8 +19,8 @@ Hatoba 的原生 HarmonyOS 适配，目标为 HarmonyOS 6.0/API20 起的 ARM64 *
 - 两类 API26 真机已经运行生成数据自动化。完整证据、测试范围和未验收项目见
   [验证记录](platform/harmonyos/docs/validation.md)。实现接入不代表每项系统交互已经验收。
 
-v0.8.5 已在 API26 平板完成安装、网络/业务端到端和普通入口复验；MateBook 的既有证据
-属于先前版本，本轮未复验。
+v0.8.5 的同一签名包已在 API26 平板与 MateBook Pro（2in1）完成安装、网络/业务端到端和
+普通入口复验；两类设备均通过 SSH/Telnet 各 768 KiB 流控及真实 AI 发送/保存/取消检查。
 
 本版不提供本地终端、stdio MCP、桌面 SSH Agent/CLI、外部程序编辑器、托盘和桌面自动更新。
 来自其他设备的这些配置会保留；本机能力控制执行和界面入口。
