@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHarmonyApi } from "./api";
 import { HostBridge } from "./bridge";
+import { commandContract } from "./commands.generated";
 
 class Port {
   onmessage: ((event: { data: unknown }) => void) | null = null;
@@ -23,10 +24,48 @@ describe("HarmonyOS transport", () => {
     const result = api.host_set_favorite("h1", true);
     expect(port.messages[0]).toMatchObject({ command: "host_set_favorite", args: { id: "h1", favorite: true } });
     port.reply(null);
-    await expect(result).resolves.toBeUndefined();
+    await expect(result).resolves.toBeNull();
     const missing = api.host_get("gone");
     port.receive({ v: 1, type: "reply", id: port.messages.at(-1)?.id, ok: false, error: { code: "not_found", detail: "host" } });
     await expect(missing).rejects.toMatchObject({ code: "not_found" });
+    bridge.close();
+  });
+
+  it("exposes all generated commands through the shared enumerable adapter", async () => {
+    const bridge = new HostBridge(new Port() as unknown as MessagePort);
+    const api = await createHarmonyApi(bridge);
+    expect(Object.keys(api).sort()).toEqual([...Object.values(commandContract).map((c) => c.command), "listen"].sort());
+    bridge.close();
+  });
+
+  it.each(["saved", "quick"])("preserves %s Telnet frame consumption credits", async (kind) => {
+    const port = new Port();
+    const bridge = new HostBridge(port as unknown as MessagePort);
+    const api = await createHarmonyApi(bridge);
+    const frames: Uint8Array[] = [];
+    let consumed: (() => void) | undefined;
+    const onFrame = (frame: Uint8Array) => {
+      frames.push(frame);
+      return new Promise<void>((resolve) => { consumed = resolve; });
+    };
+    const size = { cols: 80, rows: 24 };
+    const result = kind === "saved"
+      ? api.telnet_open("generated-host", size, onFrame)
+      : api.telnet_open_target("127.0.0.1", 2323, size, onFrame);
+    const call = port.messages[0];
+    expect(call.command).toBe(kind === "saved" ? "telnet_open" : "telnet_open_target");
+    const id = ((call.args as Record<string, unknown>).channel as { channel: number }).channel;
+    const frame = new Uint8Array(7);
+    new DataView(frame.buffer).setUint32(0, id, true);
+    frame.set([0, 128, 255], 4);
+    port.receive(frame.buffer);
+    expect(frames).toEqual([new Uint8Array([0, 128, 255])]);
+    await Promise.resolve();
+    expect(port.messages.some((message) => message.type === "ack")).toBe(false);
+    consumed!();
+    await vi.waitFor(() => expect(port.messages.at(-1)).toMatchObject({ type: "ack", channel: id, bytes: 3 }));
+    port.reply("generated-session", call.id);
+    await expect(result).resolves.toBe("generated-session");
     bridge.close();
   });
 

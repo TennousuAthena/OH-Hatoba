@@ -1,4 +1,4 @@
-import type { LiveSession } from "./session";
+import type { LiveSession } from "@/session/session";
 import s from "./TerminalKeys.module.css";
 
 const keys = [

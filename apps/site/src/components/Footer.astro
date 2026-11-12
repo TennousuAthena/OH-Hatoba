@@ -1,5 +1,14 @@
 ---
-import { BUG_REPORT_URL, CONTRIBUTING_URL, LICENSE_URL, RELEASES_URL, REPO_URL, SECURITY_URL } from "../consts";
+import {
+  BUG_REPORT_URL,
+  CONTRIBUTING_URL,
+  LICENSE_URL,
+  PRIVACY_URL,
+  RELEASES_URL,
+  REPO_URL,
+  SECURITY_URL,
+  SPONSOR_URL,
+} from "../consts";
 import { LANG, LANGUAGE_NAME, LOCALES, localePath, messages, type Locale } from "../i18n";
 import Link from "./Link.astro";
 
@@ -54,8 +63,18 @@ const t = messages(locale);
         </Link>
       </li>
       <li>
+        <Link variant="muted" href={PRIVACY_URL}>
+          {t.footer.privacy}
+        </Link>
+      </li>
+      <li>
         <Link variant="muted" href={CONTRIBUTING_URL}>
           {t.footer.contributing}
+        </Link>
+      </li>
+      <li>
+        <Link variant="muted" href={SPONSOR_URL}>
+          {t.footer.sponsor}
         </Link>
       </li>
     </ul>

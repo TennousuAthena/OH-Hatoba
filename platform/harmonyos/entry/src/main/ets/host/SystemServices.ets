@@ -40,6 +40,8 @@ interface Capabilities {
   tray: boolean;
   updater: boolean;
   folderPicker: boolean;
+  externalEditor: boolean;
+  systemProxy: boolean;
 }
 interface ZoomResult { zoom: number; max: number; }
 
@@ -83,7 +85,7 @@ export class SystemServices {
       case 'capabilities': {
         const result: Capabilities = {
           localTerminal: false, sshAgent: false, stdioMcp: false, desktopCli: false,
-          tray: false, updater: false,
+          tray: false, updater: false, externalEditor: false, systemProxy: false,
           folderPicker: canIUse('SystemCapability.FileManagement.UserFileService.FolderSelection')
         };
         return result;

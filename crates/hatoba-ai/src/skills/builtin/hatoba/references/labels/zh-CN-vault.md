@@ -90,7 +90,7 @@ The labels that these files name in English, as the interface shows them in Simp
 | Private Key | 私钥 |
 | Used by | 使用中的主机 |
 | Last used | 上次使用 |
-| Copy public key | 复制公钥 |
+| Copy Public Key | 复制公钥 |
 | Copy | 复制 |
 | Rename | 重命名 |
 | Deploy to Host | 部署到主机 |
@@ -136,6 +136,7 @@ The labels that these files name in English, as the interface shows them in Simp
 | Language | 语言 |
 | System Default | 跟随系统 |
 | 简体中文 | 简体中文 |
+| 繁體中文 | 繁體中文 |
 | English | English |
 | 日本語 | 日本語 |
 | Show host reachability | 显示主机在线状态 |
@@ -171,8 +172,10 @@ The labels that these files name in English, as the interface shows them in Simp
 
 | en | zh-CN |
 |---|---|
-| Default proxy on this device | 这台设备的默认代理 |
+| Default Proxy on This Device | 这台设备的默认代理 |
 | No proxy | 不使用代理 |
+| Proxy for Hatoba | Hatoba 自身的代理 |
+| System proxy | 系统代理 |
 | Saved Proxies | 已保存的代理 |
 | Add Proxy | 添加代理 |
 | Edit Proxy | 编辑代理 |

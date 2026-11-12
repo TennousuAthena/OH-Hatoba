@@ -248,6 +248,13 @@ export const commandContract = {
     ],
     "channels": []
   },
+  "hostsArrange": {
+    "command": "hosts_arrange",
+    "parameters": [
+      "order"
+    ],
+    "channels": []
+  },
   "hostSetFavorite": {
     "command": "host_set_favorite",
     "parameters": [
@@ -505,6 +512,13 @@ export const commandContract = {
     ],
     "channels": []
   },
+  "sshSuggestions": {
+    "command": "ssh_suggestions",
+    "parameters": [
+      "sessionId"
+    ],
+    "channels": []
+  },
   "sshTest": {
     "command": "ssh_test",
     "parameters": [
@@ -555,6 +569,102 @@ export const commandContract = {
   },
   "localClose": {
     "command": "local_close",
+    "parameters": [
+      "sessionId"
+    ],
+    "channels": []
+  },
+  "telnetHostsList": {
+    "command": "telnet_hosts_list",
+    "parameters": [],
+    "channels": []
+  },
+  "telnetHostSave": {
+    "command": "telnet_host_save",
+    "parameters": [
+      "input"
+    ],
+    "channels": []
+  },
+  "telnetHostDelete": {
+    "command": "telnet_host_delete",
+    "parameters": [
+      "id"
+    ],
+    "channels": []
+  },
+  "telnetHostDuplicate": {
+    "command": "telnet_host_duplicate",
+    "parameters": [
+      "id"
+    ],
+    "channels": []
+  },
+  "telnetHostSetFavorite": {
+    "command": "telnet_host_set_favorite",
+    "parameters": [
+      "id",
+      "favorite"
+    ],
+    "channels": []
+  },
+  "telnetHostCopyPassword": {
+    "command": "telnet_host_copy_password",
+    "parameters": [
+      "id"
+    ],
+    "channels": []
+  },
+  "telnetOpen": {
+    "command": "telnet_open",
+    "parameters": [
+      "hostId",
+      "options",
+      "channel"
+    ],
+    "channels": [
+      2
+    ]
+  },
+  "telnetOpenTarget": {
+    "command": "telnet_open_target",
+    "parameters": [
+      "address",
+      "port",
+      "options",
+      "channel"
+    ],
+    "channels": [
+      3
+    ]
+  },
+  "telnetWrite": {
+    "command": "telnet_write",
+    "parameters": [
+      "sessionId",
+      "data"
+    ],
+    "channels": []
+  },
+  "telnetWriteBytes": {
+    "command": "telnet_write_bytes",
+    "parameters": [
+      "sessionId",
+      "data"
+    ],
+    "channels": []
+  },
+  "telnetResize": {
+    "command": "telnet_resize",
+    "parameters": [
+      "sessionId",
+      "cols",
+      "rows"
+    ],
+    "channels": []
+  },
+  "telnetClose": {
+    "command": "telnet_close",
     "parameters": [
       "sessionId"
     ],
@@ -681,6 +791,70 @@ export const commandContract = {
     "parameters": [
       "transferId"
     ],
+    "channels": []
+  },
+  "sftpEditOpen": {
+    "command": "sftp_edit_open",
+    "parameters": [
+      "tabId",
+      "sessionId",
+      "path"
+    ],
+    "channels": []
+  },
+  "sftpEditReopen": {
+    "command": "sftp_edit_reopen",
+    "parameters": [
+      "editId"
+    ],
+    "channels": []
+  },
+  "sftpEditSession": {
+    "command": "sftp_edit_session",
+    "parameters": [
+      "tabId",
+      "sessionId"
+    ],
+    "channels": []
+  },
+  "sftpEditUpload": {
+    "command": "sftp_edit_upload",
+    "parameters": [
+      "editId",
+      "overwrite"
+    ],
+    "channels": []
+  },
+  "sftpEditDiscard": {
+    "command": "sftp_edit_discard",
+    "parameters": [
+      "editId"
+    ],
+    "channels": []
+  },
+  "sftpEditStop": {
+    "command": "sftp_edit_stop",
+    "parameters": [
+      "editId",
+      "upload"
+    ],
+    "channels": []
+  },
+  "sftpEditChanged": {
+    "command": "sftp_edit_changed",
+    "parameters": [
+      "editId"
+    ],
+    "channels": []
+  },
+  "sftpEditList": {
+    "command": "sftp_edit_list",
+    "parameters": [],
+    "channels": []
+  },
+  "sftpEditQuit": {
+    "command": "sftp_edit_quit",
+    "parameters": [],
     "channels": []
   },
   "syncStatus": {
@@ -890,6 +1064,34 @@ export const commandContract = {
   },
   "starPromptDone": {
     "command": "star_prompt_done",
+    "parameters": [],
+    "channels": []
+  },
+  "commandHistoryList": {
+    "command": "command_history_list",
+    "parameters": [
+      "owner"
+    ],
+    "channels": []
+  },
+  "commandHistoryAdd": {
+    "command": "command_history_add",
+    "parameters": [
+      "owner",
+      "command"
+    ],
+    "channels": []
+  },
+  "commandHistoryRemove": {
+    "command": "command_history_remove",
+    "parameters": [
+      "owner",
+      "command"
+    ],
+    "channels": []
+  },
+  "commandHistoryClear": {
+    "command": "command_history_clear",
     "parameters": [],
     "channels": []
   },

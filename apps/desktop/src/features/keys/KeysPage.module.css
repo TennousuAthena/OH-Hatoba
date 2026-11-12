@@ -28,7 +28,7 @@
   container-type: inline-size;
 }
 
-/* Table: 名称 | 类型 | 指纹 | 创建 | 使用中 (design §04) */
+/* Table: 名称 | 类型 | 指纹 | 创建 | 使用中 */
 .head,
 .row {
   display: grid;
@@ -63,8 +63,9 @@
   }
 }
 
+/* The same height as the hosts and forwards lists' header (@hatoba/ui tableHead). */
 .head {
-  height: 28px;
+  height: 26px;
   margin: 0 24px;
   font-size: var(--text-xs);
   font-weight: 500;
@@ -84,6 +85,10 @@
   padding: 4px 12px 12px;
 }
 
+.list:focus-visible {
+  outline: none;
+}
+
 .row {
   height: var(--row);
   padding: 0 12px;
@@ -97,10 +102,6 @@
 
 .row.rowOn {
   background: var(--rowsel);
-}
-
-.row:focus-visible {
-  outline-offset: -2px;
 }
 
 .cellName {
@@ -169,7 +170,7 @@
   color: var(--fg2);
 }
 
-/* Detail panel (design §04, 300px) */
+/* Detail panel (300px) */
 .panel {
   width: 300px;
   flex: none;
@@ -296,11 +297,11 @@
   word-break: break-all;
 }
 
+/* The private key never reaches the WebView: one line of dots, as a password field shows a secret, in the public
+   key's box. */
 .privateBox {
-  padding: 12px;
-  letter-spacing: 2px;
-  color: var(--fg3);
-  line-height: 1.4;
+  letter-spacing: 1px;
+  color: var(--fg2);
   overflow: hidden;
   white-space: nowrap;
 }

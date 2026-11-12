@@ -1,8 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Icon } from "@/components/controls";
-import { StatusTile } from "@/components/layout";
-import { toast } from "@/components/overlay";
-import { StatusLine } from "@/components/patterns";
+import { Button, Icon, PageHeader, StatusLine, StatusTile, toast } from "@hatoba/ui";
 import { useVaultData } from "@/app/data";
 import { errorMessage } from "@/app/errors";
 import { formatRelative, useT, type MessageKey } from "@/i18n";
@@ -13,6 +10,7 @@ import s from "./Sync.module.css";
 
 const TYPE_ICON: Record<ConflictView["item_type"], string> = {
   host: "hard-drives",
+  telnet_host: "network",
   key: "key",
   group: "folder-simple",
   known_host: "fingerprint",
@@ -30,7 +28,7 @@ const TYPE_ICON: Record<ConflictView["item_type"], string> = {
   mcp_server: "plugs",
 };
 
-/** Fields whose values read better in the monospace face (as in the design). */
+/** Fields whose values read better in the monospace face. */
 const MONO_FIELDS = new Set(["name", "address", "port", "username", "key", "fingerprint", "base_url", "path", "env"]);
 
 /** Fields the backend sends as "true" or "false". */
@@ -57,7 +55,7 @@ function describe(t: T, c: ConflictView): string {
   return t("sync.cf.desc.both", { type });
 }
 
-/** Differing fields, plus a state row when one side deleted the item (design §05c). */
+/** Differing fields, plus a state row when one side deleted the item. */
 function rowsOf(c: ConflictView): Row[] {
   const rows: Row[] = [...c.fields];
   if ((c.local_deleted || c.remote_deleted) && !rows.some((r) => r.field === "state")) {
@@ -193,6 +191,9 @@ export function SyncConflictsView({ onClose }: { onClose: () => void }) {
 
   return (
     <div className={s.page}>
+      <PageHeader title={t("rail.sync")}>
+        <Button onClick={onClose}>{t("btn.later")}</Button>
+      </PageHeader>
       <div className={s.scroll}>
         <div className={`${s.column} ${s.columnTight}`}>
           <div className={s.header}>
@@ -201,7 +202,6 @@ export function SyncConflictsView({ onClose }: { onClose: () => void }) {
               <div className={s.title}>{t("sync.cf.title", { n: list?.length ?? 0 })}</div>
               <div className={s.sub}>{t("sync.cf.sub")}</div>
             </div>
-            <Button onClick={onClose}>{t("btn.later")}</Button>
           </div>
 
           {list?.length === 0 && <div className={s.empty}>{t("sync.cf.empty")}</div>}

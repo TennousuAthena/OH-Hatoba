@@ -13,6 +13,9 @@ desktop-host = []
 
 [dependencies]
 hatoba-core.workspace = true
+hatoba-assistant.workspace = true
+hatoba-ipc.workspace = true
+hatoba-telnet.workspace = true
 hatoba-ssh.workspace = true
 hatoba-ai.workspace = true
 tokio.workspace = true
@@ -30,12 +33,12 @@ futures.workspace = true
 specta.workspace = true
 specta-typescript = "0.0.12"
 dirs = "6"
-reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2", "charset", "system-proxy"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2", "charset", "system-proxy", "socks"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 encoding_rs = "0.8"
 serde_yaml_ng = "0.10"
-zip = { version = "8.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+zip = { version = "9.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 quick-xml = "0.42"
 
 [build-dependencies]

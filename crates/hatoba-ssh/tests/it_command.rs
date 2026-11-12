@@ -9,6 +9,8 @@ use std::time::{Duration, Instant};
 
 use common::*;
 use hatoba_ssh::remote_command::{self, Output, Stopped};
+use hatoba_ssh::sudo::{self, Access, RunAs};
+use hatoba_ssh::{SshSession, remote_file::RemoteFileError};
 use tokio_util::sync::CancellationToken;
 
 macro_rules! server {
@@ -303,4 +305,264 @@ async fn a_stop_ends_a_streamed_command_whose_output_nobody_reads() {
     .expect("the stop waited for the output to be read")
     .unwrap();
     assert_eq!(run.stopped, Some(Stopped::Ended));
+}
+
+/// Runs `command` as `run_as` and returns its stdout, failing on another exit status than 0.
+async fn as_root(session: &SshSession, run_as: &RunAs, command: &str) -> String {
+    let (tx, rx) = tokio::sync::mpsc::channel(8);
+    let (run, (stdout, stderr)) = tokio::join!(
+        remote_command::run_streaming_as(
+            session,
+            command,
+            Some("~"),
+            run_as,
+            None,
+            std::future::pending(),
+            tx
+        ),
+        received(rx)
+    );
+    let run = run.unwrap();
+    assert_eq!(
+        run.output.exit_status,
+        Some(0),
+        "{command}: {}",
+        String::from_utf8_lossy(&stderr)
+    );
+    String::from_utf8(stdout).unwrap()
+}
+
+/// Runs `command` as `run_as` with `input` as its stdin, and returns its exit status and stdout.
+async fn with_stdin(
+    session: &SshSession,
+    run_as: &RunAs,
+    command: &str,
+    input: Vec<u8>,
+) -> (Option<u32>, Vec<u8>) {
+    let (in_tx, in_rx) = tokio::sync::mpsc::channel(4);
+    let (tx, rx) = tokio::sync::mpsc::channel(8);
+    let feed = async move {
+        for chunk in input.chunks(64 * 1024) {
+            // A command that does not read it all ends first.
+            if in_tx.send(chunk.to_vec()).await.is_err() {
+                break;
+            }
+        }
+    };
+    let run = remote_command::run_streaming_as(
+        session,
+        command,
+        None,
+        run_as,
+        Some(in_rx),
+        std::future::pending(),
+        tx,
+    );
+    let (run, (stdout, _), ()) = tokio::time::timeout(Duration::from_secs(30), async {
+        tokio::join!(run, received(rx), feed)
+    })
+    .await
+    .expect("the command with a stdin did not end");
+    (run.unwrap().output.exit_status, stdout)
+}
+
+/// HOST-15: a stdin takes a second session beside the command's. A host that allows one fails the
+/// command at once, and commands that pass theirs at the same time on a host that allows two take
+/// turns, instead of each holding one session and waiting for another.
+#[tokio::test]
+async fn stdin_commands_share_few_sessions() {
+    let Some(server) = SshdServer::start_max_sessions(1) else {
+        return;
+    };
+    let session = server.connect_key("ed25519", None).await;
+    let (tx, _rx) = tokio::sync::mpsc::channel(8);
+    let (_in_tx, in_rx) = tokio::sync::mpsc::channel(1);
+    let run = remote_command::run_streaming_as(
+        &session,
+        "cat",
+        None,
+        &RunAs::Login,
+        Some(in_rx),
+        std::future::pending(),
+        tx,
+    );
+    let error = tokio::time::timeout(Duration::from_secs(5), run)
+        .await
+        .expect("the command waited for a second session the host refused")
+        .unwrap_err();
+    assert!(error.message.contains("second session"), "{error}");
+
+    let Some(server) = SshdServer::start_max_sessions(2) else {
+        return;
+    };
+    let session = server.connect_key("ed25519", None).await;
+    let runs = (0..3).map(|i| {
+        let session = &session;
+        async move { with_stdin(session, &RunAs::Login, "cat", format!("{i}\n").into_bytes()).await }
+    });
+    for (i, run) in futures::future::join_all(runs)
+        .await
+        .into_iter()
+        .enumerate()
+    {
+        assert_eq!(run, (Some(0), format!("{i}\n").into_bytes()), "command {i}");
+    }
+}
+
+/// HOST-15: `hatoba exec` passes a stdin to the command, which ends where it does; a command that
+/// does not read it ends all the same.
+#[tokio::test]
+async fn a_stdin_reaches_the_command() {
+    let server = server!();
+    let session = server.connect_key("ed25519", None).await;
+    let login = RunAs::Login;
+    assert_eq!(
+        with_stdin(&session, &login, "cat; echo done", b"a\nb\n".to_vec()).await,
+        (Some(0), b"a\nb\ndone\n".to_vec())
+    );
+    let big = vec![b'x'; 1_000_000];
+    assert_eq!(
+        with_stdin(&session, &login, "wc -c | tr -d ' '", big.clone()).await,
+        (Some(0), b"1000000\n".to_vec())
+    );
+    assert_eq!(
+        with_stdin(&session, &login, "echo quick", big).await,
+        (Some(0), b"quick\n".to_vec())
+    );
+    assert_eq!(
+        with_stdin(&session, &login, "head -n 1", b"one\ntwo\n".to_vec()).await,
+        (Some(0), b"one\n".to_vec())
+    );
+}
+
+/// HOST-15: `hatoba exec --sudo` and `hatoba cp --sudo` where sudo asks for no password, as on
+/// CI's runners: the command runs as root from the login user's home directory, a stop ends it,
+/// and a copy writes and reads a file that only root can. Skipped where sudo would ask.
+#[tokio::test]
+async fn sudo_runs_the_command_and_the_copy_as_root() {
+    let server = server!();
+    let session = server.connect_key("ed25519", None).await;
+    let run_as = match sudo::access(&session).await {
+        Ok(Access::NoPassword) => RunAs::Sudo(None),
+        Ok(Access::Root) => RunAs::Login,
+        _ => return,
+    };
+    let home = Command::new("sh")
+        .args(["-c", "getent passwd \"$(id -un)\" | cut -d: -f6"])
+        .output()
+        .unwrap();
+    let home = std::path::PathBuf::from(String::from_utf8_lossy(&home.stdout).trim())
+        .canonicalize()
+        .unwrap();
+    assert_eq!(
+        as_root(&session, &run_as, "id -u; pwd -P").await,
+        format!("0\n{}\n", home.display())
+    );
+    // A stdin reaches a command that runs as root, through a pipe only root can open.
+    assert_eq!(
+        with_stdin(&session, &run_as, "cat; id -u", b"in\n".to_vec()).await,
+        (Some(0), b"in\n0\n".to_vec())
+    );
+
+    // A stop ends a command that runs as root.
+    let (tx, rx) = tokio::sync::mpsc::channel(8);
+    let (run, _) = tokio::join!(
+        remote_command::run_streaming_as(
+            &session,
+            "sleep 307",
+            None,
+            &run_as,
+            None,
+            started("sleep 307"),
+            tx
+        ),
+        received(rx)
+    );
+    assert_eq!(run.unwrap().stopped, Some(Stopped::Ended));
+    assert!(processes("sleep 307").is_empty());
+
+    // A copy into a folder that only root can open, and back.
+    let locked = as_root(
+        &session,
+        &run_as,
+        "d=$(mktemp -d) && chmod 700 \"$d\" && echo \"$d\"",
+    )
+    .await
+    .trim()
+    .to_owned();
+    let dir = sudo::temp_dir(&session).await.unwrap();
+    let staged = sudo::temp_file(&dir);
+    let write = session
+        .exec_output(
+            "sh -c 'IFS= read -r f; printf hello > \"$f\"'",
+            Some(format!("{staged}\n").into_bytes()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(write.exit_status, Some(0));
+    sudo::install(&session, &run_as, &staged, &locked, "conf", None)
+        .await
+        .unwrap();
+    assert_eq!(
+        as_root(&session, &run_as, &format!("stat -c %u {locked}/conf")).await,
+        "0\n"
+    );
+    sudo::install(&session, &run_as, &staged, &locked, "private", Some(0o600))
+        .await
+        .unwrap();
+    assert_eq!(
+        as_root(&session, &run_as, &format!("stat -c %a {locked}/private")).await,
+        "600\n"
+    );
+    assert!(matches!(
+        sudo::install(
+            &session,
+            &run_as,
+            &staged,
+            &format!("{locked}/no/x"),
+            "x",
+            None
+        )
+        .await,
+        Err(RemoteFileError::NoDirectory)
+    ));
+    sudo::remove_temp_dir(&session, &dir).await.unwrap();
+    assert!(!std::path::Path::new(&dir).exists());
+
+    let local = server.area("sudo-download").join("conf");
+    std::fs::create_dir_all(local.parent().unwrap()).unwrap();
+    std::fs::write(&local, b"old").unwrap();
+    let download = |remote: String| {
+        let local = local.clone();
+        let session = &session;
+        let run_as = &run_as;
+        async move {
+            sudo::download(
+                session,
+                run_as,
+                &remote,
+                &local,
+                |_| {},
+                CancellationToken::new(),
+            )
+            .await
+        }
+    };
+    download(format!("{locked}/conf")).await.unwrap();
+    assert_eq!(std::fs::read(&local).unwrap(), b"hello");
+    let mode =
+        std::os::unix::fs::PermissionsExt::mode(&std::fs::metadata(&local).unwrap().permissions());
+    assert_eq!(mode & 0o777, 0o600);
+    // A file that is not there leaves the local one as it was, and no part file.
+    std::fs::write(&local, b"old").unwrap();
+    assert!(matches!(
+        download(format!("{locked}/missing")).await,
+        Err(RemoteFileError::NotFound)
+    ));
+    assert_eq!(std::fs::read(&local).unwrap(), b"old");
+    assert_eq!(
+        std::fs::read_dir(local.parent().unwrap()).unwrap().count(),
+        1
+    );
+    as_root(&session, &run_as, &format!("rm -rf {locked}")).await;
 }

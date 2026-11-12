@@ -1,4 +1,5 @@
 import type { AppError, EventMap } from "../types";
+import { appError } from "../api";
 
 export const HOST_PROTOCOL = 1;
 export const HANDSHAKE = "oh-hatoba-host/v1";
@@ -7,7 +8,7 @@ const MAX_CHANNELS = 128;
 const MAX_FRAME = 256 * 1024;
 const MAX_JSON = 1024 * 1024;
 
-const failure = (detail: string): AppError => ({ code: "internal", detail });
+const failure = (detail: string): AppError => appError("internal", detail);
 
 /** Native owns credentials and business state. This port carries only whitelisted commands and
  * existing DTOs. It is independent of Tauri globals and never falls back to the demo backend. */

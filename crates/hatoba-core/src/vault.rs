@@ -24,7 +24,7 @@ use crate::crypto::{
 use crate::error::{Error, Result};
 use crate::model::{
     Group, Host, Item, KnownHost, PortForward, Proxy, RightClick, SETTINGS_ID, Settings, SshKey,
-    new_id,
+    TelnetHost, new_id,
 };
 use crate::recovery::RecoveryCode;
 use crate::store::{ConflictRow, ItemRow, Store, StoreOps, meta};
@@ -187,7 +187,6 @@ impl std::fmt::Debug for RecoveryChange {
 /// The non-secret vault metadata kept in `meta`, as uploaded on sync setup.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalMeta {
-    /// Schema version.
     pub schema_version: u32,
     /// Base64 salt.
     pub kdf_salt: String,
@@ -942,25 +941,27 @@ impl Vault {
             .collect()
     }
 
-    /// All hosts.
     #[must_use]
     pub fn hosts(&self) -> Vec<(String, Host)> {
         self.collect(Item::as_host)
     }
 
-    /// All keys.
+    /// All Telnet hosts (TELNET-01).
+    #[must_use]
+    pub fn telnet_hosts(&self) -> Vec<(String, TelnetHost)> {
+        self.collect(Item::as_telnet_host)
+    }
+
     #[must_use]
     pub fn keys(&self) -> Vec<(String, SshKey)> {
         self.collect(Item::as_key)
     }
 
-    /// All groups.
     #[must_use]
     pub fn groups(&self) -> Vec<(String, Group)> {
         self.collect(Item::as_group)
     }
 
-    /// All known hosts.
     #[must_use]
     pub fn known_hosts(&self) -> Vec<(String, KnownHost)> {
         self.collect(Item::as_known_host)
@@ -972,7 +973,6 @@ impl Vault {
         self.collect(Item::as_proxy)
     }
 
-    /// All port forwards.
     #[must_use]
     pub fn forwards(&self) -> Vec<(String, PortForward)> {
         self.collect(Item::as_forward)
@@ -1432,10 +1432,10 @@ impl Vault {
     /// none that its key opens (none yet, or a damaged one), the local one is queued dated at the
     /// epoch, older than any settings of the remote's own devices, which therefore replace it
     /// whenever they arrive (an edit made here after the join is dated as usual). Tombstones,
-    /// items that cannot be decrypted, and the conflict log are dropped, and every
-    /// [`SealedLocal`] is sealed again, and the PIN unlock is turned off. Returns whether the
-    /// vault key changed, so the caller can drop what still holds the old one (biometric unlock,
-    /// the PIN's copy in the OS credential store).
+    /// items that cannot be decrypted, and the conflict log are dropped, every [`SealedLocal`],
+    /// file snapshot and command history is sealed again, and the PIN unlock is turned off.
+    /// Returns whether the vault key changed, so the caller can drop what still holds the old one
+    /// (biometric unlock, the PIN's copy in the OS credential store).
     ///
     /// Once the transaction has committed the join has happened: if reloading the items then
     /// fails, the vault is left locked (never on the old key) and this still returns `Ok`.
@@ -1505,6 +1505,7 @@ impl Vault {
                 }
                 tx.clear_conflicts()?;
                 crate::vault_snapshots::reseal_snapshots(tx, &old, &vault_key)?;
+                crate::vault_history::reseal_command_history(tx, &old, &vault_key)?;
                 // The PIN wraps the old key, like the biometric unlock, and is turned off with it.
                 tx.delete_meta(meta::PIN)?;
                 for (key, resealed) in &local {
@@ -2195,6 +2196,34 @@ mod tests {
         vault.unlock(PW).unwrap();
         assert!(vault.get(&id).is_some());
         assert!(vault.get("garbage").is_none());
+    }
+
+    #[test]
+    fn items_of_a_type_this_version_lacks_are_skipped_and_kept() {
+        let (mut vault, _clock, _code) = created();
+        let id = new_id();
+        let key = &vault.unlocked.as_ref().unwrap().vault_key;
+        let plain = br#"{"type":"serial_host","name":"x"}"#;
+        let envelope = seal(key, item_aad(&id).as_bytes(), plain)
+            .unwrap()
+            .to_json();
+        vault
+            .store
+            .upsert_item_row(&ItemRow {
+                id: id.clone(),
+                envelope: Some(envelope.clone()),
+                revision: 1,
+                deleted: false,
+                dirty: false,
+                updated_at: 1,
+            })
+            .unwrap();
+        vault.lock();
+        vault.unlock(PW).unwrap();
+        assert!(vault.get(&id).is_none());
+        let row = vault.store.item_row(&id).unwrap().unwrap();
+        assert_eq!(row.envelope.as_deref(), Some(envelope.as_str()));
+        assert!(!row.deleted && !row.dirty);
     }
 
     #[test]

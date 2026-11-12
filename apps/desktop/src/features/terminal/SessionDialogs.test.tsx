@@ -3,10 +3,10 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setLocale, t, type Locale } from "@/i18n";
 import type { HostKeyPrompt } from "@/ipc/types";
-import { pushHostKeyPrompt, usePrompts } from "./prompts";
+import { pushHostKeyPrompt, usePrompts } from "@/session/prompts";
 import { SessionDialogs } from "./SessionDialogs";
 
-vi.mock("./listeners", () => ({ startSessionListeners: () => () => {} }));
+vi.mock("@/session/listeners", () => ({ startSessionListeners: () => () => {} }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let unmount: (() => void) | null = null;
@@ -48,7 +48,7 @@ describe("host key dialogs", () => {
     expect(dialog.textContent).toContain("SHA256:received-demo-key");
   });
 
-  it.each(["en", "zh-CN", "ja"] as const)(
+  it.each(["en", "zh-CN", "zh-TW", "ja"] as const)(
     "shows the other trusted key when asking to trust a new key type in %s",
     (locale) => {
       const dialog = show({ known_key_type: "ssh-rsa", known_fingerprint: "SHA256:trusted-demo-rsa" }, locale);

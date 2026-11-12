@@ -36,6 +36,8 @@ pub mod sftp;
 pub mod shell;
 mod socks;
 pub mod stats;
+pub mod sudo;
+pub mod suggest;
 #[cfg(all(test, unix))]
 mod test_sh;
 
@@ -43,16 +45,18 @@ pub use config::{SshConfigHost, parse_ssh_config, parse_ssh_config_with_home};
 pub use error::{SshError, SshErrorKind};
 pub use forward::{DynamicForward, ForwardHandle, LocalForward, RemoteForward};
 pub use hostkey::{HostKeyInfo, HostKeyVerifier};
-pub use interactive::{KeyboardInteractive, Prompt, PromptRequest};
+pub use interactive::{Banner, BannerWait, KeyboardInteractive, Prompt, PromptRequest};
 pub use keys::{
     GenerateKind, KeyAlgorithm, KeyError, ParsedKey, fingerprint_sha256, generate_key,
     parse_private_key, try_fingerprint_sha256,
 };
+pub use net::dial;
 pub use probe::{tcp_probe, tcp_probe_via};
 pub use proxy::{ProxyConfig, ProxyKind};
 pub use server_os::{ServerOs, server_os};
 pub use session::{
     AuthMethod, ConnectConfig, ExecOutput, JumpHop, MountStats, ServerStats, ShellEvent,
-    ShellHandle, ShellOptions, SshSession, StatsEvent, StatsHandle, connect,
+    ShellHandle, ShellOptions, SshSession, StatsEvent, StatsHandle, connect, target_label,
 };
-pub use sftp::{FileEntry, SftpClient, TransferDirection, TransferProgress};
+pub use sftp::{FileEntry, RemoteStat, SftpClient, TransferDirection, TransferProgress};
+pub use suggest::ServerSuggestions;

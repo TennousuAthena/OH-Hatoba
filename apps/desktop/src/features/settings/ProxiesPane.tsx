@@ -1,13 +1,23 @@
 import { useState } from "react";
-import { useVaultData } from "@/app/data";
+import {
+  Badge,
+  Button,
+  Group,
+  Icon,
+  IconButton,
+  PopupSelect,
+  confirm,
+  layoutStyles,
+  toast,
+  type SelectOption,
+} from "@hatoba/ui";
+import { useAllHosts, useVaultData } from "@/app/data";
 import { errorMessage } from "@/app/errors";
-import { Badge, Button, Icon, IconButton } from "@/components/controls";
-import { Group, layoutStyles } from "@/components/layout";
-import { PopupSelect, confirm, toast, type SelectOption } from "@/components/overlay";
 import { useT } from "@/i18n";
 import { api } from "@/ipc/api";
 import type { ProxyView } from "@/ipc/types";
 import { cx } from "@/lib/cx";
+import { hostCapabilities } from "@/lib/hostServices";
 import { proxySummary } from "./proxyLogic";
 import { ProxyDialog } from "./ProxyDialog";
 import { EmptyBlock } from "./sectionParts";
@@ -15,16 +25,20 @@ import { Pane, SettingRow, usePrefs } from "./shared";
 import s from "./ProxiesPane.module.css";
 
 /**
- * Settings → Proxies (SSH-13): the saved SOCKS5 and HTTP proxies, which sync, and the default
- * proxy of this device, which does not.
+ * Settings → Proxies (SSH-13): the saved SOCKS5 and HTTP proxies, which sync, and this device's
+ * default proxy and proxy for Hatoba's own connections, which do not.
  */
 export function ProxiesPane() {
   const t = useT();
   const proxies = useVaultData((st) => st.proxies);
-  const hosts = useVaultData((st) => st.hosts);
+  // SSH-13: SSH and Telnet hosts both name proxies.
+  const hosts = useAllHosts();
   const [prefs, setPrefs] = usePrefs();
   const [dialog, setDialog] = useState<{ proxy: ProxyView | null } | null>(null);
   const defaultId = prefs.default_proxy_id;
+  // A deleted proxy falls back to the host default: system proxy, or direct on HarmonyOS.
+  const systemProxy = hostCapabilities().systemProxy;
+  const appId = proxies.some((p) => p.id === prefs.app_proxy_id) ? prefs.app_proxy_id : null;
 
   const defaultOptions: SelectOption<string | null>[] = [
     { value: null, label: t("settings.proxy.none") },
@@ -33,6 +47,10 @@ export function ProxiesPane() {
     ...(defaultId && !proxies.some((p) => p.id === defaultId)
       ? [{ value: defaultId, label: t("settings.proxy.missing") }]
       : []),
+  ];
+  const appOptions: SelectOption<string | null>[] = [
+    { value: null, label: t(systemProxy ? "settings.proxy.system" : "settings.proxy.none") },
+    ...proxies.map((p) => ({ value: p.id, label: p.name, hint: proxySummary(p) })),
   ];
 
   const remove = async (p: ProxyView) => {
@@ -48,8 +66,9 @@ export function ProxiesPane() {
     if (!ok) return;
     try {
       await api.proxy_delete(p.id);
-      // The backend also stopped using it as this device's default.
+      // The backend also stopped using it on this device.
       if (prefs.default_proxy_id === p.id) setPrefs({ default_proxy_id: null });
+      if (prefs.app_proxy_id === p.id) setPrefs({ app_proxy_id: null });
       await useVaultData.getState().reload();
       toast(t("settings.proxy.deleted", { name: p.name }));
     } catch (e) {
@@ -77,6 +96,19 @@ export function ProxiesPane() {
             options={defaultOptions}
             minWidth={260}
             onChange={(default_proxy_id) => setPrefs({ default_proxy_id })}
+          />
+        </SettingRow>
+        <SettingRow
+          label={t("settings.proxy.app")}
+          hint={t(systemProxy ? "settings.proxy.app.hint" : "settings.proxy.app.manualHint")}
+        >
+          <PopupSelect<string | null>
+            ariaLabel={t("settings.proxy.app")}
+            icon="globe"
+            value={appId}
+            options={appOptions}
+            minWidth={260}
+            onChange={(app_proxy_id) => setPrefs({ app_proxy_id })}
           />
         </SettingRow>
       </Group>

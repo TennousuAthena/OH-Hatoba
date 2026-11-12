@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { IconButton } from "@/components/controls";
+import { IconButton, isImeEvent } from "@hatoba/ui";
 import { useT } from "@/i18n";
 import { cx } from "@/lib/cx";
-import { isImeEvent } from "@/lib/ime";
-import type { LiveSession } from "./session";
+import type { LiveSession } from "@/session/session";
 import s from "./FindBar.module.css";
 
 /** Small inline find bar (TERM-07): Enter / Shift+Enter step through matches, Esc closes. */

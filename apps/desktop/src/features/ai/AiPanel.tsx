@@ -8,34 +8,27 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { useVaultData } from "@/app/data";
+import { Button, EmptyState, Icon, IconButton, LinkButton, Spinner } from "@hatoba/ui";
+import { useAllHosts } from "@/app/data";
 import { useApp } from "@/app/store";
-import { useTabs, type SessionTab } from "@/app/tabs";
-import { Button, Icon, IconButton, LinkButton, Spinner } from "@/components/controls";
-import { EmptyState } from "@/components/layout";
-import { reconnectSession } from "@/features/terminal/connect";
-import { shellName } from "@/features/terminal/localShells";
+import { tabHostId, useTabs, type SessionTab } from "@/app/tabs";
 import { useT } from "@/i18n";
-import type { HostView } from "@/ipc/types";
+import type { AnyHostView } from "@/ipc/types";
 import { shortcutLabel } from "@/lib/platform";
 import { cx } from "@/lib/cx";
-import {
-  attachDroppedPaths,
-  attachFiles,
-  connectConversation,
-  continueHomeConversation,
-  focusInput,
-  newConversation,
-  reloadSlot,
-  stopSideQuestion,
-  stopTurn,
-  toggleAiPanel,
-} from "./actions";
-import { dialectOf } from "./commandRules";
-import { Composer } from "./Composer";
+import { reconnectSession } from "@/session/connect";
+import { shellName } from "@/session/localShells";
+import { attachDroppedPaths, attachFiles } from "./actions/attach";
+import { focusInput, toggleAiPanel } from "./actions/panel";
+import { stopSideQuestion } from "./actions/sideQuestions";
+import { connectConversation, continueHomeConversation, newConversation, reloadSlot } from "./actions/slots";
+import { stopTurn } from "./actions/turns";
+import { dialectOf } from "./rules/commandRules";
+import { Composer } from "./composer/Composer";
 import { usePanelFileDrop } from "./fileDrop";
-import { History } from "./History";
-import { hostInfo, MessageList } from "./Messages";
+import { History } from "./history/History";
+import { hostInfo } from "./calls/hostInfo";
+import { MessageList } from "./messages/Messages";
 import { chats, conversationModel, hasModels } from "./models";
 import { connectionFor, movedFrom, placeLabel } from "./place";
 import { sideRunning } from "./side";
@@ -62,8 +55,8 @@ export function AiPanel({ slotId }: { slotId: string }) {
   const slot = stored ?? blank;
   const catalog = useAi((st) => st.catalog);
   const tab = useTabs((st) => (slotId === HOME_SLOT ? undefined : st.tabs.find((x) => x.id === slotId)));
-  const hosts = useVaultData((st) => st.hosts);
-  const tabHost = tab ? hosts.find((h) => h.id === tab.hostId) : undefined;
+  const hosts = useAllHosts();
+  const tabHost = tab ? hosts.find((h) => h.id === tabHostId(tab)) : undefined;
   // §7.5: a local tab is this computer, named so wherever a tab's host is named.
   const local = tab?.local
     ? {
@@ -85,8 +78,9 @@ export function AiPanel({ slotId }: { slotId: string }) {
   const model = conversationModel(slot.entries, catalog.providers, catalog.settings, slot.model);
   const ready = catalog.loaded && hasModels(catalog.providers);
   const busy = !!slot.turn || slot.remoteRunning;
-  // AI-35: text files dropped on the panel go with the next message.
-  const drop = usePanelFileDrop(panelRef, ready, {
+  // AI-35: text files dropped on the panel go with the next message; none behind the lock screen (SEC-03).
+  const unlocked = useApp((st) => st.phase === "unlocked");
+  const drop = usePanelFileDrop(panelRef, ready && unlocked, {
     onFiles: (files) => void attachFiles(slotId, files),
     onPaths: (paths) => void attachDroppedPaths(slotId, paths),
   });
@@ -183,10 +177,7 @@ export function AiPanel({ slotId }: { slotId: string }) {
           <span className={s.title} title={title}>
             {title}
           </span>
-          <span
-            className={s.host}
-            title={tabHost ? `${tabHost.username}@${tabHost.address}:${tabHost.port}` : undefined}
-          >
+          <span className={s.host} title={hostInfo(tabHost)?.target}>
             {hostLabel}
           </span>
         </div>
@@ -283,8 +274,8 @@ function Notices({
   slotId: string;
   slot: Slot;
   tab: SessionTab | undefined;
-  tabHost: HostView | undefined;
-  hosts: HostView[];
+  tabHost: AnyHostView | undefined;
+  hosts: AnyHostView[];
 }) {
   const t = useT();
   const device = useApp((st) => st.info.device_name);
@@ -367,7 +358,7 @@ function Notices({
   return items.length > 0 ? <div className={s.notices}>{items}</div> : null;
 }
 
-function EmptyConversation({ tab, host }: { tab: SessionTab | undefined; host: HostView | undefined }) {
+function EmptyConversation({ tab, host }: { tab: SessionTab | undefined; host: AnyHostView | undefined }) {
   const t = useT();
   return (
     <EmptyState

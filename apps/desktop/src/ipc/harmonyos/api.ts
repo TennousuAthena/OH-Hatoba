@@ -16,6 +16,11 @@ export async function createHarmonyApi(host?: HostBridge): Promise<HatobaApi> {
   }
 
   const commands = new Proxy({}, {
+    ownKeys: () => Object.keys(commandContract),
+    getOwnPropertyDescriptor: (_target, method) =>
+      typeof method === "string" && Object.hasOwn(commandContract, method)
+        ? { configurable: true, enumerable: true }
+        : undefined,
     get(_target, method: string) {
       const contract = commandContract[method as keyof typeof commandContract];
       if (!contract) return undefined;

@@ -1,5 +1,6 @@
-import { isTauri, isHarmonyOS } from "@/ipc/api";
+import { isTauri, isHarmonyOS, appError } from "@/ipc/api";
 import { hostService } from "@/lib/hostServices";
+import type { Platform } from "@/lib/platform";
 
 /** Native file pickers. In a plain browser (mock backend) they fall back to the file input / file name. */
 
@@ -29,4 +30,27 @@ export async function pickSavePath(fileName: string): Promise<string | null> {
     return save({ defaultPath: fileName });
   }
   return fileName;
+}
+
+/** SFTP-05: picks the program that edits remote files: an app bundle on macOS, a program elsewhere. */
+export async function pickProgram(platform: Platform): Promise<string | null> {
+  if (isHarmonyOS()) throw appError("internal", "External editors are unavailable on this device");
+  if (!isTauri())
+    return platform === "macos"
+      ? "/Applications/Visual Studio Code.app"
+      : "C:\\Program Files\\Microsoft VS Code\\Code.exe";
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const picked = await open({
+    multiple: false,
+    directory: false,
+    defaultPath: platform === "macos" ? "/Applications" : undefined,
+    filters: platform === "windows" ? [{ name: "Programs", extensions: ["exe", "cmd", "bat"] }] : undefined,
+  });
+  return typeof picked === "string" ? picked : null;
+}
+
+/** A program's name as a menu shows it: `Code.exe` and `Visual Studio Code.app` without the extension. */
+export function programName(path: string): string {
+  const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+  return name.replace(/\.(exe|cmd|bat|app)$/i, "");
 }

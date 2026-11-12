@@ -1,12 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useVaultData } from "@/app/data";
-import { Button, Icon, IconButton, Segmented, Switch, controlStyles } from "@/components/controls";
-import { Group, layoutStyles } from "@/components/layout";
-import { Menu, PopupSelect, confirm, toast, useMenu, type MenuEntry } from "@/components/overlay";
-import { HintText, ListRow, StatusLine } from "@/components/patterns";
-import { LOCAL_TARGET, removeAllowance, savedAllowances, useAllowances } from "@/features/ai/allowances";
+import {
+  Button,
+  Group,
+  HintText,
+  Icon,
+  IconButton,
+  ListRow,
+  Menu,
+  PopupSelect,
+  Segmented,
+  StatusLine,
+  Switch,
+  confirm,
+  controlStyles,
+  layoutStyles,
+  toast,
+  useMenu,
+  type MenuEntry,
+} from "@hatoba/ui";
+import { useAllHosts } from "@/app/data";
+import { LOCAL_TARGET, removeAllowance, savedAllowances, useAllowances } from "@/features/ai/rules/allowances";
 import { EFFORTS, effortKey } from "@/features/ai/effort";
-import { answersText, verdictText } from "@/features/ai/autoText";
+import { answersText, verdictText } from "@/features/ai/rules/autoText";
 import { InstructionsField } from "@/features/ai/InstructionsField";
 import { judgeChosen } from "@/features/ai/models";
 import { byteCount, INSTRUCTIONS_MAX_BYTES } from "@/features/ai/instructions";
@@ -21,11 +36,11 @@ import type {
   AiModelRef,
   AiPermissionMode,
   AiProviderView,
-  AiSettingsPatch,
   AiSettingsView,
   SearchProviderView,
 } from "@/ipc/types";
 import { cx } from "@/lib/cx";
+import { ProviderIcon } from "@/lib/ProviderIcon";
 import {
   changedSettings,
   judgeChoices,
@@ -109,7 +124,7 @@ export function AiPane() {
   };
 
   /** Stores the fields in `patch` of the synced settings. On failure the pane shows what the backend has. */
-  const saveSettings = async (patch: AiSettingsPatch) => {
+  const saveSettings = async (patch: Partial<AiSettingsView>) => {
     const cur = dataRef.current;
     if (!cur) return;
     commit({ ...cur, settings: { ...cur.settings, ...patch } });
@@ -342,7 +357,7 @@ function ProviderRow({
         onClick={onEdit}
       >
         <span className={s.providerIcon} aria-hidden>
-          <Icon name="sparkle" />
+          <ProviderIcon provider={p} />
         </span>
         <span className={s.providerText}>
           <span className={s.providerName}>{p.name}</span>
@@ -476,6 +491,20 @@ const SAMPLE_LABEL: Record<string, MessageKey> = {
   token_in_url: "aiSettings.judge.sample.token_in_url",
   input_read: "aiSettings.judge.sample.input_read",
   answer_unrequested: "aiSettings.judge.sample.answer_unrequested",
+  config_requested: "aiSettings.judge.sample.config_requested",
+  config_unrequested: "aiSettings.judge.sample.config_unrequested",
+  push_requested: "aiSettings.judge.sample.push_requested",
+  push_unrequested: "aiSettings.judge.sample.push_unrequested",
+  build_requested: "aiSettings.judge.sample.build_requested",
+  build_unrequested: "aiSettings.judge.sample.build_unrequested",
+  compose_requested: "aiSettings.judge.sample.compose_requested",
+  compose_unrequested: "aiSettings.judge.sample.compose_unrequested",
+  copy_requested: "aiSettings.judge.sample.copy_requested",
+  copy_unrequested: "aiSettings.judge.sample.copy_unrequested",
+  fix_agreed: "aiSettings.judge.sample.fix_agreed",
+  told_by_result: "aiSettings.judge.sample.told_by_result",
+  edit_requested: "aiSettings.judge.sample.edit_requested",
+  tls_check_off: "aiSettings.judge.sample.tls_check_off",
 };
 
 const DECISION_LABEL: Record<AiJudgeDecision, MessageKey> = {
@@ -711,7 +740,8 @@ const ALLOWANCE_ICON: Record<string, string> = {
 function SavedApprovals() {
   const t = useT();
   const list = useAllowances((st) => st.list);
-  const hosts = useVaultData((st) => st.hosts);
+  // TELNET-04: approvals on a Telnet host are saved for it too.
+  const hosts = useAllHosts();
   useEffect(() => {
     savedAllowances().catch((e) => toast(aiErrorMessage(t, e), "error"));
   }, [t]);

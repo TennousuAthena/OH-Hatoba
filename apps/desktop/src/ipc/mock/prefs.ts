@@ -1,22 +1,36 @@
 import type { LocalPrefs } from "../types";
 import { PREFS } from "./data";
 
-type ChoicePref = "language" | "appearance" | "density" | "ai_permission_mode" | "hosts_view" | "close_action";
+type ChoicePref =
+  "language" | "appearance" | "density" | "ai_permission_mode" | "hosts_view" | "hosts_sort" | "close_action";
 
 /** The values this build knows for each pref that is one of a set; the record keys keep them complete. */
 const CHOICES: { [K in ChoicePref]: Record<LocalPrefs[K], true> } = {
-  language: { system: true, "zh-CN": true, en: true, ja: true },
+  language: { system: true, "zh-CN": true, "zh-TW": true, en: true, ja: true },
   appearance: { system: true, light: true, dark: true },
   density: { regular: true, compact: true },
   ai_permission_mode: { manual: true, auto: true, bypass: true },
   hosts_view: { list: true, cards: true },
+  hosts_sort: {
+    recent: true,
+    name: true,
+    address: true,
+    custom: true,
+    status: true,
+    cpu: true,
+    memory: true,
+    disk: true,
+    network: true,
+    uptime: true,
+  },
   close_action: { ask: true, tray: true, quit: true },
 };
 
 /** Whether `value` reads as the pref `key`, as serde reads Rust's `LocalPrefs`. */
 function fits(key: keyof LocalPrefs, value: unknown): boolean {
   if (Object.hasOwn(CHOICES, key)) return typeof value === "string" && Object.hasOwn(CHOICES[key as ChoicePref], value);
-  if (key === "default_proxy_id" || key === "local_shell") return value === null || typeof value === "string";
+  if (key === "default_proxy_id" || key === "app_proxy_id" || key === "local_shell" || key === "sftp_editor")
+    return value === null || typeof value === "string";
   if (key === "dashboard_hidden_columns") return Array.isArray(value) && value.every((v) => typeof v === "string");
   const fallback = PREFS[key];
   // Rust stores the numbers as u32.

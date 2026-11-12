@@ -71,7 +71,7 @@ export const ja: Messages = {
       },
       {
         term: "SFTP",
-        text: "ターミナルの横のファイルパネル。ドラッグ＆ドロップでアップロードでき、ダウンロードはいつでもキャンセルできます。",
+        text: "ターミナルの横のファイルパネル。ドラッグ＆ドロップでアップロードでき、ダウンロードはいつでもキャンセルできます。リモートのファイルは手元のエディターで編集でき、保存するたびにアップロードされます。",
       },
       {
         term: "ポートフォワーディング",
@@ -98,7 +98,9 @@ export const ja: Messages = {
     releases: "リリース",
     report: "問題を報告",
     security: "セキュリティポリシー",
+    privacy: "プライバシーポリシー",
     contributing: "コントリビュート",
+    sponsor: "スポンサー",
     license: "Hatoba は MIT ライセンスで公開しています。",
   },
   download: {
@@ -134,8 +136,7 @@ export const ja: Messages = {
     checksums: "に、このリリースのすべてのファイルのチェックサムがあります。",
     allReleases: "すべてのリリース",
     source: "ソースからビルド",
-    testing:
-      "Hatoba は主に Windows で開発しているため、Linux 版と macOS 版はテストが十分ではありません。うまく動かない場合は Issue でお知らせください。",
+    problem: "うまく動きませんか？",
     issue: "Issue を作成",
   },
   notFound: {

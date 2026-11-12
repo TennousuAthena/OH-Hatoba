@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use russh::client::{self, Handle, Msg};
-use russh::{Channel, ChannelMsg, ChannelReadHalf, ChannelWriteHalf, Disconnect};
+use russh::{Channel, ChannelMsg, ChannelReadHalf, ChannelWriteHalf, Disconnect, kex};
 use tokio::sync::{Notify, mpsc, oneshot};
 use tokio::time::Instant;
 use zeroize::Zeroizing;
@@ -15,7 +15,7 @@ use zeroize::Zeroizing;
 use crate::auth::{self, AuthContext};
 use crate::error::{SshError, SshErrorKind};
 use crate::forward::{self, DynamicForward, ForwardHandle, LocalForward, RemoteForward};
-use crate::handler::{ClientHandler, CloseReason, SessionShared};
+use crate::handler::{Banners, ClientHandler, CloseReason, SessionShared};
 use crate::hostkey::HostKeyVerifier;
 use crate::interactive::KeyboardInteractive;
 use crate::net::{ConnectClock, Phase, ceil_ms, tcp_connect};
@@ -26,6 +26,7 @@ use crate::shell;
 pub use crate::shell::{ShellEvent, ShellHandle, ShellOptions};
 use crate::stats;
 pub use crate::stats::{MountStats, ServerStats, StatsEvent, StatsHandle};
+use crate::suggest::{self, ServerSuggestions};
 
 /// Upper bound for output collected by [`SshSession::exec_output`] and
 /// [`crate::remote_command::run`].
@@ -93,6 +94,15 @@ pub struct JumpHop {
     /// The ssh-agent sockets agent authentication tries on this hop, in order (SSH-09). Empty
     /// uses the platform's agent: `SSH_AUTH_SOCK`, or the OpenSSH pipe on Windows.
     pub agent_sockets: Vec<String>,
+}
+
+/// `user@host:port`, with an IPv6 address in brackets.
+pub fn target_label(username: &str, host: &str, port: u16) -> String {
+    if host.contains(':') {
+        format!("{username}@[{host}]:{port}")
+    } else {
+        format!("{username}@{host}:{port}")
+    }
 }
 
 /// Everything needed to open a session.
@@ -166,8 +176,24 @@ impl fmt::Debug for ConnectConfig {
     }
 }
 
+/// NIST-curve ECDH exchanges, which OpenSSH offers by default but russh does not. Many
+/// older network switches have nothing newer.
+const ECDH_KEX: [kex::Name; 3] = [
+    kex::ECDH_SHA2_NISTP256,
+    kex::ECDH_SHA2_NISTP384,
+    kex::ECDH_SHA2_NISTP521,
+];
+
 fn russh_config(cfg: &ConnectConfig, known_key_types: &[String]) -> Arc<client::Config> {
     let mut preferred = russh::Preferred::default();
+    // Where OpenSSH lists them: after curve25519, before Diffie-Hellman.
+    let exchanges = preferred.kex.to_mut();
+    exchanges.retain(|name| !ECDH_KEX.contains(name));
+    let at = exchanges
+        .iter()
+        .position(|name| *name == kex::DH_GEX_SHA256)
+        .unwrap_or(exchanges.len());
+    exchanges.splice(at..at, ECDH_KEX);
     preferred.key.to_mut().sort_by_key(|algorithm| {
         let key_type = if matches!(algorithm, russh::keys::Algorithm::Rsa { .. }) {
             "ssh-rsa"
@@ -220,12 +246,19 @@ async fn connect_hop(
 ) -> Result<Hop, SshError> {
     let clock = ConnectClock::new();
     let shared = SessionShared::new();
+    let (banner_waits, banners) = mpsc::unbounded_channel();
+    let banners = tokio::sync::Mutex::new(banners);
     let handler = ClientHandler::new(
         spec.host.to_owned(),
         spec.port,
         Arc::clone(verifier),
         Arc::clone(&shared),
         Arc::clone(&clock),
+        Banners {
+            username: spec.username.to_owned(),
+            interactive: interactive.cloned(),
+            waits: banner_waits,
+        },
     );
 
     let work = async {
@@ -284,6 +317,7 @@ async fn connect_hop(
             clock: &clock,
             shared: &shared,
             agent_sockets: spec.agent_sockets,
+            banners: &banners,
         };
         auth::authenticate(&mut handle, &ctx, spec.auth).await?;
         Ok::<_, SshError>((handle, rtt))
@@ -302,7 +336,8 @@ async fn connect_hop(
 ///
 /// `cfg.connect_timeout` bounds DNS + TCP + handshake + authentication of each
 /// hop; time spent in the `verifier` or the keyboard-interactive callback does
-/// not count. Failures are classified (see [`SshErrorKind`]).
+/// not count, nor does the server's wait after a banner the callback shows.
+/// Failures are classified (see [`SshErrorKind`]).
 pub async fn connect(
     cfg: ConnectConfig,
     verifier: Arc<dyn HostKeyVerifier>,
@@ -496,6 +531,9 @@ struct ExecChannels {
     state: Mutex<ExecState>,
     /// Woken whenever the state changes.
     changed: Notify,
+    /// Taken by a command that opens a second channel beside its first
+    /// ([`SshSession::exec_pair_turn`]).
+    pairs: tokio::sync::Mutex<()>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -741,6 +779,16 @@ impl SshSession {
         }
     }
 
+    /// What command suggestions take from the server (TERM-16), read over an exec channel that
+    /// closes once it has answered. `None` for a server whose identification string names FreeBSD,
+    /// NetBSD or Windows, on which nothing is run.
+    pub async fn suggestions(&self) -> Result<Option<ServerSuggestions>, SshError> {
+        match self.server_os() {
+            Some(ServerOs::FreeBsd | ServerOs::NetBsd | ServerOs::Windows) => Ok(None),
+            _ => suggest::read(self).await.map(Some),
+        }
+    }
+
     /// Starts the `sftp` subsystem on a new channel of this connection.
     pub async fn sftp(&self) -> Result<SftpClient, SshError> {
         let mut channel = self.open_channel().await?;
@@ -861,6 +909,16 @@ impl SshSession {
     pub(crate) async fn open_exec_channel(
         &self,
     ) -> Result<(ChannelReadHalf, ExecWriter, ExecSlot), SshError> {
+        self.open_exec_channel_beside(0).await
+    }
+
+    /// [`open_exec_channel`](Self::open_exec_channel) for a caller that holds `held` exec channels
+    /// of the connection already, which it does not wait for: a refusal while it holds the only
+    /// ones open is the error.
+    pub(crate) async fn open_exec_channel_beside(
+        &self,
+        held: usize,
+    ) -> Result<(ChannelReadHalf, ExecWriter, ExecSlot), SshError> {
         let channels = &self.inner.exec;
         loop {
             let closes = channels.state().closes;
@@ -887,7 +945,7 @@ impl SshSession {
                     break;
                 }
                 // A channel opening may open, and then close.
-                if state.open > 0 || state.opening > 0 {
+                if state.open > held || state.opening > 0 {
                     changed.await;
                     continue;
                 }
@@ -895,6 +953,13 @@ impl SshSession {
             }
             tracing::debug!("exec: opening a channel the server refused again");
         }
+    }
+
+    /// Lets one command at a time hold a first exec channel while it opens a second: commands
+    /// that each held one and waited for another would otherwise take every session the server
+    /// allows and wait for good.
+    pub(crate) async fn exec_pair_turn(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.inner.exec.pairs.lock().await
     }
 
     /// Opens and splits a session channel once. The open runs in a task of its own: a call
@@ -1027,7 +1092,25 @@ mod tests {
         let defaults = russh::Preferred::default();
         assert_eq!(&keys[3..], &defaults.key[..4]);
         assert_eq!(keys.len(), defaults.key.len());
-        assert_eq!(cfg.preferred.kex, defaults.kex);
+        assert_eq!(
+            cfg.preferred.kex,
+            russh_config(&config(), &[]).preferred.kex
+        );
+    }
+
+    #[test]
+    fn nist_ecdh_sits_between_curve25519_and_diffie_hellman() {
+        let cfg = russh_config(&config(), &[]);
+        let exchanges = &cfg.preferred.kex;
+        let defaults = russh::Preferred::default().kex;
+        let at = defaults
+            .iter()
+            .position(|name| *name == kex::DH_GEX_SHA256)
+            .unwrap();
+        assert_eq!(exchanges[at - 1], kex::CURVE25519_PRE_RFC_8731);
+        assert_eq!(exchanges[..at], defaults[..at]);
+        assert_eq!(exchanges[at..at + 3], ECDH_KEX);
+        assert_eq!(exchanges[at + 3..], defaults[at..]);
     }
 
     #[test]

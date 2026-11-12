@@ -81,6 +81,17 @@ The labels that these files name in English, as the interface shows them in Japa
 | Copy if selected, otherwise paste | 選択があればコピー、なければ貼り付け |
 | Show context menu | コンテキストメニューを表示 |
 
+### Command suggestions
+
+| en | ja |
+|---|---|
+| Command suggestions | コマンドの候補 |
+| Search commands | コマンドを検索 |
+| No matching commands | 一致するコマンドはありません |
+| Terminal | ターミナル |
+| Suggest commands | 入力中にコマンドを提案 |
+| Clear Command History | コマンド履歴を消去 |
+
 ### Terminal settings
 
 | en | ja |
@@ -107,8 +118,16 @@ The labels that these files name in English, as the interface shows them in Japa
 | Copy if selected, otherwise paste | 選択があればコピー、なければ貼り付け |
 | Show context menu | コンテキストメニューを表示 |
 | Confirm before pasting multiple lines | 複数行を貼り付ける前に確認 |
+| Suggest commands | 入力中にコマンドを提案 |
+| Command history | コマンド履歴 |
+| Clear Command History | コマンド履歴を消去 |
+| Clear the command history? | コマンド履歴を消去しますか？ |
 | Scrollback | スクロールバック |
 | Local Terminal Shell | ローカル ターミナルのシェル |
+| SFTP | SFTP |
+| Editor | エディター |
+| System Default | システムの既定 |
+| Choose a Program | プログラムを選択 |
 | General | 一般 |
 | Appearance | 外観 |
 
@@ -127,15 +146,15 @@ The labels that these files name in English, as the interface shows them in Japa
 | en | ja |
 |---|---|
 | Upload files | ファイルをアップロード |
-| New folder | 新規フォルダ |
+| New folder | 新規フォルダー |
 | Refresh | 更新 |
-| Parent folder | 上のフォルダ |
+| Parent folder | 上のフォルダー |
 | Name | 名前 |
 | Size | サイズ |
 | Modified | 更新 |
-| This folder is empty | このフォルダは空です |
+| This folder is empty | このフォルダーは空です |
 | Loading… | 読み込み中… |
-| Can’t read this folder | このフォルダを読み取れません |
+| Can’t read this folder | このフォルダーを読み取れません |
 
 ### Files and folders
 
@@ -143,16 +162,48 @@ The labels that these files name in English, as the interface shows them in Japa
 |---|---|
 | Open | 開く |
 | Download | ダウンロード |
+| Edit | 編集 |
 | Rename | 名前を変更 |
 | Delete | 削除 |
 | Copy Path | パスをコピー |
-| New Folder | 新規フォルダ |
+| New Folder | 新規フォルダー |
 | Upload Files | ファイルをアップロード |
 | The name can’t be empty or contain /. | 名前を空にしたり、/ を含めたりすることはできません。 |
 | This file will be permanently deleted from the server. This can’t be undone. | このファイルはサーバーから完全に削除されます。元に戻せません。 |
-| This folder and everything in it will be permanently deleted from the server. This can’t be undone. | このフォルダとその中身はすべてサーバーから完全に削除されます。元に戻せません。 |
+| This folder and everything in it will be permanently deleted from the server. This can’t be undone. | このフォルダーとその中身はすべてサーバーから完全に削除されます。元に戻せません。 |
 | Path copied | パスをコピーしました |
 | Drop to upload to {path} | ここにドロップして {path} にアップロード |
+
+### Edit files
+
+| en | ja |
+|---|---|
+| Edit | 編集 |
+| Terminal | ターミナル |
+| SFTP | SFTP |
+| Editor | エディター |
+| System Default | システムの既定 |
+| Choose a Program | プログラムを選択 |
+| Editing | 編集中 |
+| Saved | 保存済み |
+| Waiting to upload | アップロード待ち |
+| Uploading… | アップロード中… |
+| Changed on the server | サーバー上で変更あり |
+| Open in Editor | エディターで開く |
+| Upload Again | もう一度アップロード |
+| Stop Editing | 編集を終了 |
+| “{name}” changed on the server | 「{name}」はサーバー上で変更されています |
+| Overwrite | 上書き |
+| Discard My Changes | 自分の変更を破棄 |
+| Resolve Conflict | 競合を解決 |
+| Upload the changes to “{name}”? | 「{name}」の変更をアップロードしますか？ |
+| Upload | アップロード |
+| Discard Changes | 変更を破棄 |
+| Their last saves haven’t uploaded to {host} yet. | 最後の保存が {host} にまだアップロードされていません。 |
+| Their last saves haven’t uploaded to {host}, and the tab isn’t connected. Reconnect to upload them. | 最後の保存が {host} にまだアップロードされておらず、このタブは接続されていません。アップロードするには再接続してください。 |
+| Their last saves haven’t uploaded yet. Nothing uploads while Hatoba is locked. | 最後の保存はまだアップロードされていません。Hatoba のロック中は何もアップロードされません。 |
+| Couldn’t open “{name}” in an editor. You can choose one in Settings → Terminal. | 「{name}」をエディターで開けませんでした。設定 → ターミナルでエディターを選べます。 |
+| {n} files didn’t upload. | {n} 個のファイルがアップロードされませんでした。 |
 
 ### Transfers
 
@@ -250,7 +301,7 @@ The labels that these files name in English, as the interface shows them in Japa
 | Can’t reach the proxy. Check that it’s running and that its address and port are right. | プロキシに接続できません。プロキシが動いているか、アドレスとポートが正しいか確認してください。 |
 | The proxy asks for a username and password, or didn’t accept the saved ones. | プロキシがユーザー名とパスワードを求めているか、保存されたものを受け入れませんでした。 |
 | The proxy this connection uses was deleted. Choose another one in the host’s settings or in Settings → Proxies. | この接続で使うプロキシは削除されています。ホストの設定か「設定 → プロキシ」で別のものを選んでください。 |
-| Please check your input. | 入力内容を確認してください。 |
+| The input isn’t valid. Check it and try again. | 入力内容が正しくありません。確認してもう一度お試しください。 |
 | The vault is locked. | 保管庫はロックされています。 |
 | Address | アドレス |
 | Port | ポート |
@@ -278,10 +329,18 @@ The labels that these files name in English, as the interface shows them in Japa
 |---|---|
 | Trust and Connect | 信頼して接続 |
 | Cancel | キャンセル |
-| Host key has changed | ホストキーが変更されました |
+| Host key has changed | ホスト鍵が変更されました |
 | Disconnect | 切断 |
 | Update Fingerprint and Connect | フィンガープリントを更新して接続 |
-| New host key for {host}:{port} | {host}:{port} の新しいホストキー |
+| New host key for {host}:{port} | {host}:{port} の新しいホスト鍵 |
+
+### Sign-in messages
+
+| en | ja |
+|---|---|
+| Message from {target} | {target} からのメッセージ |
+| Open Link | リンクを開く |
+| Cancel | キャンセル |
 
 ### Dropped connections and keepalive
 

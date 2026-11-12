@@ -94,6 +94,11 @@ fn after_unlock(app: &AppHandle, state: &AppState) {
     }) {
         tracing::debug!("connections not stamped again: {}", e.detail);
     }
+    // SFTP-05: editing goes on, after asking about saves that did not upload.
+    #[cfg(feature = "desktop-host")]
+    state.edits.unlock();
+    // SSH-13: before sync connects.
+    crate::app_proxy::refresh(app);
     sync::on_unlock(app);
 }
 

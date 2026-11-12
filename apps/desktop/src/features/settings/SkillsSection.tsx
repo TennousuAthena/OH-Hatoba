@@ -1,9 +1,18 @@
 import { hostCapabilities } from "@/lib/hostServices";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Badge, Button, Icon, IconButton, Switch } from "@/components/controls";
-import { layoutStyles } from "@/components/layout";
-import { Menu, confirm, toast, useMenu } from "@/components/overlay";
-import { HintText } from "@/components/patterns";
+import {
+  Badge,
+  Button,
+  HintText,
+  Icon,
+  IconButton,
+  Menu,
+  Switch,
+  confirm,
+  layoutStyles,
+  toast,
+  useMenu,
+} from "@hatoba/ui";
 import { useT } from "@/i18n";
 import { api, isTauri, isHarmonyOS } from "@/ipc/api";
 import type { BuiltinSkillView, SkillView } from "@/ipc/types";

@@ -185,3 +185,82 @@ async fn synced_stdio_configuration_is_preserved_but_never_started() {
     };
     assert_eq!(env["GENERATED_VALUE"].as_str(), "generated-test-only");
 }
+
+#[tokio::test]
+async fn telnet_dispatch_streams_bytes_and_rejects_input_while_locked() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+    use tokio::time::{Duration, timeout};
+
+    let app = app();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let fixture = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut bytes = [0; 9];
+        stream.read_exact(&mut bytes).await.unwrap();
+        assert_eq!(&bytes, b"fixture\r\n");
+        stream.write_all(b"server-ok").await.unwrap();
+        let mut extra = [0; 1];
+        assert_eq!(stream.read(&mut extra).await.unwrap(), 0);
+    });
+    let session = dispatch(
+        &app,
+        "telnet_open_target",
+        json!({"address":"127.0.0.1", "port":port, "options":{"cols":80,"rows":24}, "channel":{"channel":71}}),
+    )
+    .await
+    .unwrap();
+    dispatch(
+        &app,
+        "telnet_write_bytes",
+        json!({"sessionId":session,"data":b"fixture\n".to_vec()}),
+    )
+    .await
+    .unwrap();
+    let output = timeout(Duration::from_secs(5), async {
+        let mut output = Vec::new();
+        loop {
+            while let Some(message) = app.outbox().pop() {
+                if let Message::Binary(bytes) = message {
+                    assert_eq!(u32::from_le_bytes(bytes[..4].try_into().unwrap()), 71);
+                    assert_eq!(bytes[4], crate::commands::ssh::FRAME_DATA);
+                    output.extend_from_slice(&bytes[5..]);
+                    app.ack(71, bytes.len() - 4).unwrap();
+                    if output.ends_with(b"server-ok") {
+                        return output;
+                    }
+                }
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(output.ends_with(b"server-ok"));
+    dispatch(&app, "vault_lock", json!({})).await.unwrap();
+    let error = dispatch(
+        &app,
+        "telnet_write",
+        json!({"sessionId":session,"data":"must not reach fixture"}),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code, crate::error::ErrorCode::Locked);
+    dispatch(&app, "telnet_close", json!({"sessionId":session}))
+        .await
+        .unwrap();
+    timeout(Duration::from_secs(5), fixture)
+        .await
+        .unwrap()
+        .unwrap();
+}
+
+#[tokio::test]
+async fn desktop_editor_commands_are_unavailable_to_portable_dispatch() {
+    let app = app();
+    for command in ["sftp_edit_open", "sftp_edit_reopen", "sftp_edit_quit"] {
+        assert!(!crate::SUPPORTED_COMMANDS.contains(&command));
+        assert!(dispatch(&app, command, json!({})).await.is_err());
+    }
+}

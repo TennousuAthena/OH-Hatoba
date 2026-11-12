@@ -12,7 +12,8 @@
 //!   administrator, so macOS asks for one.
 //!
 //! On Linux and macOS the command's own commands run the executable in the foreground, which runs
-//! them before the app would start (`main.rs`).
+//! them before the app would start (`main.rs`). The Linux launcher lists them and is written again
+//! at every startup. The macOS one is written once, so it asks the executable which words they are.
 
 use std::path::Path;
 
@@ -87,7 +88,7 @@ fn sh_quote(s: &str) -> String {
 /// A launcher that starts `exe` in the background with its arguments, so the terminal neither
 /// waits for Hatoba nor takes it down when it closes, unless they are one of the command's own
 /// commands (HOST-15).
-#[cfg_attr(windows, allow(dead_code))]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn detached_launcher(exe: &Path) -> String {
     let exe = sh_quote(&exe.to_string_lossy());
     format!(
@@ -98,10 +99,47 @@ fn detached_launcher(exe: &Path) -> String {
 
 /// The lines of a launcher that run `exe`, quoted for sh, in the foreground for the command's own
 /// commands (HOST-15), which print what they get back.
-#[cfg_attr(windows, allow(dead_code))]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn own_commands(exe: &str) -> String {
     format!(
         "case \"$1\" in\n  {}) exec {exe} \"$@\" ;;\nesac\n",
+        hatoba_cli::COMMANDS.join("|")
+    )
+}
+
+/// The macOS launcher, which opens the app bundle `app` with the arguments: `open -n` starts
+/// another copy, which hands them to the one already running. A development build has no bundle
+/// and starts `exe` in the background, as [`detached_launcher`] does. The command's own commands
+/// (HOST-15) run `exe` in the foreground. The launcher asks `exe` whether the first word is one
+/// (`hatoba_cli::ASK`) instead of listing them: it is not written again at startup, so a list
+/// would miss the commands a later version adds.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn macos_launcher(exe: &Path, app: Option<&Path>) -> String {
+    let exe = sh_quote(&exe.to_string_lossy());
+    let open = match app {
+        Some(app) => format!(
+            "exec open -n -a {} --args \"$@\"",
+            sh_quote(&app.to_string_lossy())
+        ),
+        None => format!("nohup {exe} \"$@\" >/dev/null 2>&1 &"),
+    };
+    format!(
+        "#!/bin/sh\n# {COMMENT}\nif {exe} {} \"$1\"; then\n  exec {exe} \"$@\"\nfi\n{open}\n",
+        hatoba_cli::ASK
+    )
+}
+
+/// The `hatoba` that Git Bash and WSL run, which runs `exe` from the same folder. Git Bash turns
+/// each argument that starts with `/` into a Windows path when it starts a Windows program. The
+/// command's own commands (HOST-15) turn that off, so remote paths and commands reach the host as
+/// typed, and `hatoba cp` finds the Windows path of a local one itself. Other command lines keep
+/// it: the app they may start would pass the variables on to every local terminal it opens. From
+/// WSL, the variables stay on the Linux side.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn git_bash_launcher(exe: &str) -> String {
+    format!(
+        "#!/bin/sh\n# {COMMENT}\ncase \"$1\" in\n  {}) export MSYS_NO_PATHCONV=1 \
+         MSYS2_ARG_CONV_EXCL='*' ;;\nesac\nexec \"$(dirname \"$0\")/{exe}\" \"$@\"\n",
         hatoba_cli::COMMANDS.join("|")
     )
 }
@@ -113,7 +151,7 @@ mod imp {
     use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_WRITE, REG_EXPAND_SZ, REG_SZ};
     use winreg::{RegKey, RegValue};
 
-    use super::{COMMENT, path_with, path_without, write_if_changed};
+    use super::{git_bash_launcher, path_with, path_without, write_if_changed};
     use crate::error::{AppError, AppResult, ErrorCode};
 
     /// The console program installed beside the executable, and its copy in `bin`.
@@ -144,10 +182,7 @@ mod imp {
         }
         std::fs::create_dir_all(&bin)?;
         replace_if_changed(&console, &bin.join(COMMAND))?;
-        write_if_changed(
-            &bin.join("hatoba"),
-            &format!("#!/bin/sh\n# {COMMENT}\nexec \"$(dirname \"$0\")/{COMMAND}\" \"$@\"\n"),
-        )?;
+        write_if_changed(&bin.join("hatoba"), &git_bash_launcher(COMMAND))?;
         remove(&bin.join("hatoba.cmd"))?;
         edit_path(|path| path_with(path, &bin.to_string_lossy()))
     }
@@ -424,7 +459,7 @@ mod imp {
     use std::process::Command;
 
     use super::unix::{ensure_free, is_ours, write_executable};
-    use super::{COMMENT, detached_launcher, own_commands, sh_quote};
+    use super::{macos_launcher, sh_quote};
     use crate::error::{AppError, AppResult, ErrorCode};
 
     const LAUNCHER: &str = "/usr/local/bin/hatoba";
@@ -471,9 +506,8 @@ mod imp {
         true
     }
 
-    /// Opens the app bundle with the arguments. `open -n` starts another copy, which hands them
-    /// to the one already running. The command's own commands run the bundle's executable
-    /// instead (HOST-15). A development build has no bundle and runs its executable.
+    /// The launcher for this executable and the app bundle it is in, which a development build
+    /// does not have.
     fn launcher() -> AppResult<String> {
         let exe = std::env::current_exe()?;
         // …/Hatoba.app/Contents/MacOS/Hatoba
@@ -481,14 +515,7 @@ mod imp {
             .ancestors()
             .nth(3)
             .filter(|p| p.extension().is_some_and(|e| e == "app"));
-        Ok(match bundle {
-            Some(app) => format!(
-                "#!/bin/sh\n# {COMMENT}\n{}exec open -n -a {} --args \"$@\"\n",
-                own_commands(&sh_quote(&exe.to_string_lossy())),
-                sh_quote(&app.to_string_lossy())
-            ),
-            None => detached_launcher(&exe),
-        })
+        Ok(macos_launcher(&exe, bundle))
     }
 
     /// Runs a shell command as an administrator, after macOS asks for one.
@@ -575,8 +602,107 @@ mod tests {
         assert!(launcher.contains("nohup '/home/me/Apps/Hatoba.AppImage' \"$@\""));
         // HOST-15: `hatoba exec` and the rest run in the foreground.
         assert!(launcher.contains(
-            "case \"$1\" in\n  hosts|exec|cp|help|-h|--help|--version) \
+            "case \"$1\" in\n  hosts|exec|cp|memory|help|-h|--help|--version) \
              exec '/home/me/Apps/Hatoba.AppImage' \"$@\" ;;\nesac\n"
         ));
+    }
+
+    /// HOST-15: from Git Bash, the command's own commands get their arguments as typed.
+    #[test]
+    fn the_git_bash_launcher_passes_the_own_commands_arguments_as_typed() {
+        let launcher = git_bash_launcher("hatoba.exe");
+        assert!(launcher.starts_with("#!/bin/sh\n# Hatoba command line launcher."));
+        assert!(launcher.contains(
+            "\ncase \"$1\" in\n  hosts|exec|cp|memory|help|-h|--help|--version) \
+             export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' ;;\nesac\n"
+        ));
+        assert!(launcher.ends_with("\nexec \"$(dirname \"$0\")/hatoba.exe\" \"$@\"\n"));
+    }
+
+    /// HOST-13: the macOS launcher is written once, so it holds no list of the command's own
+    /// commands.
+    #[test]
+    fn the_macos_launcher_asks_the_executable_which_commands_are_its_own() {
+        assert_eq!(
+            macos_launcher(
+                Path::new("/Applications/Hatoba.app/Contents/MacOS/Hatoba"),
+                Some(Path::new("/Applications/Hatoba.app"))
+            ),
+            "#!/bin/sh\n\
+             # Hatoba command line launcher. Turn it off in Hatoba's settings, under General.\n\
+             if '/Applications/Hatoba.app/Contents/MacOS/Hatoba' --own-command \"$1\"; then\n  \
+             exec '/Applications/Hatoba.app/Contents/MacOS/Hatoba' \"$@\"\n\
+             fi\n\
+             exec open -n -a '/Applications/Hatoba.app' --args \"$@\"\n"
+        );
+        // A development build has no bundle to open.
+        let launcher = macos_launcher(Path::new("/src/target/debug/hatoba"), None);
+        assert!(launcher.contains("\nif '/src/target/debug/hatoba' --own-command \"$1\"; then\n"));
+        assert!(
+            launcher.ends_with("\nfi\nnohup '/src/target/debug/hatoba' \"$@\" >/dev/null 2>&1 &\n")
+        );
+    }
+
+    /// HOST-13: sh runs the macOS launcher with stand-ins for `open` and for the executable, which
+    /// has a command the launcher never heard of, as after an update.
+    #[cfg(unix)]
+    #[test]
+    fn the_macos_launcher_runs_a_command_a_later_version_adds() {
+        use std::process::Command;
+
+        let dir = std::env::temp_dir().join(format!("hatoba o'launcher {}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // sh writes the stand-ins: a file this process wrote cannot be run while the child of
+        // another test still holds it open.
+        let stand_in = |name: &str, body: &str| {
+            let path = dir.join(name);
+            let written = Command::new("/bin/sh")
+                .arg("-c")
+                .arg(r#"printf '#!/bin/sh\n%s\n' "$1" > "$0" && chmod +x "$0""#)
+                .arg(&path)
+                .arg(body)
+                .status()
+                .unwrap();
+            assert!(written.success());
+            path
+        };
+        let exe = stand_in(
+            "Hatoba",
+            &format!(
+                r#"if [ "$1" = {} ]; then [ "$2" = later ]; exit; fi; echo "exe $*"; exit 7"#,
+                hatoba_cli::ASK
+            ),
+        );
+        stand_in("open", r#"echo "open $*""#);
+        let app = dir.join("Hatoba.app");
+        // Not `hatoba`: on a file system that ignores case, that is the executable's stand-in.
+        let launcher = dir.join("launcher");
+        std::fs::write(&launcher, macos_launcher(&exe, Some(&app))).unwrap();
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let path =
+            std::env::join_paths(std::iter::once(dir.clone()).chain(std::env::split_paths(&path)))
+                .unwrap();
+        let run = |args: &[&str]| {
+            let out = Command::new("/bin/sh")
+                .arg(&launcher)
+                .args(args)
+                .env("PATH", &path)
+                .output()
+                .unwrap();
+            (out.status.code(), String::from_utf8(out.stdout).unwrap())
+        };
+
+        // The command runs in the foreground: its output and exit status are the launcher's.
+        assert_eq!(
+            run(&["later", "a  b"]),
+            (Some(7), "exe later a  b\n".into())
+        );
+        let opened = format!("open -n -a {} --args", app.display());
+        assert_eq!(
+            run(&["db", "a  b"]),
+            (Some(0), format!("{opened} db a  b\n"))
+        );
+        assert_eq!(run(&[]), (Some(0), format!("{opened}\n")));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

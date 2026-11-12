@@ -1,4 +1,5 @@
-//! SFTP file panel (spec §7.3) on top of a live terminal session.
+//! SFTP file panel (spec §7.3) on top of a live terminal session, and the remote files it edits
+//! in a local editor (SFTP-05).
 
 use std::path::PathBuf;
 
@@ -8,10 +9,17 @@ use hatoba_ssh::{SftpClient, TransferProgress};
 use tokio_util::sync::CancellationToken;
 
 use crate::dto::{FileEntry, TransferDirection, TransferProgressEvent, TransferState};
+#[cfg(feature = "desktop-host")]
+use crate::dto::{LocalPrefs, RemoteEditView};
 use crate::error::{AppError, AppResult};
+#[cfg(feature = "desktop-host")]
+use crate::remote_edit;
 use crate::state::{AppState, state as app_state};
 
-async fn client(state: &AppState, session_id: &str) -> AppResult<SftpClient> {
+/// The session's SFTP client. SEC-03: sessions stay connected behind the lock screen, but take no
+/// input until unlocked, so every SFTP command fails while locked.
+pub(crate) async fn client(state: &AppState, session_id: &str) -> AppResult<SftpClient> {
+    state.with_unlocked(|_| Ok(()))?;
     let live = state.ssh.get(session_id)?;
     let client = live.sftp.get_or_try_init(|| live.session.sftp()).await?;
     Ok(client.clone())
@@ -115,7 +123,7 @@ pub async fn sftp_mkdir(
     Ok(client(&state, &session_id).await?.mkdir(&path).await?)
 }
 
-struct Transfer {
+pub(crate) struct Transfer {
     app: AppHandle,
     id: String,
     session_id: String,
@@ -124,7 +132,51 @@ struct Transfer {
     last: std::sync::Mutex<TransferProgress>,
 }
 
+const NO_PROGRESS: TransferProgress = TransferProgress {
+    bytes: 0,
+    total: 0,
+    bytes_per_sec: 0,
+};
+
 impl Transfer {
+    /// Registers a transfer, whose cancel token `transfer_cancel` finds by its id, and shows it.
+    fn begin(
+        app: AppHandle,
+        session_id: String,
+        direction: TransferDirection,
+        name: String,
+    ) -> (std::sync::Arc<Self>, CancellationToken) {
+        let id = uuid::Uuid::now_v7().to_string();
+        let token = CancellationToken::new();
+        app_state(&app).ssh.add_transfer(id.clone(), token.clone());
+        let transfer = std::sync::Arc::new(Self {
+            app,
+            id,
+            session_id,
+            direction,
+            name,
+            last: std::sync::Mutex::new(NO_PROGRESS),
+        });
+        transfer.progress(NO_PROGRESS);
+        (transfer, token)
+    }
+
+    /// Reports `result` as the transfer's end and forgets its cancel token.
+    fn end(&self, token: &CancellationToken, result: &Result<(), hatoba_ssh::SshError>) {
+        match result {
+            Ok(()) => self.finish(TransferState::Done, None),
+            Err(_) if token.is_cancelled() => self.finish(TransferState::Cancelled, None),
+            Err(e) => self.finish(TransferState::Failed, Some(e.message.clone())),
+        }
+        app_state(&self.app).ssh.finish_transfer(&self.id);
+    }
+
+    /// The progress callback a [`SftpClient`] transfer takes.
+    fn reporter(self: &std::sync::Arc<Self>) -> impl Fn(TransferProgress) + Send + Sync + 'static {
+        let t = self.clone();
+        move |p: TransferProgress| t.progress(p)
+    }
+
     fn progress(&self, p: TransferProgress) {
         *self.last.lock().unwrap_or_else(|e| e.into_inner()) = p;
         self.emit(p, TransferState::Running, None);
@@ -151,6 +203,14 @@ impl Transfer {
     }
 }
 
+type TransferRun = Box<
+    dyn FnOnce(
+            Box<dyn Fn(TransferProgress) + Send + Sync>,
+            CancellationToken,
+        ) -> futures::future::BoxFuture<'static, Result<(), hatoba_ssh::SshError>>
+        + Send,
+>;
+
 /// Starts a transfer in the background and returns its id; progress arrives as
 /// `transfer://progress`.
 fn spawn_transfer(
@@ -158,42 +218,32 @@ fn spawn_transfer(
     session_id: String,
     direction: TransferDirection,
     name: String,
-    run: impl FnOnce(
-        std::sync::Arc<Transfer>,
-        CancellationToken,
-    ) -> futures::future::BoxFuture<'static, Result<(), hatoba_ssh::SshError>>
-    + Send
-    + 'static,
+    run: TransferRun,
 ) -> String {
-    let id = uuid::Uuid::now_v7().to_string();
-    let token = CancellationToken::new();
-    app_state(&app).ssh.add_transfer(id.clone(), token.clone());
-    let zero = TransferProgress {
-        bytes: 0,
-        total: 0,
-        bytes_per_sec: 0,
-    };
-    let transfer = std::sync::Arc::new(Transfer {
-        app: app.clone(),
-        id: id.clone(),
-        session_id,
-        direction,
-        name,
-        last: std::sync::Mutex::new(zero),
-    });
+    let (transfer, token) = Transfer::begin(app, session_id, direction, name);
+    let id = transfer.id.clone();
     crate::host::async_runtime::spawn(async move {
         crate::host::transfer_active(&transfer.app, &transfer.id, true).await;
-        transfer.progress(zero);
-        let result = run(transfer.clone(), token.clone()).await;
-        match result {
-            Ok(()) => transfer.finish(TransferState::Done, None),
-            Err(_) if token.is_cancelled() => transfer.finish(TransferState::Cancelled, None),
-            Err(e) => transfer.finish(TransferState::Failed, Some(e.message)),
-        }
-        app_state(&transfer.app).ssh.finish_transfer(&transfer.id);
+        let result = run(Box::new(transfer.reporter()), token.clone()).await;
+        transfer.end(&token, &result);
         crate::host::transfer_active(&transfer.app, &transfer.id, false).await;
     });
     id
+}
+
+/// A transfer the caller waits for, shown in the transfer list like any other (SFTP-05).
+#[cfg(feature = "desktop-host")]
+pub(crate) async fn run_transfer(
+    app: AppHandle,
+    session_id: String,
+    direction: TransferDirection,
+    name: String,
+    run: TransferRun,
+) -> Result<(), hatoba_ssh::SshError> {
+    let (transfer, token) = Transfer::begin(app, session_id, direction, name);
+    let result = run(Box::new(transfer.reporter()), token.clone()).await;
+    transfer.end(&token, &result);
+    result
 }
 
 /// SFTP-02 download. `local_path` comes from the native save dialog.
@@ -219,22 +269,19 @@ pub async fn sftp_download(
         session_id,
         TransferDirection::Download,
         name,
-        move |t, token| {
+        Box::new(move |progress, token| {
             Box::pin(async move {
-                let progress = {
-                    let t = t.clone();
-                    move |p: TransferProgress| t.progress(p)
-                };
-                let result = async { sftp.download(&remote_path, &local, progress, token.clone())
-                    .await?;
-                tokio::select! {
-                    () = token.cancelled() => Err(hatoba_ssh::SshError::new(hatoba_ssh::SshErrorKind::Cancelled, "Transfer cancelled")),
-                    result = crate::host::commit_output(&export_app, &local) => result.map_err(|_| hatoba_ssh::SshError::new(hatoba_ssh::SshErrorKind::Io, "Could not save the selected document")),
-                } }.await;
+                let result = async {
+                    sftp.download(&remote_path, &local, progress, token.clone()).await?;
+                    tokio::select! {
+                        () = token.cancelled() => Err(hatoba_ssh::SshError::new(hatoba_ssh::SshErrorKind::Cancelled, "Transfer cancelled")),
+                        result = crate::host::commit_output(&export_app, &local) => result.map_err(|_| hatoba_ssh::SshError::new(hatoba_ssh::SshErrorKind::Io, "Could not save the selected document")),
+                    }
+                }.await;
                 crate::host::release_document(&export_app, &local).await;
                 result
             })
-        },
+        }),
     ))
 }
 
@@ -259,17 +306,13 @@ pub async fn sftp_upload(
         session_id,
         TransferDirection::Upload,
         name,
-        move |t, token| {
+        Box::new(move |progress, token| {
             Box::pin(async move {
-                let progress = {
-                    let t = t.clone();
-                    move |p: TransferProgress| t.progress(p)
-                };
                 let result = sftp.upload(&local, &remote, progress, token).await;
                 crate::host::release_document(&import_app, &local).await;
                 result
             })
-        },
+        }),
     ))
 }
 
@@ -277,4 +320,132 @@ pub async fn sftp_upload(
 #[cfg_attr(feature = "desktop-host", specta::specta)]
 pub fn transfer_cancel(state: State<'_, AppState>, transfer_id: String) {
     state.ssh.cancel_transfer(&transfer_id);
+}
+
+/// SFTP-05: opens `path` in the editor set in Settings, downloading it into a copy that uploads
+/// with every save, over the tab's connection.
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
+#[cfg(feature = "desktop-host")]
+pub async fn sftp_edit_open(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    tab_id: String,
+    session_id: String,
+    path: String,
+) -> AppResult<RemoteEditView> {
+    let editor = state.with_unlocked(|v| Ok(editor(v)))?;
+    remote_edit::open(&app, tab_id, session_id, path, editor).await
+}
+
+/// SFTP-05: opens an edited file's copy in the editor again.
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
+#[cfg(feature = "desktop-host")]
+pub async fn sftp_edit_reopen(state: State<'_, AppState>, edit_id: String) -> AppResult<()> {
+    let editor = state.with_unlocked(|v| Ok(editor(v)))?;
+    let copy = state.edits.reopen_path(&edit_id)?;
+    remote_edit::open_editor(copy, editor).await
+}
+
+/// SFTP-05: the session the tab is connected with, or `None`; saves that waited for it upload.
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
+#[cfg(feature = "desktop-host")]
+pub fn sftp_edit_session(state: State<'_, AppState>, tab_id: String, session_id: Option<String>) {
+    state.edits.set_session(&tab_id, session_id);
+}
+
+/// SFTP-05: uploads an edited file now, as a retry, or over a change made on the server when
+/// `overwrite`.
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
+#[cfg(feature = "desktop-host")]
+pub async fn sftp_edit_upload(
+    state: State<'_, AppState>,
+    edit_id: String,
+    overwrite: bool,
+) -> AppResult<()> {
+    state.with_unlocked(|_| Ok(()))?;
+    state.edits.upload(&edit_id, overwrite).await
+}
+
+/// SFTP-05: replaces an edited file's copy with the server's file.
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
+#[cfg(feature = "desktop-host")]
+pub async fn sftp_edit_discard(state: State<'_, AppState>, edit_id: String) -> AppResult<()> {
+    state.with_unlocked(|_| Ok(()))?;
+    state.edits.discard(&edit_id).await
+}
+
+/// SFTP-05: stops editing a file, uploading its last save first if `upload`. Returns whether
+/// editing ended; a save that cannot upload yet, as behind the lock screen, keeps it going until
+/// it does.
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
+#[cfg(feature = "desktop-host")]
+pub async fn sftp_edit_stop(
+    state: State<'_, AppState>,
+    edit_id: String,
+    upload: bool,
+) -> AppResult<bool> {
+    state.edits.stop(&edit_id, upload).await
+}
+
+/// SFTP-05: whether an edited file's copy holds a save the server does not have, also one not
+/// noticed yet.
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
+#[cfg(feature = "desktop-host")]
+pub async fn sftp_edit_changed(state: State<'_, AppState>, edit_id: String) -> AppResult<bool> {
+    state.edits.changed(&edit_id).await
+}
+
+/// SFTP-05: the files being edited.
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
+#[cfg(feature = "desktop-host")]
+pub fn sftp_edit_list(state: State<'_, AppState>) -> Vec<RemoteEditView> {
+    state.edits.list()
+}
+
+/// SFTP-05: quits once the user has answered for the edits' saves that did not upload.
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
+#[cfg(feature = "desktop-host")]
+pub fn sftp_edit_quit(app: AppHandle, state: State<'_, AppState>) {
+    state.edits.allow_quit();
+    app.exit(0);
+}
+
+/// The program set to edit remote files on this device.
+#[cfg(feature = "desktop-host")]
+fn editor(vault: &hatoba_core::vault::Vault) -> Option<String> {
+    let json = vault.local_prefs().ok().flatten()?;
+    LocalPrefs::from_stored(&json).sftp_editor
+}
+
+#[cfg(test)]
+mod tests {
+    use hatoba_core::{KdfParams, Vault};
+
+    use super::client;
+    use crate::error::ErrorCode;
+    use crate::state::AppState;
+
+    #[tokio::test]
+    async fn sftp_commands_fail_behind_the_lock_screen() {
+        let mut vault = Vault::open_in_memory().unwrap();
+        vault
+            .create_with_params("correct horse battery staple", KdfParams::for_tests())
+            .unwrap();
+        let state = AppState::new(vault, false);
+        let unlocked = client(&state, "s1").await.err().unwrap();
+        assert_ne!(unlocked.code, ErrorCode::Locked);
+
+        state.vault().lock();
+        let locked = client(&state, "s1").await.err().unwrap();
+        assert_eq!(locked.code, ErrorCode::Locked);
+    }
 }

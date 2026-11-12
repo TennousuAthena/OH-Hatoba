@@ -1,4 +1,4 @@
-import { Icon } from "@/components/controls";
+import { Icon } from "@hatoba/ui";
 import { formatRelative, useT } from "@/i18n";
 import type { SyncStatus } from "@/ipc/types";
 import { cx } from "@/lib/cx";
@@ -11,6 +11,7 @@ function pageKey(page: Page): Key {
   switch (page.kind) {
     case "hosts":
     case "host-edit":
+    case "telnet-edit":
       return "hosts";
     case "keys":
       return "keys";

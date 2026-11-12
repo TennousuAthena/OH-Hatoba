@@ -116,6 +116,12 @@ export const commands = {
 	hostSave: (input: HostInput) => __TAURI_INVOKE<HostView>("host_save", { input }),
 	hostDelete: (id: string) => __TAURI_INVOKE<null>("host_delete", { id }),
 	hostDuplicate: (id: string) => __TAURI_INVOKE<HostView>("host_duplicate", { id }),
+	/**
+	 *  Puts the hosts and Telnet hosts in this order on the hosts page (HOST-16): every host, in the
+	 *  custom order the user made. Writes only the hosts whose places change; ids that name no host
+	 *  are skipped.
+	 */
+	hostsArrange: (order: string[]) => __TAURI_INVOKE<null>("hosts_arrange", { order }),
 	hostSetFavorite: (id: string, favorite: boolean) => __TAURI_INVOKE<null>("host_set_favorite", { id, favorite }),
 	/**  Turns the resource usage in a host's terminals on or off on this device (TERM-12). */
 	hostSetShowStats: (id: string, on: boolean) => __TAURI_INVOKE<null>("host_set_show_stats", { id, on }),
@@ -147,6 +153,10 @@ export const commands = {
 	dashboardUnwatch: (watchId: number) => __TAURI_INVOKE<void>("dashboard_unwatch", { watchId }),
 	/**  **Retry**: signs in to a held host again, and tries an offline or failed one now. */
 	dashboardRetry: (hostId: string) => __TAURI_INVOKE<void>("dashboard_retry", { hostId }),
+	/**
+	 *  Reads `source` from `path`, a file or folder the user chose, or else from where the client keeps
+	 *  its sessions.
+	 */
 	hostsImportPreview: (source: ImportSource, path: string | null) => __TAURI_INVOKE<ImportPreview>("hosts_import_preview", { source, path }),
 	/**
 	 *  Creates hosts for the chosen entries of `source`, read again from `path`. It imports as keys
@@ -158,6 +168,10 @@ export const commands = {
 	hostsImport: (source: ImportSource, path: string | null, ids: string[], keyFiles: string[]) => __TAURI_INVOKE<ImportResult>("hosts_import", { source, path, ids, keyFiles }),
 	proxiesList: () => __TAURI_INVOKE<ProxyView[]>("proxies_list"),
 	proxySave: (input: ProxyInput) => __TAURI_INVOKE<ProxyView>("proxy_save", { input }),
+	/**
+	 *  Hosts that named the proxy go back to the device default; this device stops using it as its
+	 *  default and for its own connections.
+	 */
 	proxyDelete: (id: string) => __TAURI_INVOKE<null>("proxy_delete", { id }),
 	keysList: () => __TAURI_INVOKE<KeyView[]>("keys_list"),
 	/**  KEY-01 / WIN-09: OpenSSH, PEM and PuTTY .ppk, from a file or pasted text, with clear errors. */
@@ -202,6 +216,18 @@ export const commands = {
 	sshStatsStart: (sessionId: string, channel: Channel<StatsEvent>) => __TAURI_INVOKE<number>("ssh_stats_start", { sessionId, channel }),
 	/**  Stops the sampling that `ssh_stats_start` returned `stats_id` for; a later one keeps running. */
 	sshStatsStop: (sessionId: string, statsId: number) => __TAURI_INVOKE<void>("ssh_stats_stop", { sessionId, statsId }),
+	/**
+	 *  Reads what command suggestions take from the server of an SSH tab (TERM-16): its shell's history
+	 *  and the command names on its `PATH`, over an exec channel of the tab's connection that closes
+	 *  once it has answered. `null` for a server whose identification string names FreeBSD, NetBSD or
+	 *  Windows (HOST-11), on which nothing is run; an error for one that refuses the channel.
+	 */
+	sshSuggestions: (sessionId: string) => __TAURI_INVOKE<{
+	/**  The shell's own history, newest first, each command once: the login shell's history first. */
+	history: string[],
+	/**  The names of the executables on its `PATH`, sorted, each once. */
+	commands: string[],
+} | null>("ssh_suggestions", { sessionId }),
 	/**  "Test connection" in the host editor: connect, authenticate, verify the host key, disconnect. */
 	sshTest: (input: HostInput) => __TAURI_INVOKE<TestResult>("ssh_test", { input }),
 	/**  The shells a local tab can run (LOCAL-02), the default one first. */
@@ -215,7 +241,33 @@ export const commands = {
 	/**  Writes bytes as they are, for xterm's binary mouse reports (see `ssh_write_bytes`). */
 	localWriteBytes: (sessionId: string, data: number[]) => __TAURI_INVOKE<null>("local_write_bytes", { sessionId, data }),
 	localResize: (sessionId: string, cols: number, rows: number) => __TAURI_INVOKE<null>("local_resize", { sessionId, cols, rows }),
+	/**  Ends the shell and the console programs it started. */
 	localClose: (sessionId: string) => __TAURI_INVOKE<null>("local_close", { sessionId }),
+	telnetHostsList: () => __TAURI_INVOKE<TelnetHostView[]>("telnet_hosts_list"),
+	telnetHostSave: (input: TelnetHostInput) => __TAURI_INVOKE<TelnetHostView>("telnet_host_save", { input }),
+	telnetHostDelete: (id: string) => __TAURI_INVOKE<null>("telnet_host_delete", { id }),
+	telnetHostDuplicate: (id: string) => __TAURI_INVOKE<TelnetHostView>("telnet_host_duplicate", { id }),
+	telnetHostSetFavorite: (id: string, favorite: boolean) => __TAURI_INVOKE<null>("telnet_host_set_favorite", { id, favorite }),
+	/**
+	 *  SEC-08: copies a Telnet host's saved password to the clipboard from Rust, as
+	 *  `host_copy_password` does for SSH hosts.
+	 */
+	telnetHostCopyPassword: (id: string) => __TAURI_INVOKE<null>("telnet_host_copy_password", { id }),
+	/**
+	 *  Connects a tab to the Telnet host `host_id` (TELNET-02) and returns the session id. Its
+	 *  output streams on `channel` until the connection ends or `telnet_close`.
+	 */
+	telnetOpen: (hostId: string, options: LocalOpenOptions, channel: Channel<TermFrame>) => __TAURI_INVOKE<string>("telnet_open", { hostId, options, channel }),
+	/**
+	 *  Quick connect (TELNET-05): connects a tab to `address:port`, which is not saved as a host,
+	 *  through this device's default proxy. The user logs in by hand.
+	 */
+	telnetOpenTarget: (address: string, port: number, options: LocalOpenOptions, channel: Channel<TermFrame>) => __TAURI_INVOKE<string>("telnet_open_target", { address, port, options, channel }),
+	telnetWrite: (sessionId: string, data: string) => __TAURI_INVOKE<null>("telnet_write", { sessionId, data }),
+	/**  Writes bytes as they are, for xterm's binary mouse reports (see `ssh_write_bytes`). */
+	telnetWriteBytes: (sessionId: string, data: number[]) => __TAURI_INVOKE<null>("telnet_write_bytes", { sessionId, data }),
+	telnetResize: (sessionId: string, cols: number, rows: number) => __TAURI_INVOKE<null>("telnet_resize", { sessionId, cols, rows }),
+	telnetClose: (sessionId: string) => __TAURI_INVOKE<null>("telnet_close", { sessionId }),
 	hostkeyRespond: (requestId: string, accept: boolean) => __TAURI_INVOKE<void>("hostkey_respond", { requestId, accept }),
 	authPromptRespond: (requestId: string, answers: string[] | null) => __TAURI_INVOKE<void>("auth_prompt_respond", { requestId, answers }),
 	/**  Every host's forwards, by host and then by bind and destination port. */
@@ -243,6 +295,37 @@ export const commands = {
 	sftpRemove: (sessionId: string, path: string, isDir: boolean) => __TAURI_INVOKE<null>("sftp_remove", { sessionId, path, isDir }),
 	sftpMkdir: (sessionId: string, path: string) => __TAURI_INVOKE<null>("sftp_mkdir", { sessionId, path }),
 	transferCancel: (transferId: string) => __TAURI_INVOKE<void>("transfer_cancel", { transferId }),
+	/**
+	 *  SFTP-05: opens `path` in the editor set in Settings, downloading it into a copy that uploads
+	 *  with every save, over the tab's connection.
+	 */
+	sftpEditOpen: (tabId: string, sessionId: string, path: string) => __TAURI_INVOKE<RemoteEditView>("sftp_edit_open", { tabId, sessionId, path }),
+	/**  SFTP-05: opens an edited file's copy in the editor again. */
+	sftpEditReopen: (editId: string) => __TAURI_INVOKE<null>("sftp_edit_reopen", { editId }),
+	/**  SFTP-05: the session the tab is connected with, or `None`; saves that waited for it upload. */
+	sftpEditSession: (tabId: string, sessionId: string | null) => __TAURI_INVOKE<void>("sftp_edit_session", { tabId, sessionId }),
+	/**
+	 *  SFTP-05: uploads an edited file now, as a retry, or over a change made on the server when
+	 *  `overwrite`.
+	 */
+	sftpEditUpload: (editId: string, overwrite: boolean) => __TAURI_INVOKE<null>("sftp_edit_upload", { editId, overwrite }),
+	/**  SFTP-05: replaces an edited file's copy with the server's file. */
+	sftpEditDiscard: (editId: string) => __TAURI_INVOKE<null>("sftp_edit_discard", { editId }),
+	/**
+	 *  SFTP-05: stops editing a file, uploading its last save first if `upload`. Returns whether
+	 *  editing ended; a save that cannot upload yet, as behind the lock screen, keeps it going until
+	 *  it does.
+	 */
+	sftpEditStop: (editId: string, upload: boolean) => __TAURI_INVOKE<boolean>("sftp_edit_stop", { editId, upload }),
+	/**
+	 *  SFTP-05: whether an edited file's copy holds a save the server does not have, also one not
+	 *  noticed yet.
+	 */
+	sftpEditChanged: (editId: string) => __TAURI_INVOKE<boolean>("sftp_edit_changed", { editId }),
+	/**  SFTP-05: the files being edited. */
+	sftpEditList: () => __TAURI_INVOKE<RemoteEditView[]>("sftp_edit_list"),
+	/**  SFTP-05: quits once the user has answered for the edits' saves that did not upload. */
+	sftpEditQuit: () => __TAURI_INVOKE<void>("sftp_edit_quit"),
 	syncStatus: () => __TAURI_INVOKE<SyncStatus>("sync_status"),
 	/**  Wizard "Test connection": Worker `/v1/health`, or (D1 mode) token check + database list. */
 	syncTest: (config: SyncConfigInput) => __TAURI_INVOKE<SyncTestResult>("sync_test", { config }),
@@ -275,6 +358,7 @@ export const commands = {
 	syncRevokeDevice: (deviceId: string) => __TAURI_INVOKE<null>("sync_revoke_device", { deviceId }),
 	/**  §6.4: conflicts are resolved automatically; this lists the unreviewed ones (P1). */
 	syncConflicts: () => __TAURI_INVOKE<ConflictView[]>("sync_conflicts"),
+	/**  `keep`: accept the automatic resolution. `restore`: re-apply the losing version as a new edit. */
 	syncConflictResolve: (id: number, action: ConflictAction) => __TAURI_INVOKE<null>("sync_conflict_resolve", { id, action }),
 	/**
 	 *  Step 1 (DEPLOY-02): checks the API token. The token crosses to Rust here once; every later
@@ -321,6 +405,7 @@ export const commands = {
 	 */
 	deployUpgrade: (handle: string, target: UpgradeTarget, progress: Channel<DeployProgress>) => __TAURI_INVOKE<DeployOutcome>("deploy_upgrade", { handle, target, progress }),
 	settingsGet: () => __TAURI_INVOKE<SettingsView>("settings_get"),
+	/**  Writes the fields `patch` sets over the stored settings; the others keep their stored values. */
 	settingsSave: (patch: SettingsPatch) => __TAURI_INVOKE<null>("settings_save", { patch }),
 	/**  Readable while locked: the unlock screen needs the language. */
 	prefsGet: () => __TAURI_INVOKE<LocalPrefs>("prefs_get"),
@@ -329,6 +414,31 @@ export const commands = {
 	starPromptGet: () => __TAURI_INVOKE<StarPrompt>("star_prompt_get"),
 	/**  The user starred, opened the bug report form, or closed the prompt: it never shows again. */
 	starPromptDone: () => __TAURI_INVOKE<null>("star_prompt_done"),
+	/**
+	 *  The commands typed on this device in a saved host's terminals or in a local shell, newest
+	 *  first. `owner` is the host's id (SSH or Telnet), or `local:` and the shell's id
+	 *  (`LocalShellView.id`). A host or shell without a history has an empty one.
+	 */
+	commandHistoryList: (owner: string) => __TAURI_INVOKE<string[]>("command_history_list", { owner }),
+	/**
+	 *  Puts a command that Enter sent to the shell at the top of the history of `owner` (as in
+	 *  `command_history_list`). A command already there moves up, and past 1,000 commands the oldest
+	 *  goes. Nothing is kept for a command that is blank, starts with a space or is longer than 4,096
+	 *  characters, nor for a host that is no longer saved. A quick connection keeps its commands in
+	 *  its tab and never sends them here.
+	 */
+	commandHistoryAdd: (owner: string, command: string) => __TAURI_INVOKE<null>("command_history_add", { owner, command }),
+	/**
+	 *  Removes a command from the history of `owner` (as in `command_history_list`), as Shift+Delete
+	 *  does in the suggestion list. A command the history does not have changes nothing.
+	 */
+	commandHistoryRemove: (owner: string, command: string) => __TAURI_INVOKE<null>("command_history_remove", { owner, command }),
+	/**
+	 *  Deletes the command history of every saved host and local shell on this device (Settings →
+	 *  Terminal → Clear Command History).
+	 */
+	commandHistoryClear: () => __TAURI_INVOKE<null>("command_history_clear"),
+	/**  AI-01: the providers. API keys go one way to Rust and never come back. */
 	aiProvidersList: () => __TAURI_INVOKE<AiProviderView[]>("ai_providers_list"),
 	aiProviderSave: (input: AiProviderInput) => __TAURI_INVOKE<AiProviderView>("ai_provider_save", { input }),
 	aiProviderDelete: (id: string) => __TAURI_INVOKE<null>("ai_provider_delete", { id }),
@@ -351,12 +461,14 @@ export const commands = {
 	 *  way, and the provider keeps its account for the next sign-in.
 	 */
 	aiChatgptSignOut: (providerId: string) => __TAURI_INVOKE<boolean>("ai_chatgpt_sign_out", { providerId }),
+	/**  AI-14: the search providers behind `web_search`. */
 	searchProvidersList: () => __TAURI_INVOKE<SearchProviderView[]>("search_providers_list"),
 	searchProviderSave: (input: SearchProviderInput) => __TAURI_INVOKE<SearchProviderView>("search_provider_save", { input }),
 	searchProviderDelete: (id: string) => __TAURI_INVOKE<null>("search_provider_delete", { id }),
 	/**  A real query through a saved or unsaved search provider. */
 	searchProviderTest: (input: SearchProviderInput) => __TAURI_INVOKE<AiTestResult>("search_provider_test", { input }),
 	aiSettingsGet: () => __TAURI_INVOKE<AiSettingsView>("ai_settings_get"),
+	/**  Writes the fields `patch` sets, like `settings_save`. */
 	aiSettingsSave: (patch: AiSettingsPatch) => __TAURI_INVOKE<null>("ai_settings_save", { patch }),
 	/**  Every conversation, unsorted; the panel sorts by `last_activity`, pinned first. */
 	aiConversationsList: () => __TAURI_INVOKE<AiConversationView[]>("ai_conversations_list"),
@@ -583,7 +695,11 @@ export const events = {
 	appLaunch: makeEvent<LaunchEvent>("app://launch"),
 	appNotificationClick: makeEvent<NotificationTarget>("app://notification-click"),
 	cliActivity: makeEvent<CliActivityEvent>("cli://activity"),
+	sftpEdit: makeEvent<RemoteEditEvent>("sftp://edit"),
+	sftpQuit: makeEvent<RemoteEditQuitEvent>("sftp://quit"),
+	sshAuthBanner: makeEvent<AuthBanner>("ssh://auth-banner"),
 	sshAuthPrompt: makeEvent<AuthPrompt>("ssh://auth-prompt"),
+	sshAuthPromptClosed: makeEvent<AuthPromptClosed>("ssh://auth-prompt-closed"),
 	sshConnections: makeEvent<ConnectionsEvent>("ssh://connections"),
 	sshForwardsLost: makeEvent<ForwardsLostEvent>("ssh://forwards-lost"),
 	sshHostkeyPrompt: makeEvent<HostKeyPrompt>("ssh://hostkey-prompt"),
@@ -1211,6 +1327,11 @@ export type AiTurnContext = {
 	/**  A connected terminal tab is attached; `false` offers no terminal tools (AI-09). */
 	tab: boolean,
 	/**
+	 *  `host_id` names a Telnet host, and the tab is its Telnet session (TELNET-04): the
+	 *  terminal tools are only `read_terminal` and `send_input`.
+	 */
+	telnet?: boolean,
+	/**
 	 *  The tab's SSH session while it is connected, whose server's identification string the
 	 *  system prompt states (§13.1).
 	 */
@@ -1267,14 +1388,21 @@ export type AiUsage = {
 	estimated: boolean,
 };
 
+/**  Every command rejects with this shape. `detail` is technical English text, safe to show. */
 export type AppError = {
 	code: ErrorCode,
 	detail: string,
+	/**  `throttled`: unlock is allowed again at this time. */
 	retry_at: number | null,
+	/**  `invalid_input`: the offending field's name. */
 	field: string | null,
+	/**  `ssh`: the classified SSH failure. */
 	ssh_kind: SshErrorKind | null,
+	/**  `key_parse`: why the private key could not be read. */
 	key_kind: KeyParseErrorKind | null,
+	/**  `cloudflare_permission`: the permission the API token lacks. */
 	permission: CloudflarePermission | null,
+	/**  `cloudflare`: Cloudflare's numeric error code, when it sent one. */
 	cf_code: number | null,
 	/**  `ai`: the HTTP status the provider answered with. */
 	http_status: number | null,
@@ -1285,6 +1413,7 @@ export type AppError = {
 export type AppInfo = {
 	version: string,
 	platform: Platform,
+	/**  Windows 11 Mica is active (WIN-07). */
 	mica: boolean,
 	/**
 	 *  The local user name, which quick connect (HOST-12) uses when the target names no user;
@@ -1305,8 +1434,29 @@ export type AppInfo = {
 
 export type Appearance = "system" | "light" | "dark";
 
+/**
+ *  A message the server sent while signing in (`SSH_MSG_USERAUTH_BANNER`). The terminal tab
+ *  connecting shows it in its terminal, as `ssh` prints it, and while the server holds the login,
+ *  as Tailscale SSH's check mode does until the user signs in at its link, it shows in a dialog.
+ *  `auth_prompt_respond` with no answers cancels the connection; `ssh://auth-prompt-closed` says
+ *  the server answered, which closes the dialog.
+ */
+export type AuthBanner = {
+	request_id: string,
+	/**
+	 *  The terminal tab's session; `None` for a connection without a terminal, such as a port
+	 *  forward's (FWD-05).
+	 */
+	session_id: string | null,
+	/**  `user@host:port` of the hop that sent it. */
+	target: string,
+	/**  Lines end with `\n`; the only other control character is tab. */
+	text: string,
+};
+
 export type AuthKind = "password" | "key" | "agent" | "ask";
 
+/**  A keyboard-interactive (2FA) prompt (SSH-08). */
 export type AuthPrompt = {
 	request_id: string,
 	session_id: string | null,
@@ -1318,8 +1468,23 @@ export type AuthPrompt = {
 	 *  password (SSH-03) rather than as a server prompt; answered with one value.
 	 */
 	password: boolean,
+	/**
+	 *  The sudo password of the saved host `name`, for `hatoba exec --sudo` or `hatoba cp
+	 *  --sudo` (HOST-15), asked like a password; answered with one value.
+	 */
+	sudo: boolean,
+	/**  The sudo password given before was wrong. */
+	wrong: boolean,
 	/**  `user@host:port` of the hop that asks. */
 	target: string,
+};
+
+/**
+ *  An `ssh://auth-prompt` that is no longer waited for, because the request that asked it ended
+ *  unanswered: its dialog closes.
+ */
+export type AuthPromptClosed = {
+	request_id: string,
 };
 
 export type AuthPromptField = {
@@ -1417,6 +1582,10 @@ export type CloudflarePermission = "workers_scripts" | "d1";
 export type ConflictAction = "keep" | "restore";
 
 export type ConflictField = {
+	/**
+	 *  A field key the interface translates, such as `port`, `jump_host`, `tags`, `name` or
+	 *  `state`.
+	 */
 	field: string,
 	local: string | null,
 	remote: string | null,
@@ -1434,6 +1603,7 @@ export type ConflictView = {
 	remote_updated_at: number | null,
 	local_deleted: boolean,
 	remote_deleted: boolean,
+	/**  Only the fields that differ; secrets are never included. */
 	fields: ConflictField[],
 	created_at: number,
 };
@@ -1443,6 +1613,7 @@ export type ConnectOptions = {
 	rows: number,
 	/**  `ask` auth (SSH-03): used once, never stored. */
 	password: string | null,
+	/**  For a passphrase-protected key whose passphrase isn't saved. */
 	passphrase: string | null,
 };
 
@@ -1637,7 +1808,9 @@ export type ErrorCode = "locked" | "not_initialized" | "already_initialized" | "
  */
 "ai" | 
 /**  A downloaded update does not carry a valid signature from the release key (spec §11). */
-"update_signature" | "cancelled" | "io" | "internal";
+"update_signature" | 
+/**  SFTP-05: no editor opened the copy of a remote file. */
+"editor" | "cancelled" | "io" | "internal";
 
 /**
  *  A forward that failed to start on its host's connection, until it starts or stops: a port in
@@ -1655,6 +1828,7 @@ export type FileEntry = {
 	is_symlink: boolean,
 	size: number,
 	modified: number | null,
+	/**  Such as `drwxr-xr-x`. */
 	permissions: string,
 };
 
@@ -1701,6 +1875,7 @@ export type ForwardView = {
 	name: string,
 	kind: ForwardKind,
 	bind_address: string,
+	/**  0 picks a free port (on the server for a remote forward). */
 	bind_port: number,
 	/**
 	 *  As the server reaches it, or as this computer does for a remote forward; empty and 0 for
@@ -1708,6 +1883,7 @@ export type ForwardView = {
 	 */
 	dest_host: string,
 	dest_port: number,
+	/**  FWD-02: starts whenever Hatoba connects to the host. */
 	auto_start: boolean,
 };
 
@@ -1759,6 +1935,7 @@ export type HostEnvVar = {
 };
 
 export type HostInput = {
+	/**  `None` creates a new host. */
 	id: string | null,
 	name: string,
 	address: string,
@@ -1789,6 +1966,10 @@ export type HostKeyPrompt = {
 	port: number,
 	key_type: string,
 	fingerprint: string,
+	/**
+	 *  `new`: the first connection (TOFU). `changed`: the fingerprint differs from the saved one,
+	 *  and the connection is blocked (SSH-04).
+	 */
 	kind: HostKeyPromptKind,
 	known_fingerprint: string | null,
 	known_key_type: string | null,
@@ -1803,11 +1984,17 @@ export type HostView = {
 	port: number,
 	username: string,
 	auth_kind: AuthKind,
+	/**  A password is saved (HOST-08: it can be replaced but never read back). */
 	has_password: boolean,
 	key_id: string | null,
 	group_id: string | null,
 	tags: string[],
 	favorite: boolean,
+	/**
+	 *  The place in the hosts page's custom order (HOST-16), shared with Telnet hosts: lower comes
+	 *  first, and 0 (no place yet) after every place.
+	 */
+	sort: number,
 	jump_host_id: string | null,
 	/**  SSH-13. With a jump host, the jump host's choice applies instead. */
 	proxy_mode: ProxyMode,
@@ -1817,6 +2004,7 @@ export type HostView = {
 	/**  What the AI assistant is told about the host (AI-37). */
 	ai_notes: string,
 	updated_at: number,
+	/**  Device-local, never synced (HOST-06). */
 	last_connected_at: number | null,
 	/**
 	 *  The server's operating system from its SSH identification string on the last connection
@@ -1836,6 +2024,12 @@ export type HostView = {
 	/**  Environment variables the terminal asks the server to set (SSH-14). */
 	env: HostEnvVar[],
 };
+
+/**
+ *  The orders of the hosts page: the latest connection, the name, the address, the custom order
+ *  (HOST-16), and the resource usage orders (HOST-14).
+ */
+export type HostsSort = "recent" | "name" | "address" | "custom" | "status" | "cpu" | "memory" | "disk" | "network" | "uptime";
 
 export type HostsView = "list" | "cards";
 
@@ -1894,7 +2088,7 @@ export type ImportResult = {
 /**  Where a host import reads from (SSH-11, SSH-12, SSH-15). */
 export type ImportSource = "ssh_config" | "xshell" | "finalshell" | "mobaxterm" | "putty" | "securecrt" | "tabby";
 
-export type ItemType = "host" | "group" | "key" | "known_host" | "forward" | "snippet" | "proxy" | "ai_provider" | "search_provider" | "ai_conversation" | "ai_message" | "skill" | "skill_file" | "mcp_server" | "ai_memory" | "settings";
+export type ItemType = "host" | "telnet_host" | "group" | "key" | "known_host" | "forward" | "snippet" | "proxy" | "ai_provider" | "search_provider" | "ai_conversation" | "ai_message" | "skill" | "skill_file" | "mcp_server" | "ai_memory" | "settings";
 
 export type KeyAlgorithm = "ed25519" | "ecdsa" | "rsa";
 
@@ -1907,7 +2101,9 @@ export type KeyGenerateInput = {
 
 export type KeyImportInput = {
 	name: string,
+	/**  Pasted private key text; ignored when `path` is set. */
 	private_key: string | null,
+	/**  A file chosen in the native dialog, which Rust reads. */
 	path: string | null,
 	passphrase: string | null,
 };
@@ -1925,10 +2121,11 @@ export type KeyView = {
 	has_passphrase: boolean,
 	created_at: number,
 	updated_at: number,
+	/**  IDs of the hosts that use this key (KEY-03, KEY-05). */
 	used_by: string[],
 };
 
-export type Language = "system" | "zh-CN" | "en" | "ja";
+export type Language = "system" | "zh-CN" | "zh-TW" | "en" | "ja";
 
 /**  A second launch handed its arguments to this window (HOST-13); `launch_take` returns them. */
 export type LaunchEvent = null;
@@ -1948,6 +2145,7 @@ export type LocalPrefs = {
 	 *  per device, since the right size depends on the screen.
 	 */
 	ui_zoom: number,
+	/**  HOST-10: the TCP reachability dots. */
 	host_probe: boolean,
 	/**
 	 *  Check GitHub for a newer release once after the first unlock of each launch (spec §11).
@@ -1969,6 +2167,11 @@ export type LocalPrefs = {
 	ai_panel_width: number,
 	/**  SSH-13: the proxy that hosts set to the device default connect through, on this device. */
 	default_proxy_id: string | null,
+	/**
+	 *  SSH-13: the proxy that Hatoba's own connections (sync, the AI assistant and the update
+	 *  check) go through on this device; the system proxy while `None` or once it is deleted.
+	 */
+	app_proxy_id: string | null,
 	/**  SEC-02: minutes without input before the vault locks; 0 never locks. */
 	auto_lock_minutes: number,
 	/**  SEC-02: lock the vault when the computer sleeps. */
@@ -1979,6 +2182,11 @@ export type LocalPrefs = {
 	clipboard_clear_secs: number,
 	/**  HOST-05: the hosts page lists the hosts or shows them as cards. */
 	hosts_view: HostsView,
+	/**
+	 *  HOST-05, HOST-16: the order of the hosts page. A resource usage order applies while
+	 *  resource usage shows (HOST-14); the latest connection comes first otherwise.
+	 */
+	hosts_sort: HostsSort,
 	/**
 	 *  HOST-14: the hosts page shows resource usage, which reads the listed hosts in the
 	 *  background.
@@ -2002,6 +2210,11 @@ export type LocalPrefs = {
 	 *  while `None` or when the shell is gone.
 	 */
 	local_shell: string | null,
+	/**
+	 *  SFTP-05: the program that edits remote files on this device; the app the system opens each
+	 *  kind of file with while `None`.
+	 */
+	sftp_editor: string | null,
 };
 
 /**  What kind of shell a local tab runs (§7.5). */
@@ -2168,6 +2381,7 @@ export type McpToolView = {
 
 export type McpTransportInput = { kind: "stdio"; command: string; args: string[]; env: McpSecretInput[] } | { kind: "http"; url: string; headers: McpSecretInput[] };
 
+/**  Environment and header values never reach the WebView, only their names (AI-29). */
 export type McpTransportView = { kind: "stdio"; command: string; args: string[]; env_keys: string[] } | { kind: "http"; url: string; header_keys: string[] };
 
 /**  One mounted filesystem's space, in bytes, as `df -P` reports it. */
@@ -2215,6 +2429,7 @@ export type ProbeResult = {
 };
 
 export type ProxyInput = {
+	/**  `None` creates a new proxy. */
 	id: string | null,
 	name: string,
 	kind: ProxyKind,
@@ -2244,6 +2459,7 @@ export type ProxyView = {
 	port: number,
 	/**  Empty when the proxy needs no sign-in. */
 	username: string,
+	/**  A password is saved (as HOST-08: it can be replaced but never read back). */
 	has_password: boolean,
 	/**  Hosts that name this proxy (not those that use it as the device default). */
 	host_ids: string[],
@@ -2259,6 +2475,47 @@ export type QuickTarget = {
 	address: string,
 	port: number,
 	username: string,
+};
+
+/**  `edit` is `None` once editing has ended and the copy is gone. */
+export type RemoteEditEvent = {
+	edit_id: string,
+	edit: RemoteEditView | null,
+};
+
+/**
+ *  Hatoba is quitting with files being edited: the WebView asks about saves that did not upload,
+ *  then quits with `sftp_edit_quit`.
+ */
+export type RemoteEditQuitEvent = null;
+
+/**  SFTP-05: where the copy of a file edited in a local editor stands. */
+export type RemoteEditState = 
+/**  The server has the copy's content. */
+"saved" | 
+/**  A save waits to upload: until the file settles, or until the tab connects again. */
+"pending" | "uploading" | 
+/**  The last upload failed (`error`), or was cancelled (no `error`). */
+"failed" | 
+/**  The file changed on the server since it was downloaded or uploaded. */
+"conflict";
+
+/**  SFTP-05: a remote file being edited in a local editor. */
+export type RemoteEditView = {
+	edit_id: string,
+	/**  The terminal tab it was opened from, whose connection it uploads over. */
+	tab_id: string,
+	/**  The name it was opened as, which the copy keeps. */
+	name: string,
+	/**  The file written back: the path opened, or a symlink's target. */
+	remote_path: string,
+	state: RemoteEditState,
+	error: string | null,
+	/**
+	 *  The vault locked before the last save uploaded: editing ended, and the copy waits until
+	 *  the user uploads or discards it.
+	 */
+	held: boolean,
 };
 
 export type RightClick = "copy_paste" | "menu";
@@ -2343,6 +2600,14 @@ export type ServerStatsView = {
 	mounts: MountView[],
 };
 
+/**  What command suggestions take from the server of an SSH tab (TERM-16). */
+export type ServerSuggestionsView = {
+	/**  The shell's own history, newest first, each command once: the login shell's history first. */
+	history: string[],
+	/**  The names of the executables on its `PATH`, sorted, each once. */
+	commands: string[],
+};
+
 export type SessionState = "connecting" | "connected" | "disconnected" | "failed";
 
 export type SessionStateEvent = {
@@ -2350,8 +2615,10 @@ export type SessionStateEvent = {
 	/**  `None` for a quick-connect session (HOST-12). */
 	host_id: string | null,
 	state: SessionState,
+	/**  The connection's round-trip time, once connected. */
 	latency_ms: number | null,
 	error: AppError | null,
+	/**  The remote exit status of a clean `disconnected`. */
 	exit_status: number | null,
 };
 
@@ -2363,6 +2630,7 @@ export type SettingsPatch = {
 	terminal?: TerminalSettingsPatch,
 };
 
+/**  The synced settings item (spec §5.1 `Settings`). */
 export type SettingsView = {
 	terminal: TerminalSettings,
 };
@@ -2471,11 +2739,15 @@ export type SyncState = "off" | "idle" | "syncing" | "offline" | "auth_failed" |
 
 export type SyncStatus = {
 	kind: SyncKind,
+	/**  The Worker's host, or `api.cloudflare.com` in D1 direct mode. */
 	endpoint: string | null,
+	/**  D1 direct mode: the database's ID. */
 	database: string | null,
 	state: SyncState,
 	last_synced_at: number | null,
+	/**  Local changes not pushed yet. */
 	pending: number,
+	/**  Automatically resolved conflicts not reviewed yet (§6.4). */
 	conflicts: number,
 	auto_sync: boolean,
 	message: string | null,
@@ -2494,9 +2766,11 @@ export type SyncStatus = {
 
 export type SyncTestResult = {
 	ok: boolean,
+	/**  The remote already holds a vault. */
 	initialized: boolean,
 	version: string | null,
 	latency_ms: number | null,
+	/**  D1 direct mode: the databases the token can see, to pick from once the token is verified. */
 	databases: D1Database[] | null,
 	error: AppError | null,
 };
@@ -2504,6 +2778,48 @@ export type SyncTestResult = {
 export type TagCount = {
 	name: string,
 	count: number,
+};
+
+export type TelnetHostInput = {
+	id: string | null,
+	name: string,
+	address: string,
+	port: number,
+	username: string,
+	/**  `None` keeps the saved password (HOST-08); empty removes it. */
+	password: string | null,
+	group_id: string | null,
+	tags: string[],
+	favorite: boolean,
+	proxy_mode: ProxyMode,
+	/**  Required when `proxy_mode` is `proxy`, ignored otherwise. */
+	proxy_id: string | null,
+	note: string,
+	/**  At most 16 KB of UTF-8 (AI-37). */
+	ai_notes: string,
+};
+
+/**  A Telnet host (TELNET-01). Its password never leaves Rust: only whether one is saved. */
+export type TelnetHostView = {
+	id: string,
+	name: string,
+	address: string,
+	port: number,
+	/**  Typed at the login prompt; empty to type it by hand (TELNET-03). */
+	username: string,
+	has_password: boolean,
+	group_id: string | null,
+	tags: string[],
+	favorite: boolean,
+	/**  The place in the hosts page's custom order, as for SSH hosts (HOST-16). */
+	sort: number,
+	proxy_mode: ProxyMode,
+	proxy_id: string | null,
+	note: string,
+	ai_notes: string,
+	updated_at: number,
+	/**  Device-local, as for SSH hosts (HOST-06). */
+	last_connected_at: number | null,
 };
 
 /**
@@ -2521,8 +2837,15 @@ export type TerminalSettings = {
 	light_scheme: string | null,
 	cursor_style: CursorChoice,
 	scrollback: number,
+	/**  WIN-05: PuTTY-style right click, or a context menu. */
 	right_click: RightClick,
+	/**  TERM-04: ask before pasting text with line breaks. */
 	confirm_multiline_paste: boolean,
+	/**
+	 *  TERM-14: show the rest of a matching command dimmed after the cursor at a shell prompt.
+	 *  The suggestion list opens with its keys either way.
+	 */
+	suggest_commands: boolean,
 };
 
 /**  The terminal fields a [`SettingsPatch`] changes; a field left out keeps its stored value. */
@@ -2536,6 +2859,7 @@ export type TerminalSettingsPatch = {
 	scrollback?: number | null,
 	right_click?: RightClick | null,
 	confirm_multiline_paste?: boolean | null,
+	suggest_commands?: boolean | null,
 };
 
 export type TestResult = {
@@ -2668,10 +2992,14 @@ export type VaultState = "uninitialized" | "locked" | "unlocked";
 
 export type VaultStatus = {
 	state: VaultState,
+	/**  Consecutive failed unlock attempts (SEC-06). */
 	failed_attempts: number,
+	/**  While throttled, the next attempt is allowed at this time. */
 	retry_at: number | null,
 	sync_kind: SyncKind,
+	/**  Windows Hello or Touch ID is available on this device. */
 	biometric_available: boolean,
+	/**  Biometric unlock is enrolled for this vault. */
 	biometric_enabled: boolean,
 	/**  SEC-11: a PIN is set on this device. */
 	pin_enabled: boolean,

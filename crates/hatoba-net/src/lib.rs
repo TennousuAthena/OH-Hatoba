@@ -16,7 +16,9 @@ pub fn client_builder() -> reqwest::ClientBuilder {
             .clone();
         // An unconfigured store has zero trusted roots and fails TLS closed. Never disable
         // certificate, expiry or hostname validation to make a port appear to work.
-        builder.tls_certs_only(roots)
+        // OHOS defaults to a direct connection. The application can apply a saved proxy after
+        // this builder; reqwest's Linux environment lookup is not the HarmonyOS system proxy.
+        builder.tls_certs_only(roots).no_proxy()
     }
     #[cfg(not(target_env = "ohos"))]
     {

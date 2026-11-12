@@ -13,6 +13,16 @@ A local tab has the same terminal settings, search, links, copy and paste as SSH
 
 Other labels: **Connect to Host**, **Starting…**, **Running**, **Failed to start**, **Exited**.
 
+## Telnet hosts and tabs
+
+For switches, routers and other devices that offer Telnet. **New Host** opens the editor with **Protocol** at the top: choose **Telnet** there (a host's protocol is set when it is created). A Telnet host has a name, address and port (23 by default), a **Login** section with a username and password, group, tags, proxy, note and AI notes; no authentication method, keys, jump host or environment variables. It is listed with the SSH hosts, marked **Telnet**, and connects, duplicates, favorites and deletes the same way.
+
+- Telnet has no login of its own: the device prints its `login:` (or `Username:`) and `Password:` prompts. Hatoba types the saved username and password at them, once each, within the first two minutes and while Hatoba stays unlocked. A prompt that comes back after a wrong password is left to the user, and so is every prompt once the user has typed two lines of their own, or one after the saved username went in. Leave either empty to type it by hand.
+- Telnet is not encrypted: the password and everything in the terminal travel as plain text, which the editor says.
+- A server that doesn't echo, such as a mail server on port 25, gets a line at a time: Hatoba shows what is typed, except at a password prompt, and edits it with Backspace, Ctrl+U and Ctrl+W until Enter. On a port other than 23, Hatoba waits for the server to start the Telnet negotiation.
+- Quick connect reads `telnet host [port]` and `telnet://host[:port]`: the tab connects through this device's default proxy and the user logs in by hand. A saved Telnet host at that address and port connects instead.
+- A Telnet tab's status bar shows `telnet address:port`, with no resource usage, port forwarding or SFTP, and its tab a network icon. A refused connection usually means Telnet is off on the device or the port is wrong.
+
 ## The status bar
 
 The bar above the terminal shows the connection state, the target `user@host:port`, "via" and the jump host's name when one is used, and the latency in ms once connected. The buttons on the right:
@@ -31,7 +41,7 @@ For a Linux or macOS server, the status bar can show CPU, memory and network rat
 
 Clicking the readout opens a popover: CPU over the last 3 minutes with the number of cores and the load averages, memory and swap, network rates over the last 3 minutes with the interfaces counted (those of the default route), the disk usage of `/`, and the uptime. Pointing at a chart (or the arrow keys once it has focus) shows every value as it was at that moment. A meter turns orange at 80% and red at 95%. **Hide Resource Usage** at the bottom turns it off for the host.
 
-Hatoba reads `/proc` on the server (on macOS, `iostat`, `vm_stat`, `sysctl`, `netstat` and `df`) every 2 seconds over the tab's own connection, by running `sh` on a separate channel; nothing is installed, and the process shows on the server (for example in `ps`) while the readout is sampled. Sampling pauses while the tab is in the background, the window is minimized, or the vault is locked, and a pause shows as a gap in the charts. The first reading after a pause has no CPU or network rate yet ("—"); the next one, 2 seconds later, does.
+Hatoba reads `/proc` on the server (on macOS, `iostat`, `vm_stat`, `sysctl`, `netstat` and `df`) every 2 seconds over the tab's own connection, by running `sh` on a separate channel; nothing is installed, and the process shows on the server (for example in `ps`) while the readout is sampled. Sampling pauses while another tab is in front or the vault is locked, and goes on while the window is minimized; a pause shows as a gap in the charts. The first reading after a pause has no CPU or network rate yet ("—"); the next one, 2 seconds later, does.
 
 - On macOS, memory in use is counted as Activity Monitor counts it (app memory, wired and compressed), and the disk is the APFS container of `/`, used as Finder shows it: its size less what is available.
 - FreeBSD, NetBSD, Windows and other systems show "Resource usage is available only for Linux and macOS servers." with the system's name when known.
@@ -64,9 +74,26 @@ Plain Ctrl+letter always reaches the remote shell (Ctrl+L, Ctrl+W, Ctrl+K and so
 
 Other labels: **Previous (Shift+Enter)**, **Next (Enter)**, **Close find (Esc)**, **Copy if selected, otherwise paste**.
 
+## Command suggestions
+
+While you type a command at a shell prompt, in an SSH, local or Telnet tab, the rest of the newest command you ran there that starts with what you typed shows dimmed after the cursor, as in fish or PowerShell.
+
+| Action | Windows / Linux | macOS |
+|---|---|---|
+| Take the dimmed command | → or End | → or End |
+| Take its next word | Ctrl+→ | ⌥→ |
+| List the commands you ran | Ctrl+Shift+Space | ⌘⇧Space |
+
+- The commands come from the history Hatoba keeps of each saved host and each local shell, on this device only, encrypted with the vault and not synced. A quick connection keeps its commands for the tab only. Deleting a host deletes its history.
+- On an SSH tab, when that history has no match, the suggestions also come from the server: the shell's own history (`~/.bash_history`, `~/.zsh_history` and fish's `fish_history`), and for the first word of a command, the names of the commands on its `PATH`. They are read once when the tab connects and kept in memory for the tab, and nothing on the server changes. A word that starts with `/` or `~/` completes the name of a file or folder on the server, listed through SFTP as you type; a relative path gets no suggestion. The list shows the server's commands after Hatoba's; Shift+Delete and **Clear Command History** remove them from the tab, not from the files on the server. A server that refuses, or whose identification names FreeBSD, NetBSD or Windows, leaves the tab with Hatoba's own history.
+- A command is added when you press Enter at a prompt. It is read from the screen, so what the shell does not show, such as a password, is never kept, and a command that starts with a space is left out, as the shells leave it out of their own history.
+- A prompt is a line that ends with `$`, `#`, `%`, `>` or `❯`, or one that starts like the line where Enter was last pressed (such as oh-my-zsh's `➜`). Nothing shows in a full-screen program (vim, htop), while the view is scrolled up, or while an input method is composing, and nothing shows where the shell already draws its own suggestion (fish, zsh-autosuggestions, PowerShell's predictions).
+- The list (**Command suggestions**) opens at the cursor with the commands that contain what you typed, those that start with it first. Typing in **Search commands** filters it, ↑ and ↓ select, Enter, Tab or a click puts the command in place of what you typed without running it, Shift+Delete removes it from the history, and Esc closes the list. With nothing to show it says "No matching commands".
+- Settings → Terminal → **Suggest commands** turns the dimmed command off; the list still opens with its keys. **Clear Command History** deletes the history of every host and shell on this device.
+
 ## Terminal settings
 
-All of them are in Settings → Terminal and sync with the vault, except **Local Terminal Shell**. The page has three sections: **Text and Cursor**, with a preview under it of the font, size, cursor and color scheme, then **Colors** and **Behavior**.
+All of them are in Settings → Terminal and sync with the vault, except **Local Terminal Shell** and **Editor**. The page has four sections: **Text and Cursor**, with a preview under it of the font, size, cursor and color scheme, then **Colors**, **Behavior** and **SFTP**.
 
 Other labels: **Decrease font size**, **Increase font size**.
 
@@ -81,8 +108,11 @@ Other labels: **Decrease font size**, **Increase font size**.
   - There are no custom schemes and no import from other terminals.
 - **Right-Click in Terminal**: **Copy if selected, otherwise paste** (default, except on macOS) or **Show context menu** (default on macOS).
 - **Confirm before pasting multiple lines**: on by default. Pasting text that contains line breaks shows a preview first.
+- **Suggest commands**: on by default. Shows the rest of a command you ran before as you type; see "Command suggestions" above.
+- **Command history** → **Clear Command History**: deletes the command history of every host and local shell on this device, after **Clear the command history?**.
 - **Scrollback**: 1,000, 5,000, 10,000 (default), or 50,000 lines.
 - **Local Terminal Shell**: the shell new local tabs run, kept on this device only (not synced); see "Local terminal tabs" above.
+- **SFTP** → **Editor**: the program that opens files edited from the SFTP panel, kept on this device only: **System Default** (the system's app for each kind of file) or a program picked with **Choose a Program**; see `references/sftp.md`.
 - The language is in Settings → General, and the theme, list density and window zoom in Settings → Appearance; see `references/settings.md`.
 
 ## Tab states

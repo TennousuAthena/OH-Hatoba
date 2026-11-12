@@ -31,6 +31,39 @@ fn find_host(vault: &Vault, id: &str) -> AppResult<Host> {
 /// The longest host name, in characters (HOST-01).
 pub(crate) const MAX_NAME_CHARS: usize = 128;
 
+/// The proxy a host's form chose (SSH-13).
+pub(crate) fn proxy_from_input(
+    mode: ProxyMode,
+    proxy_id: Option<&str>,
+    vault: &Vault,
+) -> AppResult<HostProxy> {
+    Ok(match mode {
+        ProxyMode::DeviceDefault => HostProxy::DeviceDefault,
+        ProxyMode::Direct => HostProxy::Direct,
+        ProxyMode::Proxy => {
+            let proxy_id = proxy_id
+                .ok_or_else(|| AppError::invalid("proxy_id", "choose a proxy"))?
+                .to_owned();
+            if vault.get(&proxy_id).and_then(Item::as_proxy).is_none() {
+                return Err(AppError::invalid("proxy_id", "proxy not found"));
+            }
+            HostProxy::Proxy { proxy_id }
+        }
+    })
+}
+
+/// A host's tags as the form gave them: trimmed, without empty ones or repeats.
+pub(crate) fn tags_from_input(input: &[String]) -> Vec<String> {
+    let mut tags: Vec<String> = Vec::new();
+    for tag in input {
+        let tag = tag.trim();
+        if !tag.is_empty() && !tags.iter().any(|t| t == tag) {
+            tags.push(tag.to_owned());
+        }
+    }
+    tags
+}
+
 /// Validates the form (spec §9 "field validation errors") and builds the stored model.
 pub fn host_from_input(
     input: &HostInput,
@@ -85,20 +118,7 @@ pub fn host_from_input(
     {
         return Err(AppError::invalid("group_id", "group not found"));
     }
-    let proxy = match input.proxy_mode {
-        ProxyMode::DeviceDefault => HostProxy::DeviceDefault,
-        ProxyMode::Direct => HostProxy::Direct,
-        ProxyMode::Proxy => {
-            let proxy_id = input
-                .proxy_id
-                .clone()
-                .ok_or_else(|| AppError::invalid("proxy_id", "choose a proxy"))?;
-            if vault.get(&proxy_id).and_then(Item::as_proxy).is_none() {
-                return Err(AppError::invalid("proxy_id", "proxy not found"));
-            }
-            HostProxy::Proxy { proxy_id }
-        }
-    };
+    let proxy = proxy_from_input(input.proxy_mode, input.proxy_id.as_deref(), vault)?;
     let auth = match input.auth_kind {
         AuthKind::Password => match (&input.password, existing.map(|h| &h.auth)) {
             (Some(pw), _) => HostAuth::Password {
@@ -125,13 +145,7 @@ pub fn host_from_input(
         AuthKind::Agent => HostAuth::Agent,
         AuthKind::Ask => HostAuth::Ask,
     };
-    let mut tags: Vec<String> = Vec::new();
-    for tag in &input.tags {
-        let tag = tag.trim();
-        if !tag.is_empty() && !tags.iter().any(|t| t == tag) {
-            tags.push(tag.to_owned());
-        }
-    }
+    let tags = tags_from_input(&input.tags);
     Ok(Host {
         // HOST-01: a host without a name is named after its address, cut to the name's limit so
         // the host saves again as it is.
@@ -147,6 +161,7 @@ pub fn host_from_input(
         group_id: input.group_id.clone(),
         tags,
         favorite: input.favorite,
+        sort: existing.map_or(0, |h| h.sort),
         jump_host_id: input.jump_host_id.clone(),
         proxy,
         note: input.note.clone(),
@@ -188,13 +203,32 @@ pub fn host_save(
             Some(id) => Some(find_host(v, id)?),
             None => None,
         };
-        let item = Item::Host(host_from_input(&input, existing.as_ref(), v)?);
+        let mut host = host_from_input(&input, existing.as_ref(), v)?;
+        if existing.is_none() {
+            host.sort = v.place_new_host(None)?;
+        }
+        let item = Item::Host(host);
         check_item_size(v, &item)?;
         let id = v.put(input.id.as_deref(), item)?;
         Ok(host_view(&id, &find_host(v, &id)?, v))
     })?;
     sync::local_change(&app);
     Ok(view)
+}
+
+/// Puts the hosts and Telnet hosts in this order on the hosts page (HOST-16): every host, in the
+/// custom order the user made. Writes only the hosts whose places change; ids that name no host
+/// are skipped.
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
+pub fn hosts_arrange(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    order: Vec<String>,
+) -> AppResult<()> {
+    state.with_unlocked(|v| Ok(v.arrange_hosts(&order)?))?;
+    sync::local_change(&app);
+    Ok(())
 }
 
 /// With sync on, refuses a host too large to sync: the Worker and D1 would reject its envelope on
@@ -251,6 +285,7 @@ pub fn host_duplicate(
             .find(|n| !names.contains(n))
             .unwrap_or(base);
         host.favorite = false;
+        host.sort = v.place_new_host(Some(&id))?;
         let new_id = v.put(None, Item::Host(host))?;
         Ok(host_view(&new_id, &find_host(v, &new_id)?, v))
     })?;
@@ -378,8 +413,9 @@ pub fn group_delete(app: AppHandle, state: State<'_, AppState>, id: String) -> A
 pub fn tags_list(state: State<'_, AppState>) -> AppResult<Vec<TagCount>> {
     state.with_unlocked(|v| {
         let mut counts: BTreeMap<String, u32> = BTreeMap::new();
-        for (_, host) in v.hosts() {
-            for tag in host.tags {
+        let telnet = v.telnet_hosts().into_iter().map(|(_, h)| h.tags);
+        for tags in v.hosts().into_iter().map(|(_, h)| h.tags).chain(telnet) {
+            for tag in tags {
                 *counts.entry(tag).or_default() += 1;
             }
         }
@@ -402,10 +438,16 @@ fn probe_targets(v: &Vault, ids: &[String]) -> Vec<(String, Option<ProbeTarget>)
     ids.iter()
         .take(500)
         .filter_map(|id| {
-            let h = v.get(id).and_then(Item::as_host)?;
-            let target = crate::ssh::connection_proxy(v, h)
-                .ok()
-                .map(|proxy| (h.address.clone(), h.port, proxy));
+            let target = match v.get(id)? {
+                Item::Host(h) => crate::ssh::connection_proxy(v, h)
+                    .ok()
+                    .map(|proxy| (h.address.clone(), h.port, proxy)),
+                // TELNET-01: a Telnet host goes through its own proxy.
+                Item::TelnetHost(h) => crate::ssh::resolve_proxy(v, &h.proxy)
+                    .ok()
+                    .map(|proxy| (h.address.clone(), h.port, proxy)),
+                _ => return None,
+            };
             Some((id.clone(), target))
         })
         .collect()
@@ -447,13 +489,25 @@ pub async fn host_copy_password(
     state: State<'_, AppState>,
     id: String,
 ) -> AppResult<()> {
-    let (password, prefs) = state.with_unlocked(|v| match find_host(v, &id)?.auth {
-        HostAuth::Password { password } if !password.is_empty() => Ok((password, v.local_prefs()?)),
+    let password = state.with_unlocked(|v| match find_host(v, &id)?.auth {
+        HostAuth::Password { password } if !password.is_empty() => Ok(password),
         _ => Err(AppError::invalid(
             "password",
             "this host has no saved password",
         )),
     })?;
+    copy_secret(&app, &state, password).await
+}
+
+/// Copies a secret to the clipboard and clears it after the device's delay if the clipboard still
+/// holds it (SEC-08).
+pub(crate) async fn copy_secret(
+    app: &AppHandle,
+    state: &AppState,
+    password: Zeroizing<String>,
+) -> AppResult<()> {
+    let prefs = state.with_unlocked(|v| Ok(v.local_prefs()?))?;
+    let app = app.clone();
     let clear_secs = prefs
         .map(|json| LocalPrefs::from_stored(&json))
         .unwrap_or_default()

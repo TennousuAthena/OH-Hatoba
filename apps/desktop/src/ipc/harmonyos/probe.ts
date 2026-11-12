@@ -41,6 +41,29 @@ void connectHost().then((bridge) => {
         username: "fixture", auth_kind: "agent", password: null, key_id: null, group_id: null, tags: ["diagnostic"],
         favorite: false, jump_host_id: null, proxy_mode: "direct", proxy_id: null, note: "", ai_notes: "", env: [] });
       assert((await api.host_get(saved.id)).auth_kind === "agent");
+      const telnet = await api.telnet_host_save({ id: null, name: "Generated Telnet diagnostic", address: "127.0.0.1",
+        port: 2323, username: "fixture", password: null, group_id: null, tags: ["diagnostic"], favorite: false,
+        proxy_mode: "direct", proxy_id: null, note: "", ai_notes: "" });
+      assert((await api.telnet_hosts_list()).some((host) => host.id === telnet.id && host.port === 2323));
+      await api.telnet_host_set_favorite(telnet.id, true);
+      assert((await api.telnet_hosts_list()).some((host) => host.id === telnet.id && host.favorite));
+      const duplicate = await api.telnet_host_duplicate(telnet.id);
+      assert(duplicate.id !== telnet.id && duplicate.address === telnet.address);
+      // Only this diagnostic entry's isolated vault is touched; these strings are never executed.
+      await api.command_history_clear();
+      await api.command_history_add(saved.id, "echo generated-ssh-history");
+      await api.command_history_add(telnet.id, "echo generated-telnet-history");
+      await api.command_history_add(telnet.id, " excluded-generated-history");
+      assert((await api.command_history_list(saved.id))[0] === "echo generated-ssh-history");
+      const history = await api.command_history_list(telnet.id);
+      assert(history.length === 1 && history[0] === "echo generated-telnet-history");
+      await api.command_history_remove(telnet.id, "echo generated-telnet-history");
+      assert((await api.command_history_list(telnet.id)).length === 0);
+      await api.command_history_clear();
+      assert((await api.command_history_list(saved.id)).length === 0);
+      await api.telnet_host_delete(telnet.id);
+      await api.telnet_host_delete(duplicate.id);
+      assert(!(await api.telnet_hosts_list()).some((host) => host.id === telnet.id || host.id === duplicate.id));
       await api.host_delete(saved.id);
       let locked = false;
       const unlisten = await api.listen("vault://locked", () => { locked = true; });
@@ -52,7 +75,7 @@ void connectHost().then((bridge) => {
       await api.vault_unlock(password);
       assert((await api.vault_status()).state === "unlocked");
       unlisten();
-      const business = { typedFacade: true, vaultCreateOrReopen: true, hostCrudAndAgentPreservation: true, lockEvent: true, lockedReadDenied: true, unlock: true };
+      const business = { typedFacade: true, vaultCreateOrReopen: true, hostCrudAndAgentPreservation: true, telnetHostCrud: true, commandHistoryIsolationAndClear: true, lockEvent: true, lockedReadDenied: true, unlock: true };
       report.textContent = JSON.stringify({ native, business }, null, 2);
       console.info("OH-Hatoba shared business smoke rendered");
       const network = await bridge.invoke("host_network_probe") as { enabled?: boolean; checks?: Record<string, boolean> };
@@ -93,6 +116,52 @@ void connectHost().then((bridge) => {
         } finally {
           if (sid) await api.ssh_disconnect(sid);
           unkey(); unauth();
+        }
+        // The loopback Telnet fixture negotiates ECHO/SGA/BINARY before its marker. Waiting
+        // for the marker avoids sending while the client still uses local echo or line editing.
+        const marker = new TextEncoder().encode("OH-Hatoba Telnet fixture ready\r\n");
+        const unit = new Uint8Array([...new TextEncoder().encode("generated Telnet 中文 🌊\r\n"), 255]);
+        const telnetExpected = new Uint8Array(96 * 1024);
+        for (let i = 0; i < telnetExpected.length; i++) telnetExpected[i] = unit[i % unit.length];
+        const telnetBytes: number[] = [];
+        let telnetParsed = 0;
+        let markReady: (() => void) | undefined;
+        let markEchoed: (() => void) | undefined;
+        const ready = new Promise<void>((resolve) => { markReady = resolve; });
+        const echoed = new Promise<void>((resolve) => { markEchoed = resolve; });
+        const waitForTelnet = async (pending: Promise<void>) => {
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            await Promise.race([pending, new Promise<void>((_, reject) => {
+              timer = setTimeout(() => reject(new Error("Telnet fixture timed out")), 10000);
+            })]);
+          } finally { clearTimeout(timer); }
+        };
+        let telnetSid: string | undefined;
+        try {
+          telnetSid = await api.telnet_open_target("127.0.0.1", 22323, { cols: 80, rows: 24 }, (frame) => {
+            if (frame[0] !== FRAME_DATA) return;
+            // Capture raw bytes before xterm decodes them, including Telnet's escaped IAC byte.
+            for (const byte of frame.subarray(1)) telnetBytes.push(byte);
+            return new Promise<void>((resolve) => terminal.write(frame.subarray(1), () => {
+              telnetParsed += frame.length - 1;
+              resolve();
+              if (telnetParsed >= marker.length) markReady?.();
+              if (telnetParsed >= marker.length + telnetExpected.length) markEchoed?.();
+            }));
+          });
+          await waitForTelnet(ready);
+          assert(telnetBytes.length === marker.length && marker.every((byte, i) => byte === telnetBytes[i]));
+          await api.telnet_write_bytes(telnetSid, Array.from(telnetExpected));
+          await waitForTelnet(echoed);
+          assert(telnetBytes.length === marker.length + telnetExpected.length);
+          assert(telnetExpected.every((byte, i) => byte === telnetBytes[marker.length + i]));
+          await api.telnet_resize(telnetSid, 132, 40);
+          await api.telnet_close(telnetSid);
+          telnetSid = undefined;
+          console.info("OH-Hatoba Web Telnet transport passed");
+        } finally {
+          if (telnetSid) await api.telnet_close(telnetSid);
         }
         console.info("OH-Hatoba network probe rendered");
       }

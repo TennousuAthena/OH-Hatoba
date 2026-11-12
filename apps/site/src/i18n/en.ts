@@ -1,5 +1,5 @@
 /**
- * The English text of the site, which zh.ts and ja.ts translate. `meta.description` is the one-line
+ * The English text of the site, which zh.ts, zhTW.ts and ja.ts translate. `meta.description` is the one-line
  * description of Hatoba that the README, package.json, and the repository share; the other languages
  * translate it, and every page's description and the structured data start from it.
  */
@@ -74,7 +74,7 @@ export const en = {
       },
       {
         term: "SFTP",
-        text: "A file panel beside the terminal, with drag-and-drop upload and downloads that you can cancel.",
+        text: "A file panel beside the terminal, with drag-and-drop upload, downloads that you can cancel, and remote files edited in your own editor and uploaded on every save.",
       },
       {
         term: "Port forwarding",
@@ -101,7 +101,9 @@ export const en = {
     releases: "Releases",
     report: "Report a problem",
     security: "Security policy",
+    privacy: "Privacy policy",
     contributing: "Contributing",
+    sponsor: "Sponsor",
     license: "Hatoba is released under the MIT license.",
   },
   download: {
@@ -138,8 +140,7 @@ export const en = {
     checksums: "lists the checksum of every file in the release.",
     allReleases: "All releases",
     source: "Build from source",
-    testing:
-      "Hatoba is developed on Windows, so the Linux and macOS builds get less testing. If something doesn't work, please open an issue.",
+    problem: "Something not working?",
     issue: "Open an issue",
   },
   notFound: {

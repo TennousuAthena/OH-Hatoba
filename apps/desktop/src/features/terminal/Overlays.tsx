@@ -1,10 +1,10 @@
 import { useRef } from "react";
+import { Button, Icon, LinkButton, Spinner, toast, useExitAnimation } from "@hatoba/ui";
 import { errorMessage } from "@/app/errors";
-import { Button, Icon, LinkButton, Spinner } from "@/components/controls";
-import { toast, useExitAnimation } from "@/components/overlay";
 import { useT } from "@/i18n";
+import { appError } from "@/ipc/api";
 import type { AppError, HostView, QuickTarget } from "@/ipc/types";
-import { writeClipboard } from "./clipboard";
+import { writeClipboard } from "@/lib/clipboard";
 import { clockTime, diagnosticsText, errorCode } from "./diagnostics";
 import s from "./Overlays.module.css";
 
@@ -23,7 +23,7 @@ export function ConnectingOverlay({ name, local = false }: { name: string; local
   );
 }
 
-/** Connection failed (SSH-05): what happened, in words, plus retry (design §03b). */
+/** Connection failed (SSH-05): what happened, in words, plus retry. */
 export function ErrorCard({
   name,
   host,
@@ -48,7 +48,7 @@ export function ErrorCard({
   onAskAi(diagnostics: string): void;
 }) {
   const t = useT();
-  const err: AppError = error ?? { code: "internal", detail: "" };
+  const err: AppError = error ?? appError("internal", "");
   const when = clockTime(at ?? Date.now());
   const meta =
     attempts > 1
@@ -92,6 +92,55 @@ export function ErrorCard({
           <Button variant="primary" icon="arrow-clockwise" onClick={onRetry}>
             {t("btn.retry")}
           </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** TELNET-02: the Telnet connection could not be made. */
+export function TelnetErrorCard({
+  name,
+  target,
+  error,
+  onRetry,
+  onEdit,
+}: {
+  name: string;
+  target: { address: string; port: number } | null;
+  error: AppError | null;
+  onRetry(): void;
+  /** Opens the saved host's editor; null for a quick connection. */
+  onEdit: (() => void) | null;
+}) {
+  const t = useT();
+  const where = { host: target?.address, port: target?.port, timeoutSec: 15 };
+  const body = !error
+    ? ""
+    : error.ssh_kind === "refused"
+      ? t("terminal.telnet.refused", { host: where.host ?? "", port: where.port ?? 23 })
+      : errorMessage(t, error, where);
+  return (
+    <div className={s.scrim}>
+      <div role="alertdialog" aria-labelledby="term-err-title" className={s.card}>
+        <div className={s.cardHead}>
+          <Icon name="plugs" size={20} color="#ff6b61" />
+          <div id="term-err-title" className={s.cardTitle}>
+            {t("terminal.err.title", { name })}
+          </div>
+        </div>
+        <div className={s.cardBody}>{body}</div>
+        <div className={s.cardActions}>
+          <div className={s.grow} />
+          {onEdit && (
+            <button type="button" className={s.darkButton} onClick={onEdit}>
+              {t("terminal.err.editHost")}
+            </button>
+          )}
+          <button type="button" className={s.primaryButton} onClick={onRetry}>
+            <Icon name="arrow-clockwise" size={13} />
+            {t("btn.retry")}
+          </button>
         </div>
       </div>
     </div>

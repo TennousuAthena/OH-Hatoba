@@ -2,13 +2,14 @@ import { useMemo, useSyncExternalStore } from "react";
 import { messages, type Locale, type MessageKey } from "./locales";
 
 export type { Locale, MessageKey };
-export const LOCALES: Locale[] = ["zh-CN", "en", "ja"];
+export const LOCALES: Locale[] = ["zh-CN", "zh-TW", "en", "ja"];
 
 /** Picks a supported locale from the OS / WebView language list (default: system language). */
 export function detectLocale(languages: readonly string[] = navigator.languages ?? [navigator.language]): Locale {
   for (const raw of languages) {
     const lang = raw.toLowerCase();
-    if (lang.startsWith("zh")) return "zh-CN";
+    // Traditional Chinese for Taiwan, Hong Kong and Macau, and wherever the script is named.
+    if (lang.startsWith("zh")) return /^zh-(hant|tw|hk|mo)(-|$)/.test(lang) ? "zh-TW" : "zh-CN";
     if (lang.startsWith("ja")) return "ja";
     if (lang.startsWith("en")) return "en";
   }
@@ -56,7 +57,7 @@ function subscribe(cb: () => void) {
 }
 
 /**
- * React hook: re-renders on language change (switching takes effect immediately, design §07). The function stays the
+ * React hook: re-renders on language change (switching takes effect immediately). The function stays the
  * same until then, so the memoized values and components that take it keep their identity.
  */
 export function useT() {
@@ -127,7 +128,7 @@ export function useToday(): number {
   return useSyncExternalStore(subscribeDay, clockNow).today;
 }
 
-/** "2 min ago", "Today 09:12", "Yesterday", "Oct 5" — the design's last-connected style. */
+/** "2 min ago", "Today 09:12", "Yesterday", "Oct 5" — the hosts list's last-connected style. */
 export function formatRelative(locale: Locale, ms: number, now = Date.now()): string {
   const diff = Math.max(0, now - ms);
   const min = Math.floor(diff / 60_000);

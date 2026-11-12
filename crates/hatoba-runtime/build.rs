@@ -48,6 +48,12 @@ fn main() {
             let Item::Fn(function) = item else {
                 continue;
             };
+            if function.attrs.iter().any(|attr| {
+                attr.path().is_ident("cfg")
+                    && attr.to_token_stream().to_string().contains("desktop-host")
+            }) {
+                continue;
+            }
             let name = function.sig.ident.to_string();
             // The generated frontend contract, not a separately maintained native command list.
             let Some(contract) = contracts.get(&name) else {

@@ -81,6 +81,17 @@ The labels that these files name in English, as the interface shows them in Simp
 | Copy if selected, otherwise paste | 有选中则复制，否则粘贴 |
 | Show context menu | 弹出菜单 |
 
+### Command suggestions
+
+| en | zh-CN |
+|---|---|
+| Command suggestions | 命令建议 |
+| Search commands | 搜索命令 |
+| No matching commands | 没有匹配的命令 |
+| Terminal | 终端 |
+| Suggest commands | 输入时提示命令 |
+| Clear Command History | 清除命令历史 |
+
 ### Terminal settings
 
 | en | zh-CN |
@@ -107,8 +118,16 @@ The labels that these files name in English, as the interface shows them in Simp
 | Copy if selected, otherwise paste | 有选中则复制，否则粘贴 |
 | Show context menu | 弹出菜单 |
 | Confirm before pasting multiple lines | 粘贴多行文本前确认 |
+| Suggest commands | 输入时提示命令 |
+| Command history | 命令历史 |
+| Clear Command History | 清除命令历史 |
+| Clear the command history? | 清除命令历史？ |
 | Scrollback | 回滚缓冲区 |
 | Local Terminal Shell | 本地终端的 shell |
+| SFTP | SFTP |
+| Editor | 编辑器 |
+| System Default | 系统默认 |
+| Choose a Program | 选择程序 |
 | General | 通用 |
 | Appearance | 外观 |
 
@@ -143,6 +162,7 @@ The labels that these files name in English, as the interface shows them in Simp
 |---|---|
 | Open | 打开 |
 | Download | 下载 |
+| Edit | 编辑 |
 | Rename | 重命名 |
 | Delete | 删除 |
 | Copy Path | 复制路径 |
@@ -153,6 +173,37 @@ The labels that these files name in English, as the interface shows them in Simp
 | This folder and everything in it will be permanently deleted from the server. This can’t be undone. | 这个文件夹及其中的所有内容会从服务器上永久删除，无法撤销。 |
 | Path copied | 路径已复制 |
 | Drop to upload to {path} | 松开以上传到 {path} |
+
+### Edit files
+
+| en | zh-CN |
+|---|---|
+| Edit | 编辑 |
+| Terminal | 终端 |
+| SFTP | SFTP |
+| Editor | 编辑器 |
+| System Default | 系统默认 |
+| Choose a Program | 选择程序 |
+| Editing | 正在编辑 |
+| Saved | 已保存 |
+| Waiting to upload | 等待上传 |
+| Uploading… | 正在上传… |
+| Changed on the server | 服务器上已更改 |
+| Open in Editor | 在编辑器中打开 |
+| Upload Again | 重新上传 |
+| Stop Editing | 停止编辑 |
+| “{name}” changed on the server | “{name}”在服务器上已更改 |
+| Overwrite | 覆盖 |
+| Discard My Changes | 放弃我的修改 |
+| Resolve Conflict | 处理冲突 |
+| Upload the changes to “{name}”? | 上传对“{name}”的修改？ |
+| Upload | 上传 |
+| Discard Changes | 放弃修改 |
+| Their last saves haven’t uploaded to {host} yet. | 最近一次保存还没有上传到 {host}。 |
+| Their last saves haven’t uploaded to {host}, and the tab isn’t connected. Reconnect to upload them. | 最近一次保存还没有上传到 {host}，而这个标签页已断开连接。重新连接后才能上传。 |
+| Their last saves haven’t uploaded yet. Nothing uploads while Hatoba is locked. | 最近一次保存还没有上传。Hatoba 锁定期间不会上传。 |
+| Couldn’t open “{name}” in an editor. You can choose one in Settings → Terminal. | 无法在编辑器中打开“{name}”。可以在设置 → 终端中选择编辑器。 |
+| {n} files didn’t upload. | {n} 个文件没有上传。 |
 
 ### Transfers
 
@@ -238,7 +289,7 @@ The labels that these files name in English, as the interface shows them in Simp
 | en | zh-CN |
 |---|---|
 | Authentication failed: the server didn’t accept the username, password or key. | 认证失败：用户名、密码或密钥不被服务器接受。 |
-| The host key was rejected, so the connection was stopped. | 已拒绝主机指纹，连接已中止。 |
+| The host key was rejected, so the connection was stopped. | 已拒绝主机密钥，连接已中止。 |
 | The private key can’t be read. Check its passphrase or format. | 无法读取私钥，请检查口令或密钥格式。 |
 | The connection was closed. | 连接已断开。 |
 | SSH protocol error. | SSH 协议错误。 |
@@ -250,7 +301,7 @@ The labels that these files name in English, as the interface shows them in Simp
 | Can’t reach the proxy. Check that it’s running and that its address and port are right. | 无法连接到代理。请确认代理正在运行，并且地址和端口正确。 |
 | The proxy asks for a username and password, or didn’t accept the saved ones. | 代理要求用户名和密码，或者不接受已保存的用户名和密码。 |
 | The proxy this connection uses was deleted. Choose another one in the host’s settings or in Settings → Proxies. | 这个连接使用的代理已被删除。请在主机设置或“设置 → 代理”中另选一个。 |
-| Please check your input. | 请检查输入内容。 |
+| The input isn’t valid. Check it and try again. | 输入的内容无效。请检查后重试。 |
 | The vault is locked. | 保险库已锁定。 |
 | Address | 地址 |
 | Port | 端口 |
@@ -278,10 +329,18 @@ The labels that these files name in English, as the interface shows them in Simp
 |---|---|
 | Trust and Connect | 信任并连接 |
 | Cancel | 取消 |
-| Host key has changed | 主机指纹已改变 |
+| Host key has changed | 主机密钥已变更 |
 | Disconnect | 断开连接 |
 | Update Fingerprint and Connect | 更新指纹并连接 |
 | New host key for {host}:{port} | {host}:{port} 提供了新的主机密钥 |
+
+### Sign-in messages
+
+| en | zh-CN |
+|---|---|
+| Message from {target} | {target} 发来的消息 |
+| Open Link | 打开链接 |
+| Cancel | 取消 |
 
 ### Dropped connections and keepalive
 

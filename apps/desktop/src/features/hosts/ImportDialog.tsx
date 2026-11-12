@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { Button, Checkbox, ErrorText, FooterSpacer, Icon, Sheet, SheetHeader, Spinner, toast } from "@hatoba/ui";
 import { useVaultData } from "@/app/data";
 import { errorMessage } from "@/app/errors";
 import { useApp } from "@/app/store";
-import { Button, Checkbox, Icon, Spinner } from "@/components/controls";
-import { FooterSpacer, Sheet, SheetHeader, toast } from "@/components/overlay";
-import { ErrorText } from "@/components/patterns";
 import { useT } from "@/i18n";
 import { hostCapabilities } from "@/lib/hostServices";
 import { api, toAppError, isHarmonyOS } from "@/ipc/api";

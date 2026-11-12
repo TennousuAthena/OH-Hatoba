@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Button, PopupSelect, Segmented, Stepper, Switch, TextField, confirm, isImeEvent, toast } from "@hatoba/ui";
+import { errorMessage } from "@/app/errors";
 import { useApp } from "@/app/store";
-import { Segmented, Stepper, Switch, TextField } from "@/components/controls";
-import { PopupSelect } from "@/components/overlay";
-import { loadLocalShells, shellName } from "@/features/terminal/localShells";
-import { FONT_SIZE_MAX, FONT_SIZE_MIN, resolveScheme, terminalTheme, useTermSettings } from "@/features/terminal/theme";
+import { pickProgram, programName } from "@/features/sftp/native";
 import { useT } from "@/i18n";
 import type { LocalShellView, TerminalSettings } from "@/ipc/types";
 import { cx } from "@/lib/cx";
-import { isImeEvent } from "@/lib/ime";
-import { defaultTerminalFont } from "@/lib/platform";
+import { hostCapabilities } from "@/lib/hostServices";
+import { defaultTerminalFont, shortcutLabel } from "@/lib/platform";
+import { clearAllHistory } from "@/session/history";
+import { loadLocalShells, shellName } from "@/session/localShells";
+import { FONT_SIZE_MAX, FONT_SIZE_MIN, resolveScheme, terminalTheme, useTermSettings } from "@/session/theme";
 import { SchemePicker } from "./SchemePicker";
 import { Pane, Section, SettingRow, usePrefs, type PaneProps } from "./shared";
 import s from "./TerminalPane.module.css";
@@ -17,7 +19,8 @@ const SCROLLBACK = [1000, 5000, 10000, 50000];
 
 /**
  * Settings → Terminal (TERM-05 / TERM-06): font, cursor and colour schemes with a preview of them, the
- * mouse and paste behaviour (WIN-05), scrollback, and the local tabs' shell (LOCAL-02).
+ * mouse and paste behaviour (WIN-05), scrollback, the local tabs' shell (LOCAL-02), and the editor of
+ * remote files (SFTP-05).
  */
 export function TerminalPane({ settings, updateTerminal }: PaneProps) {
   const t = useT();
@@ -47,6 +50,23 @@ export function TerminalPane({ settings, updateTerminal }: PaneProps) {
   }, [fontFamily]);
 
   if (!term) return <Pane>{null}</Pane>;
+
+  // TERM-15: the history of every host and local shell on this device.
+  const clearHistory = async () => {
+    const ok = await confirm({
+      title: t("settings.commandHistory.clearTitle"),
+      body: t("settings.commandHistory.clearBody"),
+      confirmLabel: t("settings.commandHistory.clear"),
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await clearAllHistory();
+      toast(t("settings.commandHistory.cleared"));
+    } catch (e) {
+      toast(errorMessage(t, e), "error");
+    }
+  };
 
   const commitFont = () => {
     const from = typedFrom.current;
@@ -186,6 +206,21 @@ export function TerminalPane({ settings, updateTerminal }: PaneProps) {
             onChange={(confirm_multiline_paste) => updateTerminal({ confirm_multiline_paste })}
           />
         </SettingRow>
+        <SettingRow
+          label={t("settings.suggestCommands")}
+          hint={t("settings.suggestCommands.hint", { keys: shortcutLabel(platform, "Ctrl+Shift+Space", "⌘⇧Space") })}
+        >
+          <Switch
+            label={t("settings.suggestCommands")}
+            checked={term.suggest_commands}
+            onChange={(suggest_commands) => updateTerminal({ suggest_commands })}
+          />
+        </SettingRow>
+        <SettingRow label={t("settings.commandHistory")}>
+          <Button icon="trash" onClick={() => void clearHistory()}>
+            {t("settings.commandHistory.clear")}
+          </Button>
+        </SettingRow>
         <SettingRow label={t("settings.term.scrollback")}>
           <PopupSelect
             ariaLabel={t("settings.term.scrollback")}
@@ -203,7 +238,44 @@ export function TerminalPane({ settings, updateTerminal }: PaneProps) {
           />
         )}
       </Section>
+
+      {hostCapabilities().externalEditor && (
+        <Section title={t("settings.section.sftp")}>
+          <EditorRow value={prefs.sftp_editor} onChange={(sftp_editor) => setPrefs({ sftp_editor })} />
+        </Section>
+      )}
     </Pane>
+  );
+}
+
+const CHOOSE = "\u0000choose";
+
+/**
+ * SFTP-05: the program that edits remote files on this device, or the app the system opens each kind of
+ * file with. The last option picks a program with the file dialog.
+ */
+function EditorRow({ value, onChange }: { value: string | null; onChange(path: string | null): void }) {
+  const t = useT();
+  const platform = useApp((a) => a.info.platform);
+  const options = [
+    { value: "", label: t("settings.sftpEditor.system") },
+    ...(value ? [{ value, label: programName(value) }] : []),
+    { value: CHOOSE, label: t("settings.sftpEditor.choose") },
+  ];
+  const choose = async () => {
+    const picked = await pickProgram(platform);
+    if (picked) onChange(picked);
+  };
+  return (
+    <SettingRow label={t("settings.sftpEditor")}>
+      <PopupSelect
+        ariaLabel={t("settings.sftpEditor")}
+        value={value ?? ""}
+        minWidth={200}
+        options={options}
+        onChange={(next) => (next === CHOOSE ? void choose() : onChange(next === "" ? null : next))}
+      />
+    </SettingRow>
   );
 }
 

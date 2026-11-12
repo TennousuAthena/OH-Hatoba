@@ -1,0 +1,1050 @@
+import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon } from "@xterm/addon-search";
+import { WebLinksAddon } from "@xterm/addon-web-links";
+import { WebglAddon } from "@xterm/addon-webgl";
+import { Terminal } from "@xterm/xterm";
+import { toast } from "@hatoba/ui";
+import { hostById, telnetHostById, useVaultData } from "@/app/data";
+import { errorMessage } from "@/app/errors";
+import { isAppShortcut } from "@/app/shortcuts";
+import { useApp } from "@/app/store";
+import { useTabs, type LocalShell, type TabSource, type TabStatus, type TelnetSource } from "@/app/tabs";
+import { t } from "@/i18n";
+import { api, toAppError } from "@/ipc/api";
+import {
+  FRAME_CLOSED,
+  FRAME_DATA,
+  FRAME_ERROR,
+  FRAME_SESSION,
+  type AppError,
+  type AuthBanner,
+  type HostView,
+  type QuickTarget,
+  type SessionStateEvent,
+} from "@/ipc/types";
+import { openExternal, readClipboard, writeClipboard } from "@/lib/clipboard";
+import { isMac } from "@/lib/platform";
+import { editSessionChanged } from "./edits";
+import {
+  addToHistory,
+  dropServerLists,
+  dropTabHistory,
+  historyOf,
+  historyOwner,
+  listedHistory,
+  onHistoryChange,
+  removeFromHistory,
+  serverListsOf,
+  setServerLists,
+} from "./history";
+import { clearInfo, getInfo, patchInfo } from "./info";
+import { confirmMultilinePaste } from "./paste";
+import { PathLister } from "./pathSuggest";
+import { askPassword, askSecret, cancelSessionPrompts, pushAuthBanner, stopWaiting } from "./prompts";
+import { useRecentTargets } from "./recent";
+import { searchColors } from "./schemes";
+import { InputTracker, commandNameFor, nextWord, suggestionFor } from "./suggest";
+import { resolveScheme, terminalOptions, useTermSettings } from "./theme";
+import { useTransfers } from "./transfers";
+
+/** TERM-14: the dimmed rest of a command after the cursor, at the cursor's cell of the view. */
+export interface Suggestion {
+  rest: string;
+  x: number;
+  y: number;
+}
+
+/** A screen cell in window coordinates. */
+export interface CellBox {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  /** The right edge of the terminal's screen. */
+  screenRight: number;
+}
+
+/** One-off credentials for a connection attempt (SSH-03). They are passed to `ssh_connect` and dropped. */
+export interface Credentials {
+  password: string | null;
+  passphrase: string | null;
+}
+
+const decoder = new TextDecoder();
+
+const byTab = new Map<string, LiveSession>();
+const bySession = new Map<string, LiveSession>();
+/** State events that arrived before `ssh_connect` told us the session id. */
+const earlyEvents = new Map<string, SessionStateEvent[]>();
+
+export function getSession(tabId: string): LiveSession | undefined {
+  return byTab.get(tabId);
+}
+
+/**
+ * The live session behind a tab, created on first use. Returns null when the tab is gone, so a
+ * late re-render of a closed tab can never resurrect (and reconnect) a session.
+ */
+export function ensureSession(tabId: string): LiveSession | null {
+  const existing = byTab.get(tabId);
+  if (existing) return existing;
+  const tab = useTabs.getState().tabs.find((x) => x.id === tabId);
+  if (!tab) return null;
+  const source: TabSource = tab.local
+    ? { hostId: null, target: null, local: tab.local }
+    : tab.telnet
+      ? { hostId: null, target: null, telnet: tab.telnet }
+      : tab.target !== null
+        ? { hostId: null, target: tab.target }
+        : { hostId: tab.hostId, target: null };
+  const session = new LiveSession(tabId, source);
+  byTab.set(tabId, session);
+  return session;
+}
+
+/** The backend sessions of the tabs connected to a saved host. */
+export function hostSessionIds(hostId: string): string[] {
+  return [...byTab.values()].flatMap((x) => (x.hostId === hostId && x.sessionId ? [x.sessionId] : []));
+}
+
+/**
+ * A message the server sent while signing in. The tab connecting prints it in its terminal, as `ssh`
+ * does, and it shows in a dialog while the server holds the login. One for a tab that has closed
+ * cancels that tab's connection.
+ */
+export function routeAuthBanner(ev: AuthBanner) {
+  const sid = ev.session_id;
+  if (sid !== null) {
+    const tab = [...byTab.values()].find((x) => x.connectingAs(sid));
+    if (!tab) {
+      stopWaiting(ev.request_id);
+      return;
+    }
+    tab.printBanner(ev.text);
+  }
+  pushAuthBanner(ev);
+}
+
+/** Route an `ssh://state` event to the tab that owns the session. */
+export function routeStateEvent(ev: SessionStateEvent) {
+  const session = bySession.get(ev.session_id);
+  if (session) {
+    session.onState(ev);
+    return;
+  }
+  const list = earlyEvents.get(ev.session_id) ?? [];
+  list.push(ev);
+  earlyEvents.set(ev.session_id, list.slice(-8));
+  if (earlyEvents.size > 32) earlyEvents.delete(earlyEvents.keys().next().value!);
+}
+
+useTermSettings.subscribe(() => byTab.forEach((s) => s.applySettings()));
+
+/** How a tab's input, size and end reach its backend session: an SSH shell, a local PTY (§7.5) or a Telnet connection (§7.6). */
+interface SessionIo {
+  write(sid: string, data: string): Promise<void>;
+  writeBytes(sid: string, data: number[]): Promise<void>;
+  resize(sid: string, cols: number, rows: number): Promise<void>;
+  close(sid: string): Promise<void>;
+}
+
+const SSH_IO: SessionIo = {
+  write: (sid, data) => api.ssh_write(sid, data),
+  writeBytes: (sid, data) => api.ssh_write_bytes(sid, data),
+  resize: (sid, cols, rows) => api.ssh_resize(sid, cols, rows),
+  close: (sid) => api.ssh_disconnect(sid),
+};
+
+const LOCAL_IO: SessionIo = {
+  write: (sid, data) => api.local_write(sid, data),
+  writeBytes: (sid, data) => api.local_write_bytes(sid, data),
+  resize: (sid, cols, rows) => api.local_resize(sid, cols, rows),
+  close: (sid) => api.local_close(sid),
+};
+
+const TELNET_IO: SessionIo = {
+  write: (sid, data) => api.telnet_write(sid, data),
+  writeBytes: (sid, data) => api.telnet_write_bytes(sid, data),
+  resize: (sid, cols, rows) => api.telnet_resize(sid, cols, rows),
+  close: (sid) => api.telnet_close(sid),
+};
+
+export function needsPassphrase(err: AppError): boolean {
+  return err.code === "key_parse" && (err.key_kind === "passphrase_required" || err.key_kind === "wrong_passphrase");
+}
+
+/** An "ask every time" host connected without its password (SSH-03). */
+export function needsPassword(err: AppError): boolean {
+  return err.code === "invalid_input" && err.field === "password";
+}
+
+/**
+ * Everything about one terminal tab that must outlive React renders: the xterm instance, the
+ * backend session and its frame handler. React only attaches/detaches the DOM (so StrictMode's
+ * double mount and tab switches never reconnect).
+ */
+export class LiveSession {
+  readonly term: Terminal;
+  readonly search = new SearchAddon();
+  private readonly fit = new FitAddon();
+  private webgl: WebglAddon | null = null;
+
+  sessionId: string | null = null;
+  status: TabStatus = "connecting";
+
+  private lastSessionId: string | null = null;
+  /** The backend session id of the connection attempt in progress (FRAME_SESSION). */
+  private pendingSessionId: string | null = null;
+  private creds: Credentials | null = null;
+  private started = false;
+  private opened = false;
+  private disposed = false;
+  private active = false;
+  private gen = 0;
+  private attempts = 0;
+  private sent = { cols: 0, rows: 0 };
+  private container: HTMLElement | null = null;
+  private observer: ResizeObserver | null = null;
+  private fitTimer: number | undefined;
+  private readonly outputListeners = new Set<(text: string) => void>();
+  private readonly outputDecoder = new TextDecoder();
+  private readonly consumedWrites = new Set<() => void>();
+  /** TERM-14, TERM-15: where the input starts on the current prompt. */
+  private readonly tracker = new InputTracker();
+  /** The suggestion showing after the cursor; null while none does. */
+  suggestion: Suggestion | null = null;
+  private readonly suggestionListeners = new Set<() => void>();
+  private suggestFrame = 0;
+  private composing = false;
+  /** Input went to the shell and its echo has not come back: the screen does not show it yet. */
+  private awaitingEcho = false;
+  private readonly stopHistory: () => void;
+  /** TERM-16: false once the server refused the exec channel. */
+  private asksServer = true;
+  /** TERM-16: the server names a system that is not asked (HOST-11), through SFTP neither. */
+  private otherSystem = false;
+  private readonly paths = new PathLister(() => this.scheduleSuggestion());
+
+  constructor(
+    readonly tabId: string,
+    private source: TabSource,
+  ) {
+    this.term = new Terminal({
+      ...terminalOptions(useTermSettings.getState().settings),
+      allowProposedApi: true, // search decorations
+      scrollOnUserInput: true,
+      macOptionIsMeta: true,
+    });
+    this.term.loadAddon(this.fit);
+    this.term.loadAddon(this.search);
+    this.term.loadAddon(
+      new WebLinksAddon((event, uri) => {
+        // TERM-08: links open on Ctrl+click only, so a stray click while selecting never navigates.
+        if (event.ctrlKey || event.metaKey) void openExternal(uri);
+      }),
+    );
+    this.term.attachCustomKeyEventHandler(this.handleKey);
+    this.term.onData((data) => this.write(data));
+    this.term.onBinary((data) => this.writeBinary(data));
+    this.term.onResize(() => {
+      this.sendResize();
+      this.scheduleSuggestion();
+    });
+    this.term.onWriteParsed(() => {
+      this.awaitingEcho = false;
+      this.scheduleSuggestion();
+    });
+    this.term.onCursorMove(() => this.scheduleSuggestion());
+    this.term.onScroll(() => this.scheduleSuggestion());
+    this.stopHistory = onHistoryChange(() => this.scheduleSuggestion());
+  }
+
+  /** Whose command history the tab reads and adds to (TERM-15). */
+  private get history() {
+    return historyOwner(this.tabId, this.source);
+  }
+
+  /** The saved host; null for a quick connection. */
+  get hostId(): string | null {
+    return this.source.hostId;
+  }
+
+  /** What a quick connection connects to (HOST-12); null for a saved host. */
+  get target(): QuickTarget | null {
+    return this.source.target;
+  }
+
+  /** The shell a local tab runs (§7.5); null for an SSH tab. */
+  get local(): LocalShell | null {
+    return this.source.local ?? null;
+  }
+
+  /** What a Telnet tab connects to (§7.6); null for the other tabs. */
+  get telnet(): TelnetSource | null {
+    return this.source.telnet ?? null;
+  }
+
+  private get io(): SessionIo {
+    return this.source.local ? LOCAL_IO : this.source.telnet ? TELNET_IO : SSH_IO;
+  }
+
+  /** A quick connection whose target is now a saved host connects as that host from here on. */
+  adoptHost(host: HostView) {
+    // The tab's own history goes; the host's history takes over (TERM-15).
+    dropTabHistory(this.tabId);
+    this.source = { hostId: host.id, target: null };
+    useTabs.getState().adoptHost(this.tabId, host.id, host.name);
+  }
+
+  // ───────────── DOM attachment (called by the React view) ─────────────
+
+  attach(container: HTMLElement) {
+    if (this.disposed) return;
+    this.container = container;
+    if (!this.opened) {
+      this.term.open(container);
+      this.opened = true;
+      // Capture phase: we own pasting so multi-line content can be confirmed first (TERM-04).
+      this.term.element?.addEventListener("paste", this.onPasteEvent, true);
+      // TERM-14: no suggestion while an input method composes.
+      this.term.textarea?.addEventListener("compositionstart", this.onComposition);
+      this.term.textarea?.addEventListener("compositionend", this.onComposition);
+      void document.fonts?.ready.then(() => this.fitNow());
+    } else if (this.term.element && this.term.element.parentElement !== container) {
+      container.appendChild(this.term.element);
+    }
+    this.observer?.disconnect();
+    this.observer = new ResizeObserver(() => this.scheduleFit());
+    this.observer.observe(container);
+    this.fitNow();
+    if (this.active) this.loadWebgl();
+    if (!this.started) void this.start();
+  }
+
+  detach(container: HTMLElement) {
+    if (this.container !== container) return;
+    this.observer?.disconnect();
+    this.observer = null;
+    this.container = null;
+    window.clearTimeout(this.fitTimer);
+  }
+
+  /** The tab became visible / hidden. Only the visible terminal pays for a WebGL context. */
+  setActive(active: boolean) {
+    this.active = active;
+    if (this.disposed || !this.opened) return;
+    if (active) {
+      this.loadWebgl();
+      this.fitNow();
+      this.term.focus();
+    } else {
+      this.unloadWebgl();
+    }
+  }
+
+  focus() {
+    this.term.focus();
+  }
+
+  applySettings() {
+    if (this.disposed) return;
+    Object.assign(this.term.options, terminalOptions(useTermSettings.getState().settings));
+    this.scheduleSuggestion();
+    requestAnimationFrame(() => this.fitNow());
+    // The search addon keeps the colours it drew matches with, so a new scheme redraws them. Searching
+    // again scrolls to a match; the view stays where the user left it.
+    if (this.findQuery && JSON.stringify(this.findColors()) !== this.findDrawn) {
+      const top = this.term.buffer.active.viewportY;
+      this.search.clearDecorations();
+      this.find(this.findQuery, "next", true);
+      this.term.scrollToLine(top);
+    }
+  }
+
+  private scheduleFit() {
+    window.clearTimeout(this.fitTimer);
+    this.fitTimer = window.setTimeout(() => this.fitNow(), 50);
+  }
+
+  /** TERM-03: refit to the container; `onResize` then tells the PTY, only when cols/rows changed. */
+  fitNow() {
+    if (this.disposed || !this.opened || !this.container?.clientWidth) return;
+    const dims = this.fit.proposeDimensions();
+    if (!dims || !Number.isFinite(dims.cols) || !Number.isFinite(dims.rows)) return;
+    if (dims.cols !== this.term.cols || dims.rows !== this.term.rows) this.fit.fit();
+  }
+
+  private loadWebgl() {
+    if (this.webgl || !this.opened) return;
+    const gl = new WebglAddon();
+    try {
+      gl.onContextLoss(() => {
+        gl.dispose();
+        if (this.webgl === gl) this.webgl = null; // falls back to the DOM renderer
+      });
+      this.term.loadAddon(gl);
+      this.webgl = gl;
+    } catch {
+      gl.dispose();
+    }
+  }
+
+  private unloadWebgl() {
+    this.webgl?.dispose();
+    this.webgl = null;
+  }
+
+  // ───────────── connection lifecycle ─────────────
+
+  setCredentials(creds: Credentials | null) {
+    this.creds = creds;
+  }
+
+  private get isConnecting(): boolean {
+    return this.status === "connecting";
+  }
+
+  private setStatus(status: TabStatus) {
+    this.status = status;
+    useTabs.getState().update(this.tabId, { status, sessionId: this.sessionId });
+  }
+
+  private async start() {
+    this.started = true;
+    const creds = this.creds;
+    this.creds = null;
+    await this.connect(creds);
+  }
+
+  private async connect(creds: Credentials | null) {
+    const gen = ++this.gen;
+    this.attempts++;
+    patchInfo(this.tabId, { error: null, errorAt: null, reason: null, latencyMs: null, attempts: this.attempts });
+    this.sessionId = null;
+    this.pendingSessionId = null;
+    this.tracker.reset();
+    this.term.write("\x1b[?25h"); // show the cursor again (hidden while failed / disconnected)
+    this.setStatus("connecting");
+    if (this.source.local) {
+      await this.startLocal(gen, this.source.local);
+      return;
+    }
+    if (this.source.telnet) {
+      await this.startTelnet(gen, this.source.telnet);
+      return;
+    }
+
+    let passphrase = creds?.passphrase ?? null;
+    let password = creds?.password ?? null;
+    for (let round = 0; ; round++) {
+      const sentSize = { cols: this.term.cols, rows: this.term.rows };
+      const options = { cols: sentSize.cols, rows: sentSize.rows, password, passphrase };
+      const onFrame = (frame: Uint8Array) => this.onFrame(frame, gen);
+      const source = this.source;
+      try {
+        // A quick connection asks for its password while authenticating (an `ssh://auth-prompt`).
+        const sid =
+          source.target !== null
+            ? await api.ssh_connect_target(source.target, options, onFrame)
+            : await api.ssh_connect(source.hostId, options, onFrame);
+        if (gen !== this.gen || this.disposed) {
+          void api.ssh_disconnect(sid).catch(() => {});
+          return;
+        }
+        this.onConnected(sid, sentSize);
+        return;
+      } catch (e) {
+        if (gen !== this.gen || this.disposed) return;
+        const err = toAppError(e);
+        const host = hostById(this.hostId);
+        if (needsPassword(err) && password === null && host?.auth_kind === "ask" && round < 3) {
+          // SSH-16: the host's connection closed after the tab skipped asking for its password.
+          const answer = await askPassword(host);
+          if (gen !== this.gen || this.disposed) return;
+          if (answer !== null) {
+            password = answer;
+            continue;
+          }
+        }
+        if (needsPassphrase(err) && round < 3) {
+          // The backend has no (or a wrong) saved passphrase: ask once, use it, forget it.
+          const answer = await askSecret({
+            kind: "passphrase",
+            hostName: host?.name ?? "",
+            target: host ? `${host.username}@${host.address}:${host.port}` : "",
+            wrong: err.key_kind === "wrong_passphrase",
+          });
+          if (gen !== this.gen || this.disposed) return;
+          if (answer !== null) {
+            passphrase = answer;
+            continue;
+          }
+        }
+        this.fail(err);
+        return;
+      }
+    }
+  }
+
+  /** LOCAL-01: starts the tab's shell in a PTY of the terminal's size. */
+  private async startLocal(gen: number, shell: LocalShell) {
+    const sentSize = { cols: this.term.cols, rows: this.term.rows };
+    try {
+      const sid = await api.local_open(shell.id, sentSize, (frame) => this.onFrame(frame, gen));
+      if (gen !== this.gen || this.disposed) {
+        void api.local_close(sid).catch(() => {});
+        return;
+      }
+      this.onConnected(sid, sentSize);
+    } catch (e) {
+      if (gen !== this.gen || this.disposed) return;
+      this.fail(toAppError(e));
+    }
+  }
+
+  /** TELNET-02: connects the tab to its Telnet host, or a quick-connect target, with the terminal's size. */
+  private async startTelnet(gen: number, telnet: TelnetSource) {
+    const sentSize = { cols: this.term.cols, rows: this.term.rows };
+    const onFrame = (frame: Uint8Array) => this.onFrame(frame, gen);
+    try {
+      const sid =
+        telnet.hostId !== null
+          ? await api.telnet_open(telnet.hostId, sentSize, onFrame)
+          : await api.telnet_open_target(telnet.address, telnet.port, sentSize, onFrame);
+      if (gen !== this.gen || this.disposed) {
+        void api.telnet_close(sid).catch(() => {});
+        return;
+      }
+      this.onConnected(sid, sentSize);
+    } catch (e) {
+      if (gen !== this.gen || this.disposed) return;
+      this.fail(toAppError(e));
+    }
+  }
+
+  private onConnected(sid: string, sentSize: { cols: number; rows: number }) {
+    this.releaseSession();
+    this.sessionId = sid;
+    this.lastSessionId = sid;
+    this.sent = sentSize;
+    bySession.set(sid, this);
+    this.setStatus("connected");
+    if (!this.local) {
+      // SFTP-05: saves of the tab's edited files that waited for the connection upload.
+      editSessionChanged(this.tabId, sid);
+      // A saved host's last connected time and server OS; a quick connection's recent targets.
+      if (this.target) void useRecentTargets.getState().load();
+      else
+        void useVaultData
+          .getState()
+          .reloadHosts()
+          .catch(() => {});
+    }
+    this.sendResize(); // the view may have been resized while connecting
+    historyOf(this.history); // TERM-15: read before the first suggestion is needed
+    this.readServerLists(sid);
+    const early = earlyEvents.get(sid);
+    earlyEvents.delete(sid);
+    early?.forEach((ev) => this.onState(ev));
+    if (this.active && this.status === "connected") this.term.focus();
+  }
+
+  /** TERM-16: what an SSH tab's server offers suggestions, read once per connection. */
+  private readServerLists(sid: string) {
+    // The previous connection's: the host may since name another server.
+    dropServerLists(this.tabId);
+    this.paths.connected(null);
+    if (this.local || this.telnet || this.otherSystem) return;
+    if (!this.asksServer) {
+      this.paths.connected(sid);
+      return;
+    }
+    // The answer tells whether the server is one to list paths on as well.
+    api.ssh_suggestions(sid).then(
+      (lists) => {
+        if (this.disposed || sid !== this.sessionId) return;
+        if (lists) {
+          setServerLists(this.tabId, lists);
+          this.paths.connected(sid);
+        } else {
+          this.otherSystem = true;
+        }
+      },
+      (e: unknown) => {
+        if (this.disposed || sid !== this.sessionId) return;
+        // A refusal stays for the tab; a timeout or a lost connection says nothing about the next connection.
+        if (toAppError(e).ssh_kind === "channel") this.asksServer = false;
+        this.paths.connected(sid);
+        this.scheduleSuggestion(); // a path typed while waiting
+      },
+    );
+  }
+
+  /** Whether this tab is connecting as backend session `sid`. */
+  connectingAs(sid: string): boolean {
+    return this.isConnecting && this.pendingSessionId === sid;
+  }
+
+  /** A message the server sent while signing in, printed on a line of its own. */
+  printBanner(text: string) {
+    const atLineStart = this.term.buffer.active.cursorX === 0;
+    this.term.write(`${atLineStart ? "" : "\r\n"}${text.replaceAll("\n", "\r\n")}\r\n`);
+  }
+
+  private fail(err: AppError) {
+    patchInfo(this.tabId, { error: err, errorAt: Date.now() });
+    const atLineStart = this.term.buffer.active.cursorX === 0;
+    this.term.write(
+      `${atLineStart ? "" : "\r\n"}${this.local?.name ?? (this.telnet ? "telnet" : "ssh")}: ${err.detail}\r\n\x1b[?25l`,
+    );
+    this.setStatus("failed");
+  }
+
+  /** Connection ended (remote closed, network drop, or the user disconnected). */
+  private markDisconnected(reason: string | null, weak = false) {
+    if (this.status === "disconnected") {
+      // A later state event may know better than the bare "closed" frame.
+      if (reason && !weak) patchInfo(this.tabId, { reason });
+      return;
+    }
+    if (this.status !== "connected") return;
+    const sid = this.sessionId;
+    this.sessionId = null;
+    if (sid) useTransfers.getState().purge(sid);
+    patchInfo(this.tabId, { reason });
+    this.term.write("\x1b[?25l");
+    this.setStatus("disconnected");
+    this.scheduleSuggestion();
+  }
+
+  onState(ev: SessionStateEvent) {
+    if (this.disposed) return;
+    if (ev.latency_ms != null) patchInfo(this.tabId, { latencyMs: ev.latency_ms });
+    if (ev.state === "disconnected" || ev.state === "failed") {
+      // LOCAL-01: a shell that exits cleanly closes its tab, as in other terminals; one that fails
+      // stays open with its status, to read what it printed and restart it.
+      if (this.local && ev.exit_status === 0 && !ev.error && this.lastSessionId === ev.session_id) {
+        useTabs.getState().closeTab(this.tabId);
+        void this.dispose();
+        return;
+      }
+      this.markDisconnected(this.reasonFrom(ev));
+    }
+  }
+
+  private reasonFrom(ev: SessionStateEvent): string | null {
+    const clean = (s: string) => s.replace(/[。.]\s*$/, "");
+    if (ev.error) return ev.error.ssh_kind === "disconnected" ? null : clean(errorMessage(t, ev.error));
+    if (ev.exit_status === 0) return t("terminal.sessionEnded");
+    if (ev.exit_status != null) return t("terminal.exitStatus", { code: ev.exit_status });
+    return null;
+  }
+
+  private onFrame(frame: Uint8Array, gen: number) {
+    if (gen !== this.gen || this.disposed || frame.length === 0) return;
+    switch (frame[0]) {
+      case FRAME_DATA:
+        if (frame.length > 1) {
+          const data = frame.subarray(1);
+          if (this.outputListeners.size > 0) {
+            const text = this.outputDecoder.decode(data, { stream: true });
+            this.outputListeners.forEach((listener) => listener(text));
+          }
+          return new Promise<void>((resolve) => {
+            this.consumedWrites.add(resolve);
+            this.term.write(data, () => {
+              this.consumedWrites.delete(resolve);
+              resolve();
+            });
+          });
+        }
+        break;
+      case FRAME_CLOSED:
+        this.markDisconnected(decoder.decode(frame.subarray(1)).trim() || null, true);
+        break;
+      case FRAME_ERROR:
+        this.term.write(`\r\n\x1b[31m${decoder.decode(frame.subarray(1))}\x1b[0m\r\n`);
+        break;
+      case FRAME_SESSION:
+        this.pendingSessionId = decoder.decode(frame.subarray(1));
+        break;
+    }
+  }
+
+  /** Forget the previous backend session id (after a disconnect, before reconnecting or disposing). */
+  private releaseSession() {
+    if (this.lastSessionId) {
+      bySession.delete(this.lastSessionId);
+      earlyEvents.delete(this.lastSessionId);
+      this.lastSessionId = null;
+    }
+  }
+
+  /** Reconnect in this tab (SSH-07: always user-initiated, never an automatic loop). */
+  async reconnect(collect: () => Promise<Credentials | null>) {
+    if (this.disposed || this.isConnecting) return;
+    const missing = this.telnet
+      ? this.telnet.hostId !== null && !telnetHostById(this.telnet.hostId)
+      : !this.local && !this.target && !hostById(this.hostId);
+    if (missing) {
+      toast(t("terminal.hostMissing"), "error");
+      return;
+    }
+    const creds = await collect();
+    if (!creds || this.disposed || this.isConnecting) return;
+    const old = this.sessionId;
+    this.gen++; // drop frames and results from the old connection
+    if (old) {
+      this.sessionId = null;
+      useTransfers.getState().purge(old);
+      void this.io.close(old).catch(() => {});
+    }
+    this.releaseSession();
+    const atLineStart = this.term.buffer.active.cursorX === 0;
+    const line = t(this.local ? "terminal.local.restarting" : "terminal.reconnecting");
+    this.term.write(`${atLineStart ? "" : "\r\n"}\x1b[90m── ${line} ──\x1b[0m\r\n`);
+    await this.connect(creds);
+  }
+
+  /** User-requested disconnect; the tab stays open showing the "reconnect" banner. */
+  async disconnect() {
+    const sid = this.sessionId;
+    if (!sid) return;
+    this.gen++;
+    this.markDisconnected(null);
+    await this.io.close(sid).catch(() => {});
+  }
+
+  /** Close everything: backend session, xterm, listeners. */
+  async dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.consumedWrites.forEach((resolve) => resolve());
+    this.consumedWrites.clear();
+    // Host-key and login prompts of an attempt still in progress would outlive the tab.
+    if (this.isConnecting && this.pendingSessionId) cancelSessionPrompts(this.pendingSessionId);
+    this.gen++;
+    const sid = this.sessionId;
+    this.sessionId = null;
+    const closing = sid ? this.io.close(sid).catch(() => {}) : null;
+    if (sid) useTransfers.getState().purge(sid);
+    this.releaseSession();
+    window.clearTimeout(this.fitTimer);
+    cancelAnimationFrame(this.suggestFrame);
+    this.stopHistory();
+    if (!this.history.saved) dropTabHistory(this.tabId);
+    dropServerLists(this.tabId);
+    this.paths.connected(null);
+    this.observer?.disconnect();
+    this.term.element?.removeEventListener("paste", this.onPasteEvent, true);
+    this.unloadWebgl();
+    this.term.dispose();
+    byTab.delete(this.tabId);
+    clearInfo(this.tabId);
+    await closing;
+  }
+
+  // ───────────── input, resize, clipboard ─────────────
+
+  private write(data: string) {
+    const sid = this.sessionId;
+    if (!sid || this.status !== "connected") return;
+    // TERM-15: Enter at a prompt adds the command, read from the screen before the shell answers.
+    const { command } = this.tracker.onInput(data, this.term.buffer.active);
+    if (command !== null) addToHistory(this.history, command);
+    void this.io.write(sid, data).catch(() => {});
+    // Until the shell echoes the input, a suggestion read from the screen would be stale: another → would
+    // type the same rest again.
+    this.awaitingEcho = true;
+    if (this.suggestion) {
+      this.suggestion = null;
+      this.suggestionListeners.forEach((listener) => listener());
+    }
+    this.scheduleSuggestion();
+  }
+
+  /**
+   * xterm's binary input: legacy mouse reports, one character per byte. Their coordinates go above
+   * 0x7F, so they are sent as bytes rather than as text, which would be UTF-8 encoded.
+   */
+  private writeBinary(data: string) {
+    const sid = this.sessionId;
+    if (!sid || this.status !== "connected") return;
+    const bytes = Array.from({ length: data.length }, (_, i) => data.charCodeAt(i) & 0xff);
+    void this.io.writeBytes(sid, bytes).catch(() => {});
+  }
+
+  /** Types `data` into the shell through the same path as the keyboard (AI-13). Rejects when not connected. */
+  async sendInput(data: string): Promise<void> {
+    const sid = this.sessionId;
+    if (!sid || this.status !== "connected") throw toAppError(new Error("the session is not connected"));
+    this.term.scrollToBottom();
+    await this.io.write(sid, data);
+  }
+
+  /** Calls `listener` with the output as it arrives, decoded to text (AI-13). Returns the unsubscribe function. */
+  onOutput(listener: (text: string) => void): () => void {
+    this.outputListeners.add(listener);
+    return () => {
+      this.outputListeners.delete(listener);
+    };
+  }
+
+  private sendResize() {
+    const sid = this.sessionId;
+    if (!sid || this.status !== "connected") return;
+    const { cols, rows } = this.term;
+    if (cols === this.sent.cols && rows === this.sent.rows) return;
+    this.sent = { cols, rows };
+    void this.io.resize(sid, cols, rows).catch(() => {});
+  }
+
+  async copySelection(clearAfter = false): Promise<boolean> {
+    const text = this.term.getSelection();
+    if (!text) return false;
+    try {
+      await writeClipboard(text);
+    } catch {
+      toast(t("terminal.clipboardDenied"), "error");
+      return false;
+    }
+    if (clearAfter) this.term.clearSelection();
+    return true;
+  }
+
+  async pasteFromClipboard() {
+    try {
+      await this.paste(await readClipboard());
+    } catch {
+      toast(t("terminal.clipboardDenied"), "error");
+    }
+  }
+
+  /** Paste text as the user's input (bracketed when the remote asked for it), confirming multi-line pastes. */
+  async paste(text: string) {
+    const trimmed = text.replace(/[\r\n]+$/, "");
+    if (!/[\r\n]/.test(trimmed)) text = trimmed;
+    if (!text || this.status !== "connected") return;
+    if (/[\r\n]/.test(text) && useTermSettings.getState().settings.confirm_multiline_paste) {
+      const ok = await confirmMultilinePaste(text);
+      if (!ok) {
+        this.term.focus();
+        return;
+      }
+    }
+    // Reading the clipboard or confirming can outlast the session, or the vault being unlocked.
+    if (this.status !== "connected" || useApp.getState().phase !== "unlocked") return;
+    this.term.paste(text);
+    this.term.focus();
+  }
+
+  private onPasteEvent = (e: ClipboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    void this.paste(e.clipboardData?.getData("text/plain") ?? "");
+  };
+
+  /** Right click should go to the remote app, not to us, while it tracks the mouse (vim, tmux…). */
+  get remoteTracksMouse(): boolean {
+    return this.term.modes.mouseTrackingMode !== "none";
+  }
+
+  // ───────────── search ─────────────
+
+  /** The find bar's query while it highlights matches, and the colours they were drawn with (JSON). */
+  private findQuery = "";
+  private findDrawn = "";
+
+  private findColors() {
+    return searchColors(resolveScheme(useTermSettings.getState().settings));
+  }
+
+  find(query: string, direction: "next" | "prev", incremental = false): boolean {
+    this.findQuery = query;
+    if (!query) {
+      this.search.clearDecorations();
+      return false;
+    }
+    const decorations = this.findColors();
+    this.findDrawn = JSON.stringify(decorations);
+    const options = { incremental, decorations };
+    return direction === "next" ? this.search.findNext(query, options) : this.search.findPrevious(query, options);
+  }
+
+  /** The find bar closed: drop the highlights. */
+  endFind() {
+    this.findQuery = "";
+    this.search.clearDecorations();
+  }
+
+  requestFind() {
+    patchInfo(this.tabId, { findTick: getInfo(this.tabId).findTick + 1 });
+  }
+
+  // ───────────── command suggestions (TERM-14) ─────────────
+
+  /** Calls `listener` when the suggestion changes. Returns the unsubscribe function. */
+  subscribeSuggestion = (listener: () => void): (() => void) => {
+    this.suggestionListeners.add(listener);
+    return () => {
+      this.suggestionListeners.delete(listener);
+    };
+  };
+
+  private onComposition = (e: CompositionEvent) => {
+    this.composing = e.type === "compositionstart";
+    this.scheduleSuggestion();
+  };
+
+  private scheduleSuggestion() {
+    if (this.disposed || this.suggestFrame) return;
+    this.suggestFrame = requestAnimationFrame(() => {
+      this.suggestFrame = 0;
+      const next = this.findSuggestion();
+      const now = this.suggestion;
+      if (next?.rest === now?.rest && next?.x === now?.x && next?.y === now?.y) return;
+      this.suggestion = next;
+      this.suggestionListeners.forEach((listener) => listener());
+    });
+  }
+
+  /**
+   * What continues what is typed at a prompt, while one can show: the newest command of the tab's history,
+   * or else of its server's history, or else a command name or a path on the server (TERM-16).
+   */
+  private findSuggestion(): Suggestion | null {
+    if (this.disposed || !this.opened || this.status !== "connected" || this.composing || this.awaitingEcho) {
+      return null;
+    }
+    if (!useTermSettings.getState().settings.suggest_commands) return null;
+    const buf = this.term.buffer.active;
+    if (buf.type === "alternate" || buf.viewportY !== buf.baseY) return null;
+    const typed = this.tracker.typedAtEnd(buf);
+    if (!typed) return null;
+    const server = serverListsOf(this.tabId);
+    const rest =
+      suggestionFor(typed, historyOf(this.history)) ??
+      suggestionFor(typed, server.history) ??
+      commandNameFor(typed, server.commands) ??
+      this.paths.rest(typed);
+    return rest === null ? null : { rest, x: buf.cursorX, y: buf.cursorY };
+  }
+
+  /** The screen cell at column `x`, row `y` of the view, in window coordinates; null before the terminal opens. */
+  cellBox(x: number, y: number): CellBox | null {
+    const screen = this.term.element?.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen || !this.term.cols || !this.term.rows) return null;
+    const r = screen.getBoundingClientRect();
+    const width = r.width / this.term.cols;
+    const height = r.height / this.term.rows;
+    return { left: r.left + x * width, top: r.top + y * height, width, height, screenRight: r.right };
+  }
+
+  /** What the list of commands opens with (TERM-14): what is typed and the cursor's cell. */
+  listContext(): { typed: string; cursor: CellBox | null } {
+    const buf = this.term.buffer.active;
+    return { typed: this.tracker.typedAtEnd(buf) ?? "", cursor: this.cellBox(buf.cursorX, buf.cursorY) };
+  }
+
+  /** The commands the list shows (TERM-14, TERM-16), the same list until it changes. */
+  commandHistory = (): readonly string[] => listedHistory(this.tabId, this.history);
+
+  /** Types `command` from the list in place of what is typed, without running it. */
+  acceptListed(command: string) {
+    const right = this.term.modes.applicationCursorKeysMode ? "\x1bOC" : "\x1b[C";
+    this.write(this.tracker.clearKeys(this.term.buffer.active, right) + command);
+    this.term.focus();
+  }
+
+  /** Shift+Delete in the list. */
+  removeListed(command: string) {
+    removeFromHistory(this.tabId, this.history, command);
+  }
+
+  /**
+   * →, End and Ctrl+→ (⌥→ on macOS) take the suggestion while one shows, and Ctrl+Shift+Space
+   * (⌘⇧Space) opens the list. True when the key was taken.
+   */
+  private suggestionKey(e: KeyboardEvent, mac: boolean): boolean {
+    if (e.isComposing) return false;
+    const down = e.type === "keydown";
+    const listKey =
+      e.code === "Space" && e.shiftKey && !e.altKey && (mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey);
+    if (listKey) {
+      e.preventDefault();
+      if (down && this.status === "connected") {
+        patchInfo(this.tabId, { suggestTick: getInfo(this.tabId).suggestTick + 1 });
+      }
+      return true;
+    }
+    const shown = this.suggestion;
+    if (!shown || (e.key !== "ArrowRight" && e.key !== "End")) return false;
+    const plain = !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey;
+    const word =
+      e.key === "ArrowRight" && !e.shiftKey && !e.metaKey && (mac ? e.altKey && !e.ctrlKey : e.ctrlKey && !e.altKey);
+    if (!plain && !word) return false;
+    e.preventDefault();
+    if (down) this.write(word ? nextWord(shown.rest) : shown.rest);
+    return true;
+  }
+
+  // ───────────── keyboard (WIN-04, WIN-05) ─────────────
+
+  /**
+   * Decides whether xterm handles a key. Returning false leaves the key to the browser / app.
+   * Plain Ctrl+letter always reaches the remote; app shortcuts (Ctrl+Shift+…) never do.
+   */
+  private handleKey = (e: KeyboardEvent): boolean => {
+    const platform = useApp.getState().info.platform;
+    if (isAppShortcut(e, platform)) return false;
+    if (this.suggestionKey(e, isMac(platform))) return false;
+    const down = e.type === "keydown";
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
+    if (isMac(platform)) {
+      if (!e.metaKey || e.ctrlKey || e.altKey) return true;
+      if (key === "c") {
+        if (down) void this.copySelection();
+        return false;
+      }
+      if (key === "v") return false; // the native paste event does the work
+      if (key === "f") {
+        if (down) this.requestFind();
+        return false;
+      }
+      if (key === "k" && !e.shiftKey) {
+        // matchShortcut leaves ⌘K to the terminal while it has focus; elsewhere, and with Shift, it
+        // searches hosts.
+        if (down) this.term.clear();
+        return false;
+      }
+      return true;
+    }
+
+    if (e.ctrlKey && !e.altKey && !e.metaKey) {
+      if (key === "c" && !e.shiftKey) {
+        // With a selection Ctrl+C copies; otherwise it is ^C for the remote (WIN-05).
+        if (!this.term.hasSelection()) return true;
+        if (down) void this.copySelection(true);
+        return false;
+      }
+      if (key === "c" && e.shiftKey) {
+        e.preventDefault(); // Ctrl+Shift+C opens the inspector in some webviews
+        if (down) void this.copySelection();
+        return false;
+      }
+      if (key === "v") return false; // Ctrl+V / Ctrl+Shift+V: the native paste event does the work
+      if (key === "f" && e.shiftKey) {
+        e.preventDefault();
+        if (down) this.requestFind();
+        return false;
+      }
+      if (key === "Insert" && !e.shiftKey) {
+        if (down) void this.copySelection();
+        return false;
+      }
+    }
+    if (key === "Insert" && e.shiftKey && !e.ctrlKey && !e.altKey) return false; // Shift+Insert pastes
+    return true;
+  };
+}

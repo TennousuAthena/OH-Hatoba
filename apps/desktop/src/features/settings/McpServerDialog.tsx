@@ -1,27 +1,39 @@
 import { hostCapabilities } from "@/lib/hostServices";
 import { useEffect, useId, useState } from "react";
+import {
+  Button,
+  ErrorText,
+  FooterSpacer,
+  FormRow,
+  Group,
+  HintText,
+  IconButton,
+  LinkButton,
+  Section,
+  Segmented,
+  Sheet,
+  SheetHeader,
+  Switch,
+  TextField,
+  WarningText,
+  isImeEvent,
+} from "@hatoba/ui";
 import { errorMessage } from "@/app/errors";
-import { Button, IconButton, LinkButton, Segmented, Switch, TextField } from "@/components/controls";
-import { FormRow, Group, Section } from "@/components/layout";
-import { FooterSpacer, Sheet, SheetHeader } from "@/components/overlay";
-import { ErrorText, HintText, WarningText } from "@/components/patterns";
-import { openExternal } from "@/features/sync/external";
 import { useT, type MessageKey } from "@/i18n";
 import { api, toAppError } from "@/ipc/api";
 import type { McpServerView } from "@/ipc/types";
+import { looksLikeCommandLine, splitCommandLine } from "@/lib/commandLine";
 import { cx } from "@/lib/cx";
-import { isImeEvent } from "@/lib/ime";
+import { openExternal } from "@/lib/external";
 import { SavedKeyField } from "./aiShared";
 import {
   argRows,
   hasMcpProblems,
   initialMcpForm,
-  looksLikeCommandLine,
   mcpFormToInput,
   newSecretRow,
   newUid,
   shownRowProblems,
-  splitCommandLine,
   validateMcpForm,
   type McpForm,
   type SecretKind,

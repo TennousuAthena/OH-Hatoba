@@ -1,9 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/hatoba-ai", "crates/hatoba-cli", "crates/hatoba-core", "crates/hatoba-local", "crates/hatoba-net", "crates/hatoba-runtime", "crates/hatoba-ssh", "apps/desktop/src-tauri", "platform/harmonyos/rust"]
+members = ["crates/hatoba-ai", "crates/hatoba-assistant", "crates/hatoba-cli", "crates/hatoba-core", "crates/hatoba-ipc", "crates/hatoba-local", "crates/hatoba-net", "crates/hatoba-runtime", "crates/hatoba-ssh", "crates/hatoba-telnet", "apps/desktop/src-tauri", "platform/harmonyos/rust"]
 
 [workspace.package]
-version = "0.7.1"
+version = "0.8.5"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/scarletkc/Hatoba"
@@ -11,11 +11,14 @@ rust-version = "1.90"
 
 [workspace.dependencies]
 hatoba-ai = { path = "crates/hatoba-ai" }
+hatoba-assistant = { path = "crates/hatoba-assistant", default-features = false }
 hatoba-cli = { path = "crates/hatoba-cli" }
 hatoba-core = { path = "crates/hatoba-core" }
+hatoba-ipc = { path = "crates/hatoba-ipc", default-features = false }
 hatoba-local = { path = "crates/hatoba-local" }
 hatoba-net = { path = "crates/hatoba-net" }
 hatoba-ssh = { path = "crates/hatoba-ssh" }
+hatoba-telnet = { path = "crates/hatoba-telnet" }
 tokio = { version = "1.47", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs"] }
 tokio-util = "0.7"
 serde = { version = "1", features = ["derive"] }
@@ -30,6 +33,7 @@ uuid = { version = "1", features = ["v4", "v7", "serde"] }
 bytes = "1"
 futures = "0.3"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
+specta-typescript = "0.0.12"
 
 [profile.release]
 codegen-units = 1

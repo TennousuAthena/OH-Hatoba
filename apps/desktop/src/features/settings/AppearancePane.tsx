@@ -1,9 +1,7 @@
+import { Group, PopupSelect, Segmented, Stepper, toast } from "@hatoba/ui";
 import { errorMessage } from "@/app/errors";
 import { useApp } from "@/app/store";
 import { setAiTextSize } from "@/app/zoomKeys";
-import { Segmented, Stepper } from "@/components/controls";
-import { Group } from "@/components/layout";
-import { PopupSelect, toast } from "@/components/overlay";
 import { useAi } from "@/features/ai/store";
 import { AI_TEXT_SIZE_MAX, AI_TEXT_SIZE_MIN } from "@/features/ai/textSize";
 import { useT } from "@/i18n";
@@ -15,7 +13,7 @@ import s from "./AppearancePane.module.css";
 
 type Appearance = LocalPrefs["appearance"];
 
-/** Settings → Appearance (design §07): theme thumbnails, density and zoom, and the AI panel's text size (TERM-13). */
+/** Settings → Appearance: theme thumbnails, density and zoom, and the AI panel's text size (TERM-13). */
 export function AppearancePane() {
   const t = useT();
   const [prefs, setPrefs] = usePrefs();

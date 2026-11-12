@@ -1,0 +1,23 @@
+[package]
+name = "hatoba-ipc"
+description = "The error type and shared data transfer objects of the Hatoba desktop app's commands"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[features]
+default = ["local-processes"]
+local-processes = ["dep:hatoba-local"]
+
+[dependencies]
+# `AppError` from the errors of these crates.
+hatoba-ai.workspace = true
+hatoba-core.workspace = true
+hatoba-local = { workspace = true, optional = true }
+hatoba-ssh.workspace = true
+serde.workspace = true
+specta.workspace = true
+thiserror.workspace = true

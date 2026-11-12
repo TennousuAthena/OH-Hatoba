@@ -55,16 +55,16 @@ node scripts/release/release.mjs check
 node scripts/release/release.mjs notes --output target/release-notes.md
 ```
 
-Commit the changes, open a pull request titled `chore(release): prepare vX.Y.Z`, and squash-merge it.
+Commit the changes, open a pull request titled `chore(release): prepare vX.Y.Z`, and squash-merge it. Merging it starts the release.
 
 ## Publish
 
-1. In **Actions → Release → Run workflow**, choose `main`. The workflow releases the release pull request's commit, where `main` got the version it records, or a later commit that changed that version's release note, such as a fix to it (`releaseCommit` in `release.mjs`). It does not release the latest commit: what is merged after them goes into the next release. The installers are built from that commit, and the release tags it.
+1. The [Start release workflow](../.github/workflows/start-release.yml) runs the Release workflow on `main` when a push to `main` raises the version to one without a release tag. To run it yourself, choose `main` in **Actions → Release → Run workflow**. The workflow releases the release pull request's commit, where `main` got the version it records, or a later commit that changed that version's release note, such as a fix to it (`releaseCommit` in `release.mjs`). It does not release the latest commit: what is merged after them goes into the next release. The installers are built from that commit, and the release tags it.
 2. **Preflight** runs the script tests and checks that:
    - the version files agree, and `vX.Y.Z` does not point to another commit
    - the release note is valid, or an earlier release exists to list changes from
    - `plugins.updater.pubkey` in `tauri.conf.json` is a public key
-   - CI passed on the commit, or on an earlier commit that differs from it only in files CI skips: Markdown files and `docs/`
+   - CI passed on the commit, or on an earlier commit that differs from it only in files CI skips (Markdown files and `docs/`) and in the release version. CI on the commit before the release pull request on `main` therefore covers it, unless `bump.mjs` also refreshed the models.dev snapshot. While such a run is still going, Preflight waits up to 40 minutes for it
    - the `release` environment requires a reviewer, and the `release-signing` environment allows deployments only from `main`
 
    It then writes the release notes to the run summary.
@@ -74,7 +74,7 @@ Commit the changes, open a pull request titled `chore(release): prepare vX.Y.Z`,
    - **Build (macOS)** builds for Apple Silicon and uploads `Hatoba_X.Y.Z_macos-apple-silicon.dmg`, which people download, and `Hatoba_X.Y.Z_macos-apple-silicon-update.app.tar.gz`, which installed apps update from, as the `hatoba-macos` artifact. The app is ad-hoc signed and not notarized.
 4. **Publish** waits for approval. Read the notes in the run summary, and run the manual checks in [§12 Testing](hatoba-spec.md#12-testing) with the installers from the artifacts. When someone with a Mac can, have them download the `hatoba-macos` artifact and open the DMG before you approve. Approve the deployment to publish, or reject it to stop without publishing.
 
-Publishing writes `SHA256SUMS.txt` with the checksum of each installer and `latest.json`, which tells installed apps the version, the release notes, and where to download the installer for their platform and package type. It then tags the commit `vX.Y.Z` and creates the release **Hatoba vX.Y.Z** with the installers, their signatures, and those two files. A prerelease is marked as a pre-release and never becomes the latest release. Installed stable versions read `latest.json` from the latest release, so they update only to stable releases. Installed prereleases look through the list of releases for the newest one with a `latest.json`, so they update to the next prerelease as well. Either finds a release as soon as it is published.
+Publishing writes `SHA256SUMS.txt` with the checksum of each installer and `latest.json`, which tells installed apps the version, the release notes, and where to download the installer for their platform and package type. It then tags the commit `vX.Y.Z` and creates the release **Hatoba vX.Y.Z** with the installers, their signatures, and those two files. A prerelease is marked as a pre-release and never becomes the latest release. Installed apps find the release as soon as it is published, as [Distribution in §11](hatoba-spec.md#11-non-functional-requirements) describes.
 
 Last, the **Site** job runs the [Site workflow](../.github/workflows/site.yml), which rebuilds the website: its download page offers the newest stable release, or the newest prerelease while there is no stable one, and its docs and the demo on its home page become the built-in skill and the frontend as of that release. The workflow opens the demo before it deploys and stops if the demo doesn't reach its first approval card. `INSTALL_STEPS` in `release.mjs` holds the install steps that both the release notes and the download page give; the website's translations of them are in [`apps/site/src/i18n/install.ts`](../apps/site/src/i18n/install.ts), whose test fails until they follow a change to the English.
 
@@ -104,7 +104,7 @@ They find the files by their names in the release (`INSTALLERS` in `release.mjs`
 
 ### Set up the package managers
 
-Do this once. Until then, the winget job fails after the release is published, which leaves the release as it is, and the AUR job is skipped.
+Do this once. Until winget-pkgs has the package, the winget job leaves winget alone with a notice, and until `AUR_PUBLISH` is set, the AUR job is skipped.
 
 1. In the repository's **Settings → Environments**, create an environment named `packages`. Leave **Required reviewers** off. Under **Deployment branches and tags**, choose **Selected branches and tags** and add `main`.
 2. For winget:
@@ -132,7 +132,7 @@ Do this once. Until then, the winget job fails after the release is published, w
 
 ## Retry a failed release
 
-On the page of the failed run, choose **Re-run failed jobs**. The rerun uses the same commit and keeps the artifacts of the jobs that passed, and the **Publish** job waits for approval again. When the release already exists, the workflow keeps its notes and uploads only the files it is missing. It stops before publishing when:
+On the page of the failed run, choose **Re-run failed jobs**. The rerun uses the same commit and keeps the artifacts of the jobs that passed, and the **Publish** job waits for approval again. Published releases are immutable, so their files and tag can't change: a release that already has every file is left as it is, and one that is missing a file can't get it, so prepare the next version instead. It stops before publishing when:
 
 - `vX.Y.Z` already points to another commit. Bump to a new version instead of moving the tag.
 - A draft release uses the tag. Review the draft on GitHub, delete or publish it, and rerun the job.

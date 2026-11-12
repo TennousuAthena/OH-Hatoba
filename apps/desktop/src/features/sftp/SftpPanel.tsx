@@ -1,24 +1,39 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import {
+  ErrorText,
+  HintText,
+  Icon,
+  IconButton,
+  LinkButton,
+  Menu,
+  Spinner,
+  confirm,
+  isImeEvent,
+  toast,
+  useMenu,
+  type MenuEntry,
+} from "@hatoba/ui";
 import { errorMessage } from "@/app/errors";
-import { Icon, IconButton, LinkButton, Spinner } from "@/components/controls";
-import { confirm, Menu, toast, useMenu, type MenuEntry } from "@/components/overlay";
-import { ErrorText, HintText } from "@/components/patterns";
-import { writeClipboard } from "@/features/terminal/clipboard";
+import { useApp } from "@/app/store";
 import { formatBytes, formatDate, useT } from "@/i18n";
 import { api } from "@/ipc/api";
 import type { AppError, FileEntry } from "@/ipc/types";
+import { writeClipboard } from "@/lib/clipboard";
 import { cx } from "@/lib/cx";
-import { isImeEvent } from "@/lib/ime";
+import { hostCapabilities } from "@/lib/hostServices";
+import { editFile } from "@/session/edits";
+import { useTransfers } from "@/session/transfers";
+import { EditList } from "./EditList";
+import { fileIcon } from "./fileIcon";
 import { pickSavePath, pickUploadFiles } from "./native";
 import { joinPath, parentPath, splitLastSegment } from "./paths";
 import { TransferList } from "./TransferList";
-import { useTransfers } from "./transfers";
 import { useFileDrop } from "./useFileDrop";
 import s from "./SftpPanel.module.css";
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
-/** Folders first, then names (dot-files sort before letters, like the design's list). */
+/** Folders first, then names (dot-files sort before letters). */
 function sortEntries(list: FileEntry[]): FileEntry[] {
   return [...list].sort((a, b) => Number(b.is_dir) - Number(a.is_dir) || collator.compare(a.name, b.name));
 }
@@ -46,25 +61,22 @@ function tooltip(e: FileEntry): string {
   return lines.join("\n");
 }
 
-function fileIcon(e: FileEntry): { name: string; fill: boolean; color: string } {
-  if (e.is_dir) return { name: "folder-simple", fill: true, color: "var(--accent)" };
-  // Owner-only files (private keys, .env…) get the lock.
-  if (/^-rw-------/.test(e.permissions)) return { name: "file-lock", fill: false, color: "var(--fg2)" };
-  return { name: "file-text", fill: false, color: "var(--fg2)" };
-}
-
 interface Props {
+  /** The terminal tab, whose edited files (SFTP-05) outlive a reconnect. */
+  tabId: string;
   sessionId: string;
   hostName: string;
-  /** Only the visible tab's panel reacts to native file drops. */
+  /** Only the visible tab's panel reacts to native file drops, and only while unlocked. */
   active: boolean;
 }
 
-/** Remote file browser to the right of a terminal (design §03, SFTP-01..04). */
-export function SftpPanel({ sessionId, hostName, active }: Props) {
+/** Remote file browser to the right of a terminal (SFTP-01..05). */
+export function SftpPanel({ tabId, sessionId, hostName, active }: Props) {
   const t = useT();
   const rootRef = useRef<HTMLDivElement>(null);
   const requestSeq = useRef(0);
+  /** The folder of the latest load, which the unlock retries when the lock refused it. */
+  const requested = useRef<string | null>(null);
   const [cwd, setCwd] = useState<string | null>(null);
   const cwdRef = useRef<string | null>(null);
   const [entries, setEntries] = useState<FileEntry[]>([]);
@@ -80,6 +92,7 @@ export function SftpPanel({ sessionId, hostName, active }: Props) {
   const load = useCallback(
     async (path: string | null) => {
       const seq = ++requestSeq.current;
+      requested.current = path;
       setLoading(true);
       setError(null);
       try {
@@ -117,6 +130,13 @@ export function SftpPanel({ sessionId, hostName, active }: Props) {
       refresh();
     }
   }, [uploadsDone, refresh]);
+
+  // SEC-03: nothing reaches the server behind the lock screen; a load refused there runs again
+  // after the unlock.
+  const unlocked = useApp((st) => st.phase === "unlocked");
+  useEffect(() => {
+    if (unlocked && error?.code === "locked") void load(requested.current);
+  }, [unlocked, error, load]);
 
   const fail = (e: unknown) => toast(errorMessage(t, e), "error");
 
@@ -197,7 +217,7 @@ export function SftpPanel({ sessionId, hostName, active }: Props) {
 
   const pickAndUpload = async () => upload(await pickUploadFiles());
 
-  const { dragging, html5 } = useFileDrop(rootRef, active, (paths) => void upload(paths));
+  const { dragging, html5 } = useFileDrop(rootRef, active && unlocked, (paths) => void upload(paths));
 
   const showMenu = (e: MouseEvent, entry: FileEntry | null) => {
     e.preventDefault();
@@ -219,6 +239,15 @@ export function SftpPanel({ sessionId, hostName, active }: Props) {
         entry.is_dir
           ? { label: t("sftp.menu.open"), icon: "folder-open", onSelect: () => open(entry) }
           : { label: t("sftp.menu.download"), icon: "download-simple", onSelect: () => void download(entry) },
+        ...(entry.is_dir || !hostCapabilities().externalEditor
+          ? []
+          : [
+              {
+                label: t("sftp.menu.edit"),
+                icon: "note-pencil",
+                onSelect: () => void editFile(tabId, sessionId, entry.path, entry.name),
+              },
+            ]),
         { label: t("sftp.menu.rename"), icon: "pencil-simple", onSelect: () => setRenaming(entry.path) },
         { label: t("sftp.menu.delete"), icon: "trash", danger: true, onSelect: () => void remove(entry) },
         { kind: "separator" },
@@ -378,6 +407,7 @@ export function SftpPanel({ sessionId, hostName, active }: Props) {
         {!loading && !error && entries.length === 0 && !creating && <div className={s.message}>{t("sftp.empty")}</div>}
       </div>
 
+      <EditList tabId={tabId} />
       <TransferList sessionId={sessionId} />
 
       {dragging && (

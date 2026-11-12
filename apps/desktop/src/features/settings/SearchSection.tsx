@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, LinkButton, TextField } from "@/components/controls";
-import { FormRow, Group, layoutStyles } from "@/components/layout";
-import { PopupSelect, confirm, toast } from "@/components/overlay";
-import { HintText } from "@/components/patterns";
+import {
+  Button,
+  FormRow,
+  Group,
+  HintText,
+  LinkButton,
+  PopupSelect,
+  TextField,
+  confirm,
+  layoutStyles,
+  toast,
+} from "@hatoba/ui";
 import { useT, type MessageKey } from "@/i18n";
 import { api } from "@/ipc/api";
-import type { AiSettingsPatch, SearchKind, SearchProviderInput, SearchProviderView } from "@/ipc/types";
+import type { AiSettingsView, SearchKind, SearchProviderInput, SearchProviderView } from "@/ipc/types";
 import {
   SEARCH_KINDS,
   keyForInput,
@@ -45,7 +53,7 @@ export function SearchSection({
   /** `Settings.ai.native_search`. */
   native: boolean;
   /** The search provider to use, or none and whether the chat provider's own search runs instead. */
-  onChoose: (choice: Pick<AiSettingsPatch, "search_provider_id" | "native_search">) => void;
+  onChoose: (choice: Partial<Pick<AiSettingsView, "search_provider_id" | "native_search">>) => void;
   onSaved: (saved: SearchProviderView) => void;
   onRemoved: (id: string) => void;
 }) {

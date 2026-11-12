@@ -13,7 +13,9 @@ import {
   ciCovers,
   collectDist,
   composeNotes,
+  coveringRun,
   git,
+  raisedVersion,
   releaseCommit,
   releaseOutputs,
   releaseTarget,
@@ -182,7 +184,7 @@ test("releases the commit that set the version or last changed its note, not tho
   assert.throws(() => releaseCommit("0.3.0", repo.root), /No commit on HEAD's history sets version 0\.3\.0/);
 });
 
-test("counts a CI pass on an ancestor only when the later commits change files CI skips", (t) => {
+test("counts a CI pass on an ancestor when the later commits change only files CI skips", (t) => {
   const repo = repository(t);
   const tested = repo.commit("feat: code");
   repo.commit("docs: guide", { path: "docs/guide.md" });
@@ -193,6 +195,61 @@ test("counts a CI pass on an ancestor only when the later commits change files C
   assert.ok(!ciCovers(tested, code, repo.root));
   assert.ok(!ciCovers(code, tested, repo.root));
   assert.ok(!ciCovers("0123456789abcdef0123456789abcdef01234567", docs, repo.root));
+});
+
+test("also counts it when the later commits only raise the release version", (t) => {
+  const repo = repository(t);
+  const commit = (subject, version, members = "[]") => {
+    writeFileSync(
+      join(repo.root, "Cargo.toml"),
+      `[workspace]\nmembers = ${members}\n\n[workspace.package]\nversion = "${version}"\n`,
+    );
+    repo.run("add", "--all");
+    repo.run("commit", "--quiet", "-m", subject);
+    return repo.run("rev-parse", "HEAD");
+  };
+  const initial = repo.commit("Initial commit");
+  const tested = commit("feat: code", "0.1.0");
+  repo.note("0.2.0", "## Second\n\nMore.\n");
+  const release = commit("chore(release): prepare v0.2.0 (#2)", "0.2.0");
+  const member = commit("build: add a crate (#3)", "0.2.0", '["app"]');
+  assert.ok(ciCovers(tested, release, repo.root));
+  assert.ok(!ciCovers(tested, member, repo.root));
+  assert.ok(!ciCovers(release, member, repo.root));
+  assert.ok(!ciCovers(initial, release, repo.root));
+});
+
+test("prefers a covering CI pass, else a covering run still going", (t) => {
+  const repo = repository(t);
+  const tested = repo.commit("feat: code");
+  const docs = repo.commit("docs: guide", { path: "docs/guide.md" });
+  const later = repo.commit("fix: code");
+  const run = (head_sha, status, conclusion = null) => ({ head_sha, status, conclusion });
+  const passed = run(tested, "completed", "success");
+  const going = run(docs, "in_progress");
+  assert.equal(coveringRun([going, passed], docs, repo.root), passed);
+  assert.equal(coveringRun([run(tested, "completed", "failure"), going], docs, repo.root), going);
+  assert.equal(coveringRun([run(later, "in_progress"), run(tested, "completed", "failure")], docs, repo.root), null);
+});
+
+test("reports a raised version that has no release tag yet", (t) => {
+  const repo = repository(t);
+  const commit = (subject, version, dependencies = "") => {
+    writeFileSync(
+      join(repo.root, "Cargo.toml"),
+      `[workspace.package]\nversion = "${version}"\n\n[workspace.dependencies]\n${dependencies}`,
+    );
+    repo.run("add", "--all");
+    repo.run("commit", "--quiet", "-m", subject);
+    return repo.run("rev-parse", "HEAD");
+  };
+  const before = commit("Initial commit", "0.1.0");
+  const dependency = commit("build: add a dependency", "0.1.0", 'serde = "1"\n');
+  assert.equal(raisedVersion("0.1.0", before, repo.root), null);
+  commit("chore(release): prepare v0.2.0 (#2)", "0.2.0", 'serde = "1"\n');
+  assert.equal(raisedVersion("0.2.0", dependency, repo.root), "0.2.0");
+  repo.run("tag", "v0.2.0");
+  assert.equal(raisedVersion("0.2.0", dependency, repo.root), null);
 });
 
 // A throwaway minisign key pair, made with `tauri signer generate`; its private half was deleted

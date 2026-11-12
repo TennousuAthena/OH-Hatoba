@@ -1,15 +1,23 @@
 //! What the `hatoba` command and the running app say to each other over the endpoint
 //! ([`crate::endpoint`]): the command sends one [`Frame::Request`], and the app answers with
 //! frames until [`Frame::End`]. Each frame is a kind byte, the length of its payload as a
-//! little-endian `u32`, and the payload: raw bytes for output, UTF-8 for a notice, JSON for the
-//! rest.
+//! little-endian `u32`, and the payload: raw bytes for output, UTF-8 for a notice and a token, JSON
+//! for the rest.
+//!
+//! An `exec` that passes its stdin is asked for it with [`Frame::SendStdin`]: the command then
+//! opens a second connection, sends [`Op::Stdin`] with the token, and after it the stdin as it
+//! comes, closing the connection where the stdin ends. The first connection stays free for the
+//! output, and its end still stops the command.
+//!
+//! The memory requests are answered with what the command prints: the memories or what was done
+//! as [`Frame::Stdout`], and a line for the person as [`Frame::Notice`].
 
 use std::io::{self, Read};
 
 use serde::{Deserialize, Serialize};
 
 /// Changes when a request or a frame changes in a way the other side cannot read.
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 3;
 
 /// The largest payload either side sends or takes.
 pub const MAX_FRAME: usize = 1 << 20;
@@ -25,6 +33,8 @@ pub struct Request {
 }
 
 /// What a request asks for. A host is a saved host's id or name; local paths are absolute.
+/// `sudo` runs the command, or reads or writes the remote file, as root with sudo; a version 1
+/// request has none, and still reads, so the app can say the versions differ.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Op {
@@ -34,18 +44,53 @@ pub enum Op {
         command: String,
         cwd: Option<String>,
         prompt: bool,
+        #[serde(default)]
+        sudo: bool,
+        /// The command passes its stdin, when [`Frame::SendStdin`] asks for it.
+        #[serde(default)]
+        stdin: bool,
     },
     Upload {
         host: String,
         local: String,
         remote: String,
         prompt: bool,
+        #[serde(default)]
+        sudo: bool,
+        /// The permission bits of the file written; `None` keeps those of a file already there.
+        #[serde(default)]
+        mode: Option<u32>,
     },
     Download {
         host: String,
         remote: String,
         local: String,
         prompt: bool,
+        #[serde(default)]
+        sudo: bool,
+    },
+    /// The stdin of the `exec` that [`Frame::SendStdin`] gave `token`, which follows on this
+    /// connection as raw bytes.
+    Stdin {
+        token: String,
+    },
+    /// The AI assistant's memories (AI-53): the global ones, and with `host` that host's after
+    /// them, as text or as JSON.
+    Memories {
+        host: Option<String>,
+        json: bool,
+    },
+    /// Saves `content` as the memory `name`, in place of the one of that name: a global memory,
+    /// or with `host` one of that host's.
+    MemorySave {
+        host: Option<String>,
+        name: String,
+        content: String,
+    },
+    /// Deletes the memory `name`: a global one, or with `host` one of that host's.
+    MemoryDelete {
+        host: Option<String>,
+        name: String,
     },
 }
 
@@ -122,6 +167,8 @@ pub enum Frame {
     Stderr(Vec<u8>),
     /// A line for the person at the terminal, such as what Hatoba waits for.
     Notice(String),
+    /// Asks the command for its stdin on a second connection, with this token ([`Op::Stdin`]).
+    SendStdin(String),
     Progress(Progress),
     Hosts(Vec<HostInfo>),
     End(End),
@@ -131,6 +178,7 @@ const REQUEST: u8 = b'R';
 const STDOUT: u8 = b'1';
 const STDERR: u8 = b'2';
 const NOTICE: u8 = b'N';
+const SEND_STDIN: u8 = b'I';
 const PROGRESS: u8 = b'P';
 const HOSTS: u8 = b'H';
 const END: u8 = b'X';
@@ -144,6 +192,7 @@ impl Frame {
             Self::Stdout(b) => (STDOUT, b.clone()),
             Self::Stderr(b) => (STDERR, b.clone()),
             Self::Notice(text) => (NOTICE, text.as_bytes().to_vec()),
+            Self::SendStdin(token) => (SEND_STDIN, token.as_bytes().to_vec()),
             Self::Progress(p) => (PROGRESS, json(p)),
             Self::Hosts(h) => (HOSTS, json(h)),
             Self::End(e) => (END, json(e)),
@@ -170,6 +219,7 @@ impl Frame {
             STDOUT => Self::Stdout(payload),
             STDERR => Self::Stderr(payload),
             NOTICE => Self::Notice(String::from_utf8_lossy(&payload).into_owned()),
+            SEND_STDIN => Self::SendStdin(String::from_utf8_lossy(&payload).into_owned()),
             PROGRESS => Self::Progress(parse(&payload)?),
             HOSTS => Self::Hosts(parse(&payload)?),
             END => Self::End(parse(&payload)?),
@@ -218,11 +268,40 @@ mod tests {
                     command: "ls -la".into(),
                     cwd: Some("/srv".into()),
                     prompt: true,
+                    sudo: true,
+                    stdin: true,
+                },
+            }),
+            Frame::Request(Request {
+                version: VERSION,
+                op: Op::Stdin { token: "t1".into() },
+            }),
+            Frame::Request(Request {
+                version: VERSION,
+                op: Op::Memories {
+                    host: Some("db".into()),
+                    json: true,
+                },
+            }),
+            Frame::Request(Request {
+                version: VERSION,
+                op: Op::MemorySave {
+                    host: None,
+                    name: "sudo".into(),
+                    content: "Uses doas.\nNot sudo.".into(),
+                },
+            }),
+            Frame::Request(Request {
+                version: VERSION,
+                op: Op::MemoryDelete {
+                    host: Some("db".into()),
+                    name: "sudo".into(),
                 },
             }),
             Frame::Stdout(b"out\n".to_vec()),
             Frame::Stderr(Vec::new()),
             Frame::Notice("waiting".into()),
+            Frame::SendStdin("t1".into()),
             Frame::Progress(Progress { bytes: 5, total: 9 }),
             Frame::Hosts(vec![HostInfo {
                 id: "h1".into(),
@@ -258,6 +337,16 @@ mod tests {
         })
         .unwrap();
         assert_eq!(json, serde_json::json!({"version": VERSION, "op": "hosts"}));
+    }
+
+    #[test]
+    fn a_version_1_request_still_reads() {
+        let request: Request = parse(
+            br#"{"version":1,"op":"exec","host":"db","command":"ls","cwd":null,"prompt":true}"#,
+        )
+        .unwrap();
+        assert_eq!(request.version, 1);
+        assert!(matches!(request.op, Op::Exec { sudo: false, .. }));
     }
 
     #[test]

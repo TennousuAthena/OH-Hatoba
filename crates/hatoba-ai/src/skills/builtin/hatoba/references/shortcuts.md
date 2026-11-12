@@ -25,6 +25,9 @@ Other labels: **New Tab**, **Close Tab**, **Show AI Panel**, **Hide AI Panel**, 
 | Paste | Ctrl+V, Ctrl+Shift+V, or Shift+Insert | ⌘V |
 | Find in the terminal | Ctrl+Shift+F | ⌘F |
 | Open a link in the output | Ctrl+click | ⌘+click |
+| Take the dimmed command suggestion | → or End | → or End |
+| Take the suggestion's next word | Ctrl+→ | ⌥→ |
+| List the commands you ran | Ctrl+Shift+Space | ⌘⇧Space |
 
 In the find bar, Enter goes to the next match, Shift+Enter to the previous one, and Esc closes the bar. Right-click either copies or pastes, or opens a menu, depending on **Right-Click in Terminal** (see `references/terminal.md`).
 
@@ -44,7 +47,8 @@ The default sizes are 100% for the window and 13 px for the terminal and the AI 
 
 | Where | Keys |
 |---|---|
-| Host list | Up / Down select, Enter connects, typing starts a search |
+| Host list | Up / Down select, Enter connects, Alt+Up / Down (⌥↑ / ⌥↓) move the selected hosts, typing starts a search |
+| Key list | Up / Down select, also from the search box; typing starts a search; Delete (⌘⌫) deletes |
 | Host editor | Ctrl+S (⌘S) saves, Enter in a text field saves, Esc leaves a form that has no changes |
 | SFTP panel | Up / Down select, Enter opens a folder or downloads a file, F2 renames, Delete deletes, Backspace goes to the parent folder |
 | AI panel | Enter sends, or queues the message while a turn runs; Ctrl+Enter (⌘↩) sends at once, stopping a running turn; Alt+Enter (⌥↩) asks a side question; Shift+Enter adds a line; Up in the empty box edits the queued message; Esc stops a running turn, then sends the queued message |

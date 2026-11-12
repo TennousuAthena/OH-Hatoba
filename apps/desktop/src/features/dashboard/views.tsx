@@ -7,14 +7,13 @@ import {
   type ReactNode,
   type RefCallback,
 } from "react";
-import { Button, Icon, IconButton, LinkButton, Spinner } from "@/components/controls";
-import { Tag } from "@/components/layout";
-import { Card, Chip } from "@/components/patterns";
-import { OsIcon } from "@/features/hosts/OsIcon";
+import { Button, Card, Chip, Icon, IconButton, LinkButton, Spinner, Tag } from "@hatoba/ui";
 import { formatLoad, formatPercent, formatRate, formatUptime, type StatsReading } from "@/features/terminal/stats";
 import { formatBytes, formatMessageTime, useT, type MessageKey } from "@/i18n";
-import type { GroupView, HostView } from "@/ipc/types";
+import { isTelnetHost, type AnyHostView, type GroupView, type HostView } from "@/ipc/types";
 import { cx } from "@/lib/cx";
+import { OsIcon } from "@/lib/OsIcon";
+import { formatTelnetTarget } from "@/session/quickConnect";
 import { dashboardSwitch, retryHost } from "./actions";
 import {
   COLUMN_GAP,
@@ -58,7 +57,7 @@ export interface View {
   /** A click on a host, whose Shift and Ctrl (⌘ on macOS) pick several. */
   onSelect(e: MouseEvent, id: string): void;
   onConnect(id: string): void;
-  onContext(e: MouseEvent, host: HostView): void;
+  onContext(e: MouseEvent, host: AnyHostView): void;
 }
 
 /** The host list's look of a host that is not read: the badge and the last connection, worked out by the page. */
@@ -78,7 +77,7 @@ export function canRetry(readout: HostReadout | undefined): boolean {
 }
 
 /** **Retry** as an icon in a table row, for a host that failed or is held. */
-function RetryIcon({ host, readout, t }: { host: HostView; readout: HostReadout | undefined; t: T }) {
+function RetryIcon({ host, readout, t }: { host: AnyHostView; readout: HostReadout | undefined; t: T }) {
   if (!canRetry(readout)) return null;
   return (
     <span className={s.actions} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
@@ -152,10 +151,23 @@ function mountsTitle(r: StatsReading): string {
   return lines.join("\n");
 }
 
-function rates(r: StatsReading): string | null {
-  if (r.net_rx_rate == null && r.net_tx_rate == null) return null;
-  return `↓ ${r.net_rx_rate != null ? formatRate(r.net_rx_rate) : "—"} ↑ ${r.net_tx_rate != null ? formatRate(r.net_tx_rate) : "—"}`;
+/** A value that was not read, the same in every column, card and the detail sheet. */
+export function NoValue() {
+  return <span className={s.noValue}>—</span>;
 }
+
+/** The receive and send rates, or null when neither was read. */
+function Rates({ reading }: { reading: StatsReading }) {
+  const { net_rx_rate: rx, net_tx_rate: tx } = reading;
+  if (rx == null && tx == null) return null;
+  return (
+    <>
+      ↓ {rx != null ? formatRate(rx) : <NoValue />} ↑ {tx != null ? formatRate(tx) : <NoValue />}
+    </>
+  );
+}
+
+const hasRates = (r: StatsReading) => r.net_rx_rate != null || r.net_tx_rate != null;
 
 // ───────────────────────── Cards ─────────────────────────
 
@@ -192,7 +204,7 @@ function Meter({
       </span>
       <span className={cx(s.meterValue, alert && s.alert)} title={title}>
         {alert && <Icon name="warning" fill />}
-        {percent == null ? "—" : formatPercent(percent)}
+        {percent == null ? <NoValue /> : formatPercent(percent)}
       </span>
     </>
   );
@@ -240,7 +252,9 @@ function DetailLines({ reading, t }: { reading: StatsReading; t: T }) {
   return (
     <>
       <div className={s.line}>
-        <span className={s.lineText}>{rates(reading)}</span>
+        <span className={s.lineText}>
+          <Rates reading={reading} />
+        </span>
       </div>
       <div className={s.line}>
         <span className={s.lineText}>{details.join(" · ")}</span>
@@ -312,7 +326,8 @@ function CardState({
 }
 
 interface ItemProps {
-  host: HostView;
+  /** A Telnet host (TELNET-01) is never read: it shows that instead of readings. */
+  host: AnyHostView;
   selected: boolean;
   /** The readings, while resource usage shows. */
   readout: HostReadout | undefined;
@@ -328,11 +343,15 @@ interface ItemProps {
  */
 export const HostCard = memo(function HostCard({ host, selected, readout, leftOut, list, view }: ItemProps) {
   const { t, now, interval, alerts, stats } = view;
-  const read = stats && !leftOut;
+  const telnet = isTelnetHost(host);
+  const read = stats && !leftOut && !telnet;
   const reading = read ? latestReading(readout) : undefined;
   const stale = read && isStale(readout, now, interval);
-  const target = `${host.username ? `${host.username}@` : ""}${host.address}:${host.port}`;
+  const target = telnet
+    ? `telnet ${formatTelnetTarget(host)}`
+    : `${host.username ? `${host.username}@` : ""}${host.address}:${host.port}`;
   const body = () => {
+    if (telnet) return <CardState icon="network" title={t("hosts.telnet.noStats")} tone="dim" />;
     if (leftOut) {
       const include = dashboardSwitch(host, view.groups);
       return (
@@ -370,13 +389,17 @@ export const HostCard = memo(function HostCard({ host, selected, readout, leftOu
       role="option"
       aria-selected={selected}
       data-id={host.id}
-      className={cx(s.card, selected && s.cardSel, stats && leftOut && s.cardLeftOut)}
+      className={cx(s.card, selected && s.cardSel, stats && (leftOut || telnet) && s.cardLeftOut)}
       onClick={(e) => view.onSelect(e, host.id)}
       onDoubleClick={() => view.onConnect(host.id)}
       onContextMenu={(e) => view.onContext(e, host)}
     >
       <div className={s.cardHead}>
-        <OsIcon os={(stats && readout?.os) || host.os} badge={stats ? statusColor(readout, !!leftOut) : list.dot} />
+        {telnet ? (
+          <OsIcon os={null} icon="network" badge={stats ? statusColor(undefined, true) : list.dot} />
+        ) : (
+          <OsIcon os={(stats && readout?.os) || host.os} badge={stats ? statusColor(readout, !!leftOut) : list.dot} />
+        )}
         <span className={s.name}>{host.name}</span>
         {host.favorite && <Icon name="star" fill className={s.fav} />}
         <ConnectButton id={host.id} view={view} shown={read && readout?.phase === "held"} className={s.connect} />
@@ -469,7 +492,7 @@ export function StatsHead({
 
 /** A small meter and its percentage, red past the threshold. */
 function MiniMeter({ percent, alert, title }: { percent: number | null; alert: boolean; title?: string }) {
-  if (percent == null) return <span className={s.dim}>—</span>;
+  if (percent == null) return <NoValue />;
   return (
     <span className={cx(s.mini, alert && s.alert)} title={title}>
       <span className={s.meter}>
@@ -490,12 +513,14 @@ export const StatsRow = memo(function StatsRow({
   view,
 }: Omit<ItemProps, "list"> & { columns: DashboardColumn[] }) {
   const { t, now, interval, alerts } = view;
-  const reading = leftOut ? undefined : latestReading(readout);
-  const stale = !leftOut && isStale(readout, now, interval);
+  const telnet = isTelnetHost(host);
+  const reading = leftOut || telnet ? undefined : latestReading(readout);
+  const stale = !leftOut && !telnet && isStale(readout, now, interval);
   const status = statusLine(t, readout, reading, stale, now);
   const cell = (c: DashboardColumn) => {
     switch (c) {
       case "status":
+        if (telnet) return <Chip>{t("hosts.telnet")}</Chip>;
         if (leftOut) return <Chip>{t("dashboard.leftOutBadge")}</Chip>;
         return (
           <span className={s.cellStatus}>
@@ -527,11 +552,19 @@ export const StatsRow = memo(function StatsRow({
         );
       }
       case "network":
-        return <span className={s.mono}>{reading ? (rates(reading) ?? "—") : "—"}</span>;
-      case "load":
-        return <span className={s.mono}>{(reading && formatLoad(reading.load)) ?? "—"}</span>;
+        return reading && hasRates(reading) ? (
+          <span className={s.mono}>
+            <Rates reading={reading} />
+          </span>
+        ) : (
+          <NoValue />
+        );
+      case "load": {
+        const load = reading && formatLoad(reading.load);
+        return load ? <span className={s.mono}>{load}</span> : <NoValue />;
+      }
       case "uptime":
-        return <span>{reading?.uptime_secs != null ? formatUptime(t.locale, reading.uptime_secs) : "—"}</span>;
+        return reading?.uptime_secs != null ? <span>{formatUptime(t.locale, reading.uptime_secs)}</span> : <NoValue />;
     }
   };
   return (
@@ -539,14 +572,18 @@ export const StatsRow = memo(function StatsRow({
       role="option"
       aria-selected={selected}
       data-id={host.id}
-      className={cx(s.row, s.grid, selected && s.rowSel, leftOut && s.cardLeftOut, stale && s.staleRow)}
+      className={cx(s.row, s.grid, selected && s.rowSel, (leftOut || telnet) && s.cardLeftOut, stale && s.staleRow)}
       style={gridOf(columns)}
       onClick={(e) => view.onSelect(e, host.id)}
       onDoubleClick={() => view.onConnect(host.id)}
       onContextMenu={(e) => view.onContext(e, host)}
     >
       <span className={s.rowName}>
-        <OsIcon os={readout?.os ?? host.os} badge={statusColor(readout, !!leftOut)} />
+        {telnet ? (
+          <OsIcon os={null} icon="network" badge={statusColor(undefined, true)} />
+        ) : (
+          <OsIcon os={readout?.os ?? host.os} badge={statusColor(readout, !!leftOut)} />
+        )}
         <span className={s.name}>{host.name}</span>
         {host.favorite && <Icon name="star" fill className={s.fav} />}
       </span>
@@ -556,7 +593,12 @@ export const StatsRow = memo(function StatsRow({
         </span>
       ))}
       <span className={s.action}>
-        <ConnectButton id={host.id} view={view} shown={!leftOut && readout?.phase === "held"} className={s.connect} />
+        <ConnectButton
+          id={host.id}
+          view={view}
+          shown={!leftOut && !telnet && readout?.phase === "held"}
+          className={s.connect}
+        />
       </span>
     </div>
   );

@@ -1,10 +1,23 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  Button,
+  Checkbox,
+  ErrorText,
+  FooterSpacer,
+  FormRow,
+  Group,
+  HintText,
+  Icon,
+  PopupSelect,
+  Segmented,
+  Sheet,
+  SheetHeader,
+  TextField,
+  WarningText,
+  type SelectOption,
+} from "@hatoba/ui";
 import { useVaultData } from "@/app/data";
 import { errorMessage } from "@/app/errors";
-import { Button, Checkbox, Icon, Segmented, TextField } from "@/components/controls";
-import { FormRow, Group } from "@/components/layout";
-import { FooterSpacer, PopupSelect, Sheet, SheetHeader, type SelectOption } from "@/components/overlay";
-import { ErrorText, HintText, WarningText } from "@/components/patterns";
 import { useT, type MessageKey } from "@/i18n";
 import { api, toAppError } from "@/ipc/api";
 import type { ForwardKind, ForwardView } from "@/ipc/types";
@@ -191,12 +204,15 @@ export function ForwardDialog({
         title={forward ? t("hosts.fwd.dialog.editTitle") : t("hosts.fwd.dialog.addTitle")}
         subtitle={t(KIND_TEXT[kind].subtitle)}
       />
-      {/* Keys stay inside the dialog: React events bubble through portals to the page behind it. */}
+      {/* Keys stay inside the dialog: React events bubble through portals to the page behind it. Escape goes on to the
+          dialog's own handler, which closes it. */}
       <form
         id={ids.form}
         className={s.form}
         noValidate
-        onKeyDown={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key !== "Escape") e.stopPropagation();
+        }}
         onSubmit={(e) => {
           e.preventDefault();
           void submit();

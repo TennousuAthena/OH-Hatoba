@@ -6,8 +6,7 @@ pub mod secrets;
 pub mod commands {
     include!(concat!(env!("OUT_DIR"), "/command_modules.rs"));
 }
-#[path = "../../../apps/desktop/src-tauri/src/ai.rs"]
-pub mod ai;
+pub use hatoba_assistant::ai;
 #[path = "../../../apps/desktop/src-tauri/src/connection.rs"]
 pub mod connection;
 #[path = "../../../apps/desktop/src-tauri/src/convert.rs"]
@@ -16,24 +15,25 @@ pub mod convert;
 pub mod dashboard;
 #[path = "../../../apps/desktop/src-tauri/src/deploy.rs"]
 pub mod deploy;
-#[path = "../../../apps/desktop/src-tauri/src/dropped.rs"]
-pub mod dropped;
+pub use hatoba_assistant::dropped;
 #[path = "../../../apps/desktop/src-tauri/src/dto.rs"]
 pub mod dto;
-#[path = "../../../apps/desktop/src-tauri/src/error.rs"]
-pub mod error;
+pub use hatoba_ipc::error;
 #[path = "../../../apps/desktop/src-tauri/src/import/mod.rs"]
 pub mod import;
 #[path = "../../../apps/desktop/src-tauri/src/lock.rs"]
 pub mod lock;
-#[path = "../../../apps/desktop/src-tauri/src/mcp.rs"]
-pub mod mcp;
+pub use hatoba_assistant::mcp;
+#[path = "../../../apps/desktop/src-tauri/src/app_proxy.rs"]
+pub mod app_proxy;
 #[path = "../../../apps/desktop/src-tauri/src/ssh.rs"]
 pub mod ssh;
 #[path = "../../../apps/desktop/src-tauri/src/state.rs"]
 pub mod state;
 #[path = "../../../apps/desktop/src-tauri/src/sync.rs"]
 pub mod sync;
+#[path = "../../../apps/desktop/src-tauri/src/telnet.rs"]
+pub mod telnet;
 
 pub mod ssh_agent {
     // Synced agent settings remain intact; this host cannot access a desktop SSH agent.

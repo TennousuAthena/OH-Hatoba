@@ -1,4 +1,7 @@
-import type { FrameHandler, HatobaApi, Unlisten } from "../api";
+import { hostPort, reachableAddress } from "@/lib/address";
+import { formatTarget, sameTarget } from "@/session/quickConnect";
+import { withCommand } from "@/session/suggest";
+import { appError, type FrameHandler, type HatobaApi, type Unlisten } from "../api";
 import type {
   ConnectionsEvent,
   AppError,
@@ -15,12 +18,11 @@ import type {
   SshErrorKind,
   StarPrompt,
   SyncStatus,
+  TelnetHostView,
   VaultStatus,
 } from "../types";
 import { byteCount, HOST_NOTES_MAX_BYTES } from "@/features/ai/instructions";
 import { ENV_MAX_VARS, envRows, envTooLarge, validateEnvRows } from "@/features/hosts/envVars";
-import { formatTarget, sameTarget } from "@/features/hosts/quickConnect";
-import { hostPort, reachableAddress } from "@/features/hosts/address";
 import { defaultRightClick, defaultTerminalFont } from "@/lib/platform";
 import { ZOOM_STEPS, zoomStep } from "@/lib/zoom";
 import { FRAME_CLOSED, FRAME_DATA, FRAME_SESSION } from "../types";
@@ -29,16 +31,21 @@ import { createAiExtensionsMock } from "./aiExtensions";
 import { createAiMemoryMock } from "./aiMemory";
 import { createAiSettingsMock } from "./aiSettings";
 import { createDashboardMock } from "./dashboard";
+import { createEditsMock } from "./edits";
 import * as D from "./data";
 import { mockStats } from "./data";
 import { applyPatch } from "./patch";
 import { readStoredPrefs } from "./prefs";
 import { FakeShell } from "./shell";
+import { FakeTelnet } from "./telnet";
 import { mockLocalShells } from "./local";
 import { passedLocale, VISITOR, VISITOR_HOST, visitorPlatform } from "./visitor";
 import { version as appVersion } from "../../../package.json";
 
 /** `?ssh=<kind>`: every connection fails with this SSH error kind and a detail like the real one. */
+/** The room between neighbouring places in the custom order, as `PLACE_STEP` in Rust (HOST-16). */
+const PLACE_STEP = 1 << 16;
+
 const SSH_DEMO_DETAIL: Partial<Record<SshErrorKind, (address: string, port: number) => string>> &
   Record<"timeout", (address: string, port: number) => string> = {
   timeout: (a, p) => `connect to ${a}:${p}: operation timed out`,
@@ -54,7 +61,7 @@ const SSH_DEMO_DETAIL: Partial<Record<SshErrorKind, (address: string, port: numb
 
 /**
  * In-browser stand-in for the Rust backend so the UI can be developed and reviewed with the
- * design's sample data (`pnpm dev`). URL parameters select demo states:
+ * sample data (`pnpm dev`). URL parameters select demo states:
  *   ?state=onboarding | locked | empty      ?sync=none | syncing | offline | conflict | auth | too_large
  *   ?platform=windows | macos | linux       ?update=available | badsig | dropped | offline | error
  *   ?manager=scoop | aur | other            (the package manager that installed Hatoba)
@@ -64,8 +71,9 @@ const SSH_DEMO_DETAIL: Partial<Record<SshErrorKind, (address: string, port: numb
  *   ?ssh=timeout | refused | dns | unreachable | auth_failed | disconnected | proxy_unreachable | proxy_auth | proxy
  *   ?launch=<command line>                  ?cli=offpath
  *   ?close=prompt                           ?hello=off   ?pin=on | persist
+ *   ?edit=conflict | fail | held            (SFTP-05, see `createEditsMock`)
  *   ?biometric=unavailable | stale | cancelled   (how Windows Hello or Touch ID fails)
- *   ?lang=en | zh-CN | ja
+ *   ?lang=en | zh-CN | zh-TW | ja
  * Quick connect (HOST-12) asks to trust a new host key once per address, then for the password
  * (anything but "wrong" is accepted); targets whose address contains "timeout" fail with a timeout.
  * Connecting to staging-web-02 always fails with a timeout; with `?ssh`, every host fails with that
@@ -121,6 +129,7 @@ export function createMockApi(): HatobaApi {
   const BUNDLED_WORKER = "0.2.0";
 
   let hosts: HostView[] = demo === "empty" ? [] : D.HOSTS.map((h) => ({ ...h }));
+  let telnetHosts: TelnetHostView[] = demo === "empty" || VISITOR ? [] : D.TELNET_HOSTS.map((h) => ({ ...h }));
   let groups: GroupView[] = demo === "empty" ? [] : D.GROUPS.map((g) => ({ ...g }));
   let keys: KeyView[] = demo === "empty" ? [] : D.KEYS.map((k) => ({ ...k }));
   let proxies: ProxyView[] = demo === "empty" ? [] : D.PROXIES.map((p) => ({ ...p }));
@@ -144,6 +153,10 @@ export function createMockApi(): HatobaApi {
   let devices = [...D.DEVICES];
   let forwards: ForwardView[] = demo === "empty" ? [] : D.FORWARDS.map((f) => ({ ...f }));
   let recentTargets: QuickTarget[] = demo === "empty" ? [] : D.RECENT_TARGETS.map((r) => ({ ...r }));
+  // TERM-15: each host's and local shell's commands, newest first; the demo starts every one with a few.
+  const commandHistory = new Map<string, string[]>();
+  let historySeeded = demo !== "empty";
+  const historyOf = (owner: string) => commandHistory.get(owner) ?? (historySeeded ? [...D.COMMAND_HISTORY] : []);
   const trustedQuickHosts = new Set(recentTargets.map((r) => `${r.address}:${r.port}`));
   /**
    * SSH-16: each host's shared connection, with its tabs and forwards. `?tunnel=lost` drops a host's connection 5 s
@@ -198,11 +211,12 @@ export function createMockApi(): HatobaApi {
     hosts = hosts.map((x) => (x.id === hostId ? { ...x, last_connected_at: Date.now() } : x));
     for (const f of forwards.filter((x) => x.host_id === hostId && x.auto_start)) {
       if (busyDemo) {
-        c.failed.set(f.id, {
-          code: "ssh",
-          ssh_kind: "io",
-          detail: `cannot listen on ${f.bind_address}:${f.bind_port}: address already in use`,
-        });
+        c.failed.set(
+          f.id,
+          appError("ssh", `cannot listen on ${f.bind_address}:${f.bind_port}: address already in use`, {
+            ssh_kind: "io",
+          }),
+        );
       } else runForward(c, f);
     }
     if (lostDemo) {
@@ -217,7 +231,7 @@ export function createMockApi(): HatobaApi {
             host_id: hostId,
             state: "disconnected",
             latency_ms: null,
-            error: { code: "ssh", ssh_kind: "disconnected", detail: "keepalive timeout: no reply from the server" },
+            error: appError("ssh", "keepalive timeout: no reply from the server", { ssh_kind: "disconnected" }),
             exit_status: null,
           });
         }
@@ -225,7 +239,7 @@ export function createMockApi(): HatobaApi {
           emit("ssh://forwards-lost", {
             host_id: hostId,
             host_name: c.name,
-            error: { code: "ssh", ssh_kind: "disconnected", detail: "keepalive timeout: no reply from the server" },
+            error: appError("ssh", "keepalive timeout: no reply from the server", { ssh_kind: "disconnected" }),
           });
         }
         connectionsChanged();
@@ -271,6 +285,8 @@ export function createMockApi(): HatobaApi {
     null;
   const listeners = new Map<string, Set<(p: unknown) => void>>();
   const shells = new Map<string, FakeShell>();
+  const telnets = new Map<string, FakeTelnet>();
+  const { unlock: unlockEdits, ...edits } = createEditsMock(emit, startTransfer, q.get("edit"));
   const dashboard = createDashboardMock({
     host: (hid) => hosts.find((h) => h.id === hid),
     unlocked: () => vaultState === "unlocked",
@@ -346,7 +362,45 @@ export function createMockApi(): HatobaApi {
   }
 
   function fail(code: AppError["code"], detail: string = code, extra: Partial<AppError> = {}): never {
-    throw { code, detail, ...extra } satisfies AppError;
+    throw appError(code, detail, extra);
+  }
+
+  /** TELNET-02 in the mock: a fake switch console; a host refused by the probe refuses the connection too. */
+  async function openTelnet(host: TelnetHostView, hostId: string | null, onFrame: FrameHandler): Promise<string> {
+    needUnlocked();
+    await delay(300);
+    // The vault may have locked while connecting.
+    needUnlocked();
+    if (hostId && D.PROBE[hostId] === false)
+      fail("ssh", `connect to ${host.address}:${host.port}: connection refused`, { ssh_kind: "refused" });
+    const sid = id("t");
+    const fake = new FakeTelnet(host, (bytes) => onFrame(frame(FRAME_DATA, bytes)));
+    telnets.set(sid, fake);
+    if (hostId) telnetHosts = telnetHosts.map((h) => (h.id === hostId ? { ...h, last_connected_at: Date.now() } : h));
+    setTimeout(() => {
+      emit("ssh://state", {
+        session_id: sid,
+        host_id: hostId,
+        state: "connected",
+        latency_ms: null,
+        error: null,
+        exit_status: null,
+      });
+      fake.start();
+    }, 0);
+    fake.onExit = () => {
+      onFrame(frame(FRAME_CLOSED, new Uint8Array()));
+      emit("ssh://state", {
+        session_id: sid,
+        host_id: hostId,
+        state: "disconnected",
+        latency_ms: null,
+        error: null,
+        exit_status: null,
+      });
+      telnets.delete(sid);
+    };
+    return sid;
   }
 
   function needUnlocked() {
@@ -365,7 +419,9 @@ export function createMockApi(): HatobaApi {
     return proxies
       .map((p) => ({
         ...p,
-        host_ids: hosts.filter((h) => h.proxy_mode === "proxy" && h.proxy_id === p.id).map((h) => h.id),
+        host_ids: [...hosts, ...telnetHosts]
+          .filter((h) => h.proxy_mode === "proxy" && h.proxy_id === p.id)
+          .map((h) => h.id),
       }))
       .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
   }
@@ -380,6 +436,26 @@ export function createMockApi(): HatobaApi {
   function setSync(patch: Partial<SyncStatus>) {
     sync = { ...sync, ...patch };
     emit("sync://status", sync);
+  }
+
+  /** Numbers the hosts and Telnet hosts in `order` again, in that order (HOST-16). */
+  function arrangeHosts(order: string[]) {
+    const place = new Map(order.map((hid, i) => [hid, (i + 1) * PLACE_STEP]));
+    hosts = hosts.map((h) => (place.has(h.id) ? { ...h, sort: place.get(h.id)! } : h));
+    telnetHosts = telnetHosts.map((h) => (place.has(h.id) ? { ...h, sort: place.get(h.id)! } : h));
+  }
+
+  /** The place of a host being added, as `Vault::place_new_host` gives it: after `after`, or else last. */
+  function placeNewHost(after?: string): number {
+    const all = [...hosts, ...telnetHosts];
+    if (after && all.find((h) => h.id === after)?.sort === 0) return 0;
+    const placed = all.filter((h) => h.sort > 0).sort((a, b) => a.sort - b.sort);
+    if (placed.length === 0) return 0;
+    const i = after ? placed.findIndex((h) => h.id === after) : -1;
+    if (i < 0 || i === placed.length - 1) return placed[placed.length - 1].sort + PLACE_STEP;
+    if (placed[i + 1].sort - placed[i].sort >= 2) return Math.floor((placed[i].sort + placed[i + 1].sort) / 2);
+    arrangeHosts(placed.map((h) => h.id));
+    return placeNewHost(after);
   }
 
   function touch() {
@@ -491,6 +567,7 @@ export function createMockApi(): HatobaApi {
       if (password.length < 8) fail("invalid_input", "password too short", { field: "password" });
       vaultState = "unlocked";
       hosts = [];
+      telnetHosts = [];
       groups = [];
       keys = [];
       sync = {
@@ -516,6 +593,7 @@ export function createMockApi(): HatobaApi {
       retryAt = null;
       armPin();
       vaultState = "unlocked";
+      unlockEdits();
     },
     vault_unlock_biometric: async () => {
       await delay(700);
@@ -633,6 +711,7 @@ export function createMockApi(): HatobaApi {
         group_id: input.group_id,
         tags: input.tags,
         favorite: input.favorite,
+        sort: existing?.sort ?? placeNewHost(),
         jump_host_id: input.jump_host_id,
         proxy_mode: input.proxy_mode,
         proxy_id: input.proxy_mode === "proxy" ? input.proxy_id : null,
@@ -670,6 +749,7 @@ export function createMockApi(): HatobaApi {
         id: id("h"),
         name: `${h.name}-copy`,
         favorite: false,
+        sort: placeNewHost(hid),
         last_connected_at: null,
         os: null,
         show_stats: false,
@@ -677,6 +757,11 @@ export function createMockApi(): HatobaApi {
       hosts = [...hosts, copy];
       touch();
       return copy;
+    },
+    hosts_arrange: async (order) => {
+      needUnlocked();
+      arrangeHosts(order.filter((hid) => hosts.some((h) => h.id === hid) || telnetHosts.some((h) => h.id === hid)));
+      touch();
     },
     host_set_favorite: async (hid, favorite) => {
       hosts = hosts.map((h) => (h.id === hid ? { ...h, favorite } : h));
@@ -711,11 +796,12 @@ export function createMockApi(): HatobaApi {
     group_delete: async (gid) => {
       groups = groups.filter((g) => g.id !== gid);
       hosts = hosts.map((h) => (h.group_id === gid ? { ...h, group_id: null } : h));
+      telnetHosts = telnetHosts.map((h) => (h.group_id === gid ? { ...h, group_id: null } : h));
       touch();
     },
     tags_list: async () => {
       const counts = new Map<string, number>();
-      hosts.forEach((h) => h.tags.forEach((t) => counts.set(t, (counts.get(t) ?? 0) + 1)));
+      [...hosts, ...telnetHosts].forEach((h) => h.tags.forEach((t) => counts.set(t, (counts.get(t) ?? 0) + 1)));
       return [...counts.entries()]
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
         .map(([name, count]) => ({ name, count }));
@@ -761,6 +847,7 @@ export function createMockApi(): HatobaApi {
           port: c.port,
           username: c.username,
           favorite: false,
+          sort: placeNewHost(),
           tags: [],
           group_id: groupId,
           last_connected_at: null,
@@ -815,8 +902,12 @@ export function createMockApi(): HatobaApi {
       hosts = hosts.map((h) =>
         h.proxy_mode === "proxy" && h.proxy_id === pid ? { ...h, proxy_mode: "device_default", proxy_id: null } : h,
       );
-      if (prefs.default_proxy_id === pid) {
-        prefs = { ...prefs, default_proxy_id: null };
+      if (prefs.default_proxy_id === pid || prefs.app_proxy_id === pid) {
+        prefs = {
+          ...prefs,
+          default_proxy_id: prefs.default_proxy_id === pid ? null : prefs.default_proxy_id,
+          app_proxy_id: prefs.app_proxy_id === pid ? null : prefs.app_proxy_id,
+        };
         storePrefs();
       }
       touch();
@@ -907,7 +998,7 @@ export function createMockApi(): HatobaApi {
         await delay(400);
         const kind = sshDemo && sshDemo in SSH_DEMO_DETAIL ? (sshDemo as SshErrorKind) : "timeout";
         const detail = (SSH_DEMO_DETAIL[kind] ?? SSH_DEMO_DETAIL.timeout)(h.address, h.port);
-        const error: AppError = { code: "ssh", detail, ssh_kind: kind };
+        const error = appError("ssh", detail, { ssh_kind: kind });
         setTimeout(() => state("failed", { error }), 0);
         throw error;
       }
@@ -929,7 +1020,7 @@ export function createMockApi(): HatobaApi {
           });
         });
         if (!accepted) {
-          const error: AppError = { code: "ssh", detail: "host key rejected", ssh_kind: "host_key_rejected" };
+          const error = appError("ssh", "host key rejected", { ssh_kind: "host_key_rejected" });
           setTimeout(() => state("failed", { error }), 0);
           throw error;
         }
@@ -976,7 +1067,7 @@ export function createMockApi(): HatobaApi {
       setTimeout(() => state("connecting"), 0);
       await delay(400);
       if (target.address.includes("timeout"))
-        failWith({ code: "ssh", detail: SSH_DEMO_DETAIL.timeout(target.address, target.port), ssh_kind: "timeout" });
+        failWith(appError("ssh", SSH_DEMO_DETAIL.timeout(target.address, target.port), { ssh_kind: "timeout" }));
       const endpoint = `${target.address}:${target.port}`;
       if (!trustedQuickHosts.has(endpoint)) {
         const accepted = await new Promise<boolean>((resolve) => {
@@ -994,31 +1085,50 @@ export function createMockApi(): HatobaApi {
             known_key_type: null,
           });
         });
-        if (!accepted) failWith({ code: "ssh", detail: "host key rejected", ssh_kind: "host_key_rejected" });
+        if (!accepted) failWith(appError("ssh", "host key rejected", { ssh_kind: "host_key_rejected" }));
         trustedQuickHosts.add(endpoint);
       }
-      // No ssh-agent here: the server asks for the password.
-      const answers = await new Promise<string[] | null>((resolve) => {
-        const rid = id("ap");
-        pendingAuth.set(rid, resolve);
-        const host = target.address.includes(":") ? `[${target.address}]` : target.address;
-        emit("ssh://auth-prompt", {
-          request_id: rid,
-          session_id: sid,
-          name: target.address,
-          instructions: "",
-          prompts: [{ prompt: "Password: ", echo: false }],
-          password: true,
-          target: `${target.username}@${host}:${target.port}`,
+      const host = target.address.includes(":") ? `[${target.address}]` : target.address;
+      if (target.address.endsWith(".ts.net")) {
+        // Tailscale SSH's check mode: the server says where to sign in and holds the login until then.
+        const rid = id("ab");
+        const signedIn = await new Promise<boolean>((resolve) => {
+          pendingAuth.set(rid, () => resolve(false));
+          emit("ssh://auth-banner", {
+            request_id: rid,
+            session_id: sid,
+            target: `${target.username}@${host}:${target.port}`,
+            text: "# Tailscale SSH requires an additional check.\n# To authenticate, visit: https://login.tailscale.com/a/l7c4b9e2f1a3",
+          });
+          setTimeout(() => resolve(true), 8000);
         });
-      });
-      if (!answers) failWith({ code: "ssh", detail: "operation cancelled", ssh_kind: "cancelled" });
-      if (answers![0] === "wrong")
-        failWith({
-          code: "ssh",
-          detail: "the server rejected the password (server accepts: publickey, password)",
-          ssh_kind: "auth_failed",
+        if (pendingAuth.delete(rid)) emit("ssh://auth-prompt-closed", { request_id: rid });
+        if (!signedIn) failWith(appError("ssh", "operation cancelled", { ssh_kind: "cancelled" }));
+      } else {
+        // No ssh-agent here: the server asks for the password.
+        const answers = await new Promise<string[] | null>((resolve) => {
+          const rid = id("ap");
+          pendingAuth.set(rid, resolve);
+          emit("ssh://auth-prompt", {
+            request_id: rid,
+            session_id: sid,
+            name: target.address,
+            instructions: "",
+            prompts: [{ prompt: "Password: ", echo: false }],
+            password: true,
+            sudo: false,
+            wrong: false,
+            target: `${target.username}@${host}:${target.port}`,
+          });
         });
+        if (!answers) failWith(appError("ssh", "operation cancelled", { ssh_kind: "cancelled" }));
+        if (answers![0] === "wrong")
+          failWith(
+            appError("ssh", "the server rejected the password (server accepts: publickey, password)", {
+              ssh_kind: "auth_failed",
+            }),
+          );
+      }
       await delay(300);
       const shellHost: HostView = {
         ...D.HOSTS[0],
@@ -1042,6 +1152,26 @@ export function createMockApi(): HatobaApi {
         stopStats(sid);
       };
       return sid;
+    },
+    command_history_list: async (owner) => {
+      needUnlocked();
+      return historyOf(owner);
+    },
+    command_history_add: async (owner, command) => {
+      needUnlocked();
+      commandHistory.set(owner, withCommand(historyOf(owner), command));
+    },
+    command_history_remove: async (owner, command) => {
+      needUnlocked();
+      commandHistory.set(
+        owner,
+        historyOf(owner).filter((c) => c !== command),
+      );
+    },
+    command_history_clear: async () => {
+      needUnlocked();
+      commandHistory.clear();
+      historySeeded = false;
     },
     recent_targets_list: async () => {
       needUnlocked();
@@ -1112,6 +1242,89 @@ export function createMockApi(): HatobaApi {
       shells.get(sid)?.stop();
       shells.delete(sid);
     },
+    telnet_hosts_list: async () => {
+      needUnlocked();
+      return telnetHosts.map((h) => ({ ...h }));
+    },
+    telnet_host_save: async (input) => {
+      needUnlocked();
+      if (!input.address.trim()) fail("invalid_input", "address is required", { field: "address" });
+      if (byteCount(input.ai_notes) > HOST_NOTES_MAX_BYTES)
+        fail("invalid_input", "AI notes are limited to 16 KB", { field: "ai_notes" });
+      if (input.proxy_mode === "proxy" && !proxies.some((p) => p.id === input.proxy_id))
+        fail("invalid_input", "proxy not found", { field: "proxy_id" });
+      const existing = input.id ? telnetHosts.find((h) => h.id === input.id) : undefined;
+      const view: TelnetHostView = {
+        id: existing?.id ?? id("t"),
+        name: input.name.trim() || Array.from(input.address.trim()).slice(0, 128).join(""),
+        address: input.address.trim(),
+        port: input.port || 23,
+        username: input.username.trim(),
+        has_password: input.password !== null ? input.password.length > 0 : !!existing?.has_password,
+        group_id: input.group_id,
+        tags: input.tags,
+        favorite: input.favorite,
+        sort: existing?.sort ?? placeNewHost(),
+        proxy_mode: input.proxy_mode,
+        proxy_id: input.proxy_mode === "proxy" ? input.proxy_id : null,
+        note: input.note,
+        ai_notes: input.ai_notes,
+        updated_at: Date.now(),
+        last_connected_at: existing?.last_connected_at ?? null,
+      };
+      telnetHosts = existing ? telnetHosts.map((h) => (h.id === view.id ? view : h)) : [...telnetHosts, view];
+      touch();
+      return view;
+    },
+    telnet_host_delete: async (hid) => {
+      telnetHosts = telnetHosts.filter((h) => h.id !== hid);
+      touch();
+    },
+    telnet_host_duplicate: async (hid) => {
+      const h = telnetHosts.find((x) => x.id === hid) ?? fail("not_found");
+      const copy = {
+        ...h,
+        id: id("t"),
+        name: `${h.name}-copy`,
+        favorite: false,
+        sort: placeNewHost(hid),
+        last_connected_at: null,
+      };
+      telnetHosts = [...telnetHosts, copy];
+      touch();
+      return copy;
+    },
+    telnet_host_set_favorite: async (hid, favorite) => {
+      telnetHosts = telnetHosts.map((h) => (h.id === hid ? { ...h, favorite } : h));
+      touch();
+    },
+    telnet_host_copy_password: async () => {},
+    telnet_open_target: async (address, port, _options, onFrame: FrameHandler) => {
+      const host: TelnetHostView = {
+        ...D.TELNET_HOSTS[1],
+        id: "",
+        name: address,
+        address,
+        port,
+        username: "",
+        has_password: false,
+      };
+      return openTelnet(host, null, onFrame);
+    },
+    telnet_open: async (hostId, _options, onFrame: FrameHandler) => {
+      needUnlocked();
+      const host = telnetHosts.find((h) => h.id === hostId) ?? fail("not_found", "host not found");
+      return openTelnet(host, hostId, onFrame);
+    },
+    telnet_write: async (sid, data) => {
+      telnets.get(sid)?.input(data);
+    },
+    telnet_write_bytes: async () => {},
+    telnet_resize: async () => {},
+    telnet_close: async (sid) => {
+      telnets.get(sid)?.stop();
+      telnets.delete(sid);
+    },
     ssh_stats_start: async (sid, onEvent) => {
       const shell = shells.get(sid) ?? fail("not_found", "session");
       const statsId = ++lastStatsId;
@@ -1134,6 +1347,13 @@ export function createMockApi(): HatobaApi {
     ssh_stats_stop: async (sid, statsId) => {
       if (statsTimers.get(sid)?.id === statsId) stopStats(sid);
     },
+    ssh_suggestions: async (sid) => {
+      needUnlocked();
+      const shell = shells.get(sid) ?? fail("not_found", "session");
+      await delay(200);
+      if (shell.os === "freebsd" || shell.os === "windows") return null;
+      return { history: D.SERVER_HISTORY, commands: D.SERVER_COMMANDS };
+    },
     ssh_test: async (input) => {
       await delay(800);
       if (input.address === "172.31.40.8")
@@ -1141,7 +1361,7 @@ export function createMockApi(): HatobaApi {
           ok: false,
           latency_ms: null,
           host_key_verified: false,
-          error: { code: "ssh", detail: "timed out", ssh_kind: "timeout" },
+          error: appError("ssh", "timed out", { ssh_kind: "timeout" }),
         };
       return { ok: true, latency_ms: 38, host_key_verified: true, error: null };
     },
@@ -1221,6 +1441,7 @@ export function createMockApi(): HatobaApi {
     transfer_cancel: async (tid) => {
       transfers.get(tid)?.();
     },
+    ...edits,
 
     sync_status: async () => sync,
     sync_test: async (config) => {
@@ -1233,7 +1454,7 @@ export function createMockApi(): HatobaApi {
             version: null,
             latency_ms: null,
             databases: null,
-            error: { code: "sync", detail: "token lacks D1 edit permission" },
+            error: appError("sync", "token lacks D1 edit permission"),
           };
         return {
           ok: true,
@@ -1251,7 +1472,7 @@ export function createMockApi(): HatobaApi {
           version: null,
           latency_ms: null,
           databases: null,
-          error: { code: "sync_offline", detail: "dns" },
+          error: appError("sync_offline", "dns"),
         };
       // First-launch demo (flow B) restores from a remote that already holds a vault, and so
       // does `?deploy=vault` (flow C).
@@ -1495,7 +1716,7 @@ export function createMockApi(): HatobaApi {
 
     settings_get: async () => structuredClone(settings),
     settings_save: async (patch) => {
-      const terminal = applyPatch(settings.terminal, patch.terminal);
+      const terminal = applyPatch(settings.terminal, patch.terminal ?? {});
       if (JSON.stringify(terminal) === JSON.stringify(settings.terminal)) return;
       settings = { ...settings, terminal };
       touch();

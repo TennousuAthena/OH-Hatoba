@@ -68,7 +68,10 @@ export const zh: Messages = {
         term: "终端",
         text: "多标签、真彩色、中日韩输入法、搜索和可点击的链接，粘贴多行内容前会先确认。",
       },
-      { term: "SFTP", text: "终端旁的文件面板，支持拖放上传，下载可以随时取消。" },
+      {
+        term: "SFTP",
+        text: "终端旁的文件面板，支持拖放上传，下载可以随时取消，远程文件可以用你自己的编辑器编辑，每次保存都会上传。",
+      },
       { term: "端口转发", text: "本地、远程和 SOCKS 转发，可以随连接一起启动，也可以不开终端在后台运行。" },
       {
         term: "密钥",
@@ -91,7 +94,9 @@ export const zh: Messages = {
     releases: "版本发布",
     report: "报告问题",
     security: "安全策略",
+    privacy: "隐私政策",
     contributing: "参与贡献",
+    sponsor: "赞助",
     license: "Hatoba 以 MIT 许可证发布。",
   },
   download: {
@@ -126,7 +131,7 @@ export const zh: Messages = {
     checksums: "列出了这个版本中每个文件的校验和。",
     allReleases: "所有版本",
     source: "从源码构建",
-    testing: "Hatoba 主要在 Windows 上开发，Linux 和 macOS 版本的测试较少。如果遇到问题，欢迎提交 issue。",
+    problem: "遇到问题？",
     issue: "提交 issue",
   },
   notFound: {

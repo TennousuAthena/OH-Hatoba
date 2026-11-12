@@ -1,23 +1,22 @@
 import { hostCapabilities } from "@/lib/hostServices";
+import { Button, Card, Group, LinkButton, StatusLine, Switch, confirm, toast, type StatusTone } from "@hatoba/ui";
+import { AppLogo } from "@/app/AppLogo";
 import { useApp } from "@/app/store";
 import { useTabs } from "@/app/tabs";
 import { useUpdate } from "@/app/update";
-import { AppLogo, Button, LinkButton, Switch } from "@/components/controls";
-import { Group } from "@/components/layout";
-import { confirm, toast } from "@/components/overlay";
-import { Card, StatusLine, type StatusTone } from "@/components/patterns";
-import { Markdown } from "@/features/ai/Markdown";
+import { Markdown } from "@/features/ai/messages/Markdown";
 import { copyText } from "@/features/keys/clipboard";
-import { useTransfers } from "@/features/sftp/transfers";
-import { openExternal } from "@/features/sync/external";
 import { formatBytes, formatDate, useT, type MessageKey, type Params } from "@/i18n";
 import type { AppError, AvailableUpdate, PackageManager, UpdateProgress } from "@/ipc/types";
 import { cx } from "@/lib/cx";
+import { openExternal } from "@/lib/external";
 import { REPO_URL, WEBSITE_URL, bugReportUrl } from "@/lib/github";
+import { useTransfers } from "@/session/transfers";
 import { Pane, SettingRow, usePrefs } from "./shared";
 import s from "./AboutPane.module.css";
 
 const LICENSE_URL = `${REPO_URL}/blob/main/LICENSE`;
+const SPONSOR_URL = "https://github.com/sponsors/scarletkc";
 const SCOOP_UPDATE = "scoop update hatoba";
 
 type T = (key: MessageKey, params?: Params) => string;
@@ -237,7 +236,7 @@ export function AboutPane() {
           </div>
           {update.notes && (
             <div className={s.notesBody}>
-              <Markdown text={update.notes} />
+              <Markdown text={update.notes} details />
             </div>
           )}
           <LinkButton icon="arrow-up-right" onClick={() => void openExternal(update.release_url)}>
@@ -258,6 +257,9 @@ export function AboutPane() {
         </LinkButton>
         <LinkButton icon="bug" onClick={() => void openExternal(bugReportUrl({ version, platform }))}>
           {t("settings.about.report")}
+        </LinkButton>
+        <LinkButton icon="heart" onClick={() => void openExternal(SPONSOR_URL)}>
+          {t("settings.about.sponsor")}
         </LinkButton>
       </div>
     </Pane>

@@ -151,6 +151,9 @@ impl Context {
                         hatoba_runtime::dto::LockReason::Manual,
                     )
                     .await;
+                    for session in hatoba_runtime::state::state(&self.app).telnet.take_all() {
+                        session.close();
+                    }
                     let sessions = hatoba_runtime::state::state(&self.app).ssh.take_all();
                     for (_, session) in sessions {
                         session.close().await;

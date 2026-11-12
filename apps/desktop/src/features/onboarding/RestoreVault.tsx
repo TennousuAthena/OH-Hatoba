@@ -1,11 +1,9 @@
 import { useState } from "react";
+import { Button, ErrorText, FooterSpacer, Icon, Segmented, StatusLine, TextField } from "@hatoba/ui";
 import { enterUnlocked } from "@/app/boot";
 import { errorMessage } from "@/app/errors";
-import { Button, Icon, Segmented, TextField } from "@/components/controls";
-import { FooterSpacer } from "@/components/overlay";
-import { ErrorText, StatusLine } from "@/components/patterns";
 import { useT } from "@/i18n";
-import { api } from "@/ipc/api";
+import { api, appError } from "@/ipc/api";
 import type { SyncConfigInput } from "@/ipc/types";
 import { WizardCard } from "./WizardCard";
 import s from "./RestoreVault.module.css";
@@ -77,7 +75,7 @@ export function RestoreConnect({
     try {
       const r = await api.sync_test(config);
       if (!r.ok) {
-        setStatus({ state: "error", text: errorMessage(t, r.error ?? { code: "sync", detail: "" }) });
+        setStatus({ state: "error", text: errorMessage(t, r.error ?? appError("sync", "")) });
       } else if (!r.initialized) {
         setStatus({ state: "warn", text: t("err.remote_not_initialized") });
       } else {

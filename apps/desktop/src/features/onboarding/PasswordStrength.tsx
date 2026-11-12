@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-import { Icon, TextField } from "@/components/controls";
-import { ErrorText, HintText, WarningText } from "@/components/patterns";
+import { ErrorText, HintText, Icon, TextField, WarningText, isImeEvent } from "@hatoba/ui";
 import { useT } from "@/i18n";
-import { isImeEvent } from "@/lib/ime";
 import { COMMON_PASSWORDS } from "./commonPasswords";
 import s from "./PasswordStrength.module.css";
 
@@ -55,7 +53,7 @@ const LABELS = [
 ] as const;
 const FILLED = [1, 1, 2, 3, 4];
 
-/** The design's 4-segment meter with a label (design §05 step 3). */
+/** A 4-segment meter with a label. */
 export function StrengthMeter({ score }: { score: number | null }) {
   const t = useT();
   const color =
@@ -92,7 +90,7 @@ export function useNewPassword() {
 
 export type NewPasswordState = ReturnType<typeof useNewPassword>;
 
-/** Master password + strength meter + confirmation, as in the design's wizard step 3. */
+/** Master password + strength meter + confirmation. */
 export function NewPasswordFields({
   state,
   passwordLabel,

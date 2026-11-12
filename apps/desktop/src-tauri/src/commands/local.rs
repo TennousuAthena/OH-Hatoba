@@ -5,13 +5,13 @@ use std::sync::Arc;
 
 use crate::host::ipc::Channel;
 use crate::host::{AppHandle, State};
-use hatoba_local::{LocalPty, PtyEvent, PtySize, Shell, ShellKind};
+use hatoba_local::{LocalPty, LocalSession, PtyEvent, PtySize, Shell, ShellKind};
 use tokio::sync::mpsc;
 
 use crate::commands::ssh::{FRAME_CLOSED, FRAME_DATA, TermFrame, emit_state};
 use crate::dto::{LocalOpenOptions, LocalShellKind, LocalShellView, SessionState};
 use crate::error::{AppError, AppResult};
-use crate::local::{LocalSession, shell_env, tools_env};
+use crate::local::{shell_env, tools_env};
 use crate::state::AppState;
 
 pub(crate) fn shell_view(shell: &Shell, default: bool) -> LocalShellView {
@@ -167,6 +167,7 @@ pub async fn local_resize(
     Ok(())
 }
 
+/// Ends the shell and the console programs it started.
 #[cfg_attr(feature = "desktop-host", tauri::command)]
 #[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn local_close(state: State<'_, AppState>, session_id: String) -> AppResult<()> {

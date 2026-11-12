@@ -5,6 +5,7 @@ The evidence contains build metadata and generated-data checks, never device IDs
 """
 import argparse
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -20,15 +21,28 @@ parser.add_argument("--hdc", default=str(Path(os.environ.get("HATOBA_DEVECO_HOME
 parser.add_argument("--device-label", default="Unspecified development device")
 parser.add_argument("--system-label", default="Unspecified HarmonyOS version")
 parser.add_argument("--output", type=Path)
+parser.add_argument("--install-hap", type=Path, help="Validate and install this HAP before testing; record the exact installed artifact digest")
 parser.add_argument("--window-surface", action="store_true", help="Require native window background synchronization in normal application mode")
 parser.add_argument("--app", action="store_true", help="Verify normal application boot and React rendering without diagnostics")
-parser.add_argument("--network", action="store_true", help="Require the disposable loopback SSH/SFTP and untrusted TLS fixtures through hdc rport")
+parser.add_argument("--network", action="store_true", help="Require the disposable loopback SSH/SFTP, Telnet, HTTP and untrusted TLS fixtures through hdc rport")
 args = parser.parse_args()
 if args.window_surface and not args.app:
     parser.error("--window-surface requires --app")
 if args.app and args.network:
     parser.error("--app and --network are separate checks")
 hdc = [args.hdc, "-t", args.target]
+artifact = None
+
+if args.install_hap:
+    hap = args.install_hap.resolve(strict=True)
+    subprocess.run(["python3", str(ROOT / "scripts/harmonyos/check-hap.py"), str(hap)], check=True)
+    digest = hashlib.sha256(hap.read_bytes()).hexdigest()
+    installed = subprocess.run(hdc + ["install", "-r", str(hap)], text=True, capture_output=True, timeout=120, check=True)
+    if "successfully" not in installed.stdout.lower():
+        raise RuntimeError("HAP installation did not report success")
+    if hashlib.sha256(hap.read_bytes()).hexdigest() != digest:
+        raise RuntimeError("HAP changed during installation; cannot attest the installed artifact")
+    artifact = {"name": hap.name, "sha256": digest, "bytes": hap.stat().st_size, "bundleName": bundle}
 
 
 def command(*parts):
@@ -52,6 +66,7 @@ business = False
 network = None
 network_rendered = False
 web_terminal = False
+web_telnet = False
 diagnostic_failed = False
 app_boot = False
 app_rendered = False
@@ -80,6 +95,8 @@ while time.monotonic() < deadline:
                 network_rendered = True
             if "Web SSH transport passed" in line:
                 web_terminal = True
+            if "Web Telnet transport passed" in line:
+                web_telnet = True
             if "Diagnostic failed" in line:
                 diagnostic_failed = True
         if args.app and app_boot and app_rendered and (not args.window_surface or window_surface):
@@ -95,6 +112,8 @@ if args.app:
                 "scope": "Normal application entry loads its real native runtime, host capabilities, vault status and React application. No projection or UI interaction; does not prove layout, IME, touch or biometric usability."}
     if args.window_surface:
         evidence["nativeWindowSurfaceSynchronized"] = window_surface
+    if artifact:
+        evidence["installedArtifact"] = artifact
     encoded = json.dumps(evidence, ensure_ascii=False, indent=2) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -118,6 +137,7 @@ if args.network:
     assert all(value is True for value in network["checks"].values()), f"Native network checks failed: {network['checks']}"
     assert network_rendered, "Network report did not render"
     assert web_terminal, "Web SSH terminal transport did not pass"
+    assert web_telnet, "Web Telnet terminal transport did not pass"
 # Rebuild a narrow output schema rather than persisting raw application logs.
 evidence = {
     "verifiedAt": datetime.now(timezone.utc).isoformat(),
@@ -127,12 +147,15 @@ evidence = {
     "sharedBusinessSmoke": business,
     "native": {key: report[key] for key in ["host_protocol", "upstream_version", "upstream_commit", "architecture", "target_os", "target_env"]},
     "checks": [{"name": check["name"], "passed": check["passed"]} for check in report["checks"]],
-    "scope": "Native dependencies plus real typed-facade vault create/reopen, host CRUD, agent configuration preservation, lock event, denied locked read and unlock. Does not validate SSH networking, TLS, IME or lifecycle recovery.",
+    "scope": "Native dependencies plus real typed-facade vault create/reopen, SSH and Telnet host CRUD, agent configuration preservation, per-host command history isolation/removal/clear and leading-space exclusion, lock event, denied locked read and unlock. Does not validate SSH networking, TLS, IME or lifecycle recovery.",
 }
 if args.network:
     evidence["networkChecks"] = network["checks"]
     evidence["webSshTerminalTransport"] = web_terminal
-    evidence["scope"] = "Real OHOS native TLS trust/rejection, SSH authentication/host-key rejection/exec/PTY binary Unicode/resize, SFTP upload/download through descriptor grants with byte comparison and cancellation, local/remote/dynamic forwards, AI streaming and cancellation, HTTP MCP, OAuth PKCE/state callback and cancellation, descriptor-based config/skill imports and grant revocation, plus shared business IPC smoke. Controlled generated-data fixtures; does not validate actual picker interaction, UI/IME, external account sign-in, or lifecycle recovery."
+    evidence["webTelnetTerminalTransport"] = web_telnet
+    evidence["scope"] = "Real OHOS native TLS trust/rejection, SSH authentication/host-key rejection/exec/PTY binary Unicode/resize, SFTP upload/download through descriptor grants with byte comparison and cancellation, local/remote/dynamic forwards, AI streaming and cancellation, HTTP MCP, OAuth PKCE/state callback and cancellation, descriptor-based config/skill imports and grant revocation, Web SSH/Telnet binary echo through xterm with consumption ACK/resize/close, plus shared business IPC smoke including Telnet hosts and command history. Controlled generated-data fixtures; does not validate actual picker interaction, UI/IME, external account sign-in, or lifecycle recovery."
+if artifact:
+    evidence["installedArtifact"] = artifact
 encoded = json.dumps(evidence, ensure_ascii=False, indent=2) + "\n"
 if args.output:
     args.output.parent.mkdir(parents=True, exist_ok=True)

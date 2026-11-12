@@ -17,11 +17,15 @@ import type {
   ServerStatsView,
   SettingsView,
   SyncStatus,
+  TelnetHostView,
 } from "../types";
 
-/** Sample data from the design file (`Hatoba.dc.html`), used when running in a plain browser. */
+/** Sample data used when running in a plain browser. */
 
-const zh = mockLocale() === "zh-CN";
+const locale = mockLocale();
+/** A sample name in the mock's language: Chinese, else English. */
+const say = (en: string, zhText: string, twText: string) =>
+  locale === "zh-CN" ? zhText : locale === "zh-TW" ? twText : en;
 const MIN = 60_000;
 const DAY = 86_400_000;
 
@@ -35,11 +39,11 @@ function at(month: number, day: number) {
 }
 
 export const GROUPS: GroupView[] = [
-  { id: "g-tokyo", name: zh ? "东京生产" : "Tokyo Prod", parent_id: null, sort: 0, dashboard: true },
-  { id: "g-osaka", name: zh ? "大阪数据库" : "Osaka DB", parent_id: null, sort: 1, dashboard: true },
+  { id: "g-tokyo", name: say("Tokyo Prod", "东京生产", "東京生產"), parent_id: null, sort: 0, dashboard: true },
+  { id: "g-osaka", name: say("Osaka DB", "大阪数据库", "大阪資料庫"), parent_id: null, sort: 1, dashboard: true },
   { id: "g-staging", name: "Staging", parent_id: null, sort: 2, dashboard: true },
-  { id: "g-infra", name: zh ? "基础设施" : "Infrastructure", parent_id: null, sort: 3, dashboard: true },
-  { id: "g-home", name: zh ? "家庭实验室" : "Homelab", parent_id: null, sort: 4, dashboard: true },
+  { id: "g-infra", name: say("Infrastructure", "基础设施", "基礎設施"), parent_id: null, sort: 3, dashboard: true },
+  { id: "g-home", name: say("Homelab", "家庭实验室", "家庭實驗室"), parent_id: null, sort: 4, dashboard: true },
 ];
 
 function host(
@@ -65,6 +69,7 @@ function host(
     group_id,
     tags,
     favorite: false,
+    sort: 0,
     jump_host_id: null,
     proxy_mode: "device_default",
     proxy_id: null,
@@ -91,9 +96,11 @@ export const HOSTS: HostView[] = [
       { name: "TZ", value: "Asia/Tokyo" },
       { name: "LANG", value: "en_US.UTF-8" },
     ],
-    note: zh
-      ? "主 API 节点，部署走 GitHub Actions。重启 api.service 前先在 #ops 频道说一声。"
-      : "Primary API node, deployed via GitHub Actions. Post in #ops before restarting api.service.",
+    note: say(
+      "Primary API node, deployed via GitHub Actions. Post in #ops before restarting api.service.",
+      "主 API 节点，部署走 GitHub Actions。重启 api.service 前先在 #ops 频道说一声。",
+      "主 API 節點，部署走 GitHub Actions。重啟 api.service 前先在 #ops 頻道說一聲。",
+    ),
   }),
   host(
     "h-bastion",
@@ -125,9 +132,11 @@ export const HOSTS: HostView[] = [
       key_id: "k-dbops",
       jump_host_id: "h-bastion",
       // AI-37: what the assistant is told about this host.
-      ai_notes: zh
-        ? "PostgreSQL 16 主库，数据目录 /srv/pgdata。工作时间（09:00–19:00）不要重启 postgresql。"
-        : "PostgreSQL 16 primary, data in /srv/pgdata. Don’t restart postgresql during business hours (09:00–19:00).",
+      ai_notes: say(
+        "PostgreSQL 16 primary, data in /srv/pgdata. Don’t restart postgresql during business hours (09:00–19:00).",
+        "PostgreSQL 16 主库，数据目录 /srv/pgdata。工作时间（09:00–19:00）不要重启 postgresql。",
+        "PostgreSQL 16 主資料庫，資料目錄 /srv/pgdata。工作時間（09:00–19:00）不要重啟 postgresql。",
+      ),
     },
   ),
   host(
@@ -188,6 +197,50 @@ export const HOSTS: HostView[] = [
   }),
 ];
 
+/** Telnet hosts (TELNET-01): a switch whose login Hatoba types, and a console server it does not. */
+export const TELNET_HOSTS: TelnetHostView[] = [
+  {
+    id: "t-core-sw",
+    name: "core-sw1",
+    address: "10.0.0.2",
+    port: 23,
+    username: "admin",
+    has_password: true,
+    group_id: "g-infra",
+    tags: ["network"],
+    favorite: false,
+    sort: 0,
+    proxy_mode: "device_default",
+    proxy_id: null,
+    note: say(
+      "Core switch in the rack; Telnet only.",
+      "机房核心交换机，只开了 Telnet。",
+      "機房核心交換器，只開了 Telnet。",
+    ),
+    ai_notes: "",
+    updated_at: ago(3 * DAY),
+    last_connected_at: ago(3 * DAY),
+  },
+  {
+    id: "t-console",
+    name: "console-srv",
+    address: "10.0.0.9",
+    port: 2001,
+    username: "",
+    has_password: false,
+    group_id: "g-infra",
+    tags: ["network"],
+    favorite: false,
+    sort: 0,
+    proxy_mode: "device_default",
+    proxy_id: null,
+    note: "",
+    ai_notes: "",
+    updated_at: ago(20 * DAY),
+    last_connected_at: null,
+  },
+];
+
 /** Saved proxies (SSH-13); `host_ids` is filled in from the hosts. */
 export const PROXIES: ProxyView[] = [
   {
@@ -203,7 +256,7 @@ export const PROXIES: ProxyView[] = [
   },
   {
     id: "p-office",
-    name: zh ? "办公室代理" : "Office proxy",
+    name: say("Office proxy", "办公室代理", "辦公室代理"),
     kind: "http",
     address: "proxy.corp.example.com",
     port: 3128,
@@ -221,7 +274,7 @@ export const PROBE: Record<string, boolean> = {
   "h-staging-web": false,
 };
 
-/** Hosts whose connection attempt fails in the mock (design §03b). */
+/** Hosts whose connection attempt fails in the mock. */
 export const FAILING_HOSTS = new Set(["h-staging-web"]);
 
 /** Quick-connect targets (HOST-12) this "device" connected to before. */
@@ -357,8 +410,47 @@ export const SETTINGS: SettingsView = {
     scrollback: 10000,
     right_click: "copy_paste",
     confirm_multiline_paste: true,
+    suggest_commands: true,
   },
 };
+
+/** The commands every demo host and local shell starts its history with (TERM-15), newest first. */
+export const COMMAND_HISTORY: string[] = [
+  "git status",
+  "docker compose ps",
+  "systemctl status nginx",
+  "tail -f /var/log/nginx/access.log",
+  "df -h",
+  "ls -la",
+];
+
+/** What every demo server's shell has run (TERM-16), newest first. */
+export const SERVER_HISTORY: string[] = [
+  "journalctl -u nginx --since today",
+  "cd /srv/www && git pull",
+  "git status",
+  "htop",
+];
+
+/** The command names on every demo server's `PATH` (TERM-16), sorted. */
+export const SERVER_COMMANDS: string[] = [
+  "apt",
+  "cat",
+  "curl",
+  "docker",
+  "git",
+  "grep",
+  "htop",
+  "journalctl",
+  "kubectl",
+  "ls",
+  "lsblk",
+  "nginx",
+  "rsync",
+  "systemctl",
+  "tail",
+  "vim",
+];
 
 export const PREFS: LocalPrefs = {
   language: "system",
@@ -373,11 +465,13 @@ export const PREFS: LocalPrefs = {
   ai_panel_open: false,
   ai_panel_width: 380,
   default_proxy_id: null,
+  app_proxy_id: null,
   auto_lock_minutes: 15,
   lock_on_sleep: true,
   lock_disconnects_sessions: false,
   clipboard_clear_secs: 90,
   hosts_view: "list",
+  hosts_sort: "recent",
   hosts_stats: false,
   dashboard_hidden_columns: [],
   dashboard_interval_secs: 3,
@@ -386,6 +480,7 @@ export const PREFS: LocalPrefs = {
   dashboard_disk_alert: 90,
   close_action: "ask",
   local_shell: null,
+  sftp_editor: null,
 };
 
 /** The release that `?update=available` finds; its notes are shaped like the ones `release.mjs publish` writes. */
@@ -400,6 +495,9 @@ export const AVAILABLE_UPDATE: AvailableUpdate = {
     "- **desktop:** install signed updates from the About page ([#58](https://github.com/scarletkc/Hatoba/pull/58))\n- **desktop:** quick connect from the hosts search field ([#53](https://github.com/scarletkc/Hatoba/pull/53))",
     "### Fixes",
     "- **ai:** record tools/list_changed before the answer that follows it ([#54](https://github.com/scarletkc/Hatoba/pull/54))",
+    "<details>\n<summary>Other changes</summary>",
+    "- ci: sign the updater artifacts ([#55](https://github.com/scarletkc/Hatoba/pull/55))\n- docs: describe the update flow ([#56](https://github.com/scarletkc/Hatoba/pull/56))",
+    "</details>",
     "[Full diff](https://github.com/scarletkc/Hatoba/compare/v0.1.0...v0.2.0)",
   ].join("\n\n"),
   published_at: ago(3 * DAY),
@@ -466,7 +564,7 @@ export const DEVICES: DeviceView[] = [
   },
   {
     device_id: "d-2",
-    name: zh ? "Mac mini · 办公室" : "Mac mini · Office",
+    name: say("Mac mini · Office", "Mac mini · 办公室", "Mac mini · 辦公室"),
     platform: "macOS 15.3",
     created_at: at(3, 2),
     last_seen: ago(2 * 60 * MIN),
@@ -504,7 +602,7 @@ export const CONFLICTS: ConflictView[] = [
     fields: [
       { field: "port", local: "22", remote: "2222" },
       { field: "jump_host", local: "host:bastion-tokyo", remote: null },
-      { field: "proxy", local: zh ? "proxy:办公室代理" : "proxy:Office proxy", remote: "deleted" },
+      { field: "proxy", local: say("proxy:Office proxy", "proxy:办公室代理", "proxy:辦公室代理"), remote: "deleted" },
     ],
     created_at: ago(20 * MIN),
   },
@@ -659,7 +757,7 @@ const candidate = (c: Partial<Candidate> & Pick<Candidate, "id" | "address">): C
 
 /** What each import source holds in the demo. */
 export function importCandidates(source: ImportSource): Candidate[] {
-  const prod = zh ? "生产" : "Production";
+  const prod = say("Production", "生产", "生產");
   switch (source) {
     case "ssh_config":
       return [
@@ -716,7 +814,7 @@ export function importCandidates(source: ImportSource): Candidate[] {
           id: "staging",
           address: "staging.example.cn",
           username: "deploy",
-          folder: zh ? "测试" : "Staging",
+          folder: say("Staging", "测试", "測試"),
         }),
         candidate({
           id: "bastion-tokyo",

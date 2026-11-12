@@ -1,28 +1,30 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import { ConfirmHost, setOverlaysLocked, ToastHost } from "@/components/overlay";
+import { ConfirmHost, ToastHost, setOverlaysLocked } from "@hatoba/ui";
 import { toggleAiPanel } from "@/features/ai/actions";
 import { AiPanel } from "@/features/ai/AiPanel";
-import { EditFilesHost } from "@/features/ai/EditFiles";
+import { EditFilesHost } from "@/features/ai/calls/EditFiles";
 import { useAiLifecycle } from "@/features/ai/lifecycle";
 import { clearReadouts } from "@/features/dashboard/readings";
 import { ForwardsPage } from "@/features/hosts/ForwardsPage";
 import { HostEditPage } from "@/features/hosts/HostEditPage";
+import { TelnetEditPage } from "@/features/hosts/TelnetEditPage";
 import { HostsPage } from "@/features/hosts/HostsPage";
-import { startForwardListeners } from "@/features/hosts/forwards";
 import { useHostsUi } from "@/features/hosts/ui";
 import { KeysPage } from "@/features/keys/KeysPage";
 import { Onboarding } from "@/features/onboarding/Onboarding";
 import { SettingsWindow } from "@/features/settings/SettingsWindow";
 import { SyncPage } from "@/features/sync/SyncPage";
+import { EditDialogs } from "@/features/sftp/EditDialogs";
 import { SessionDialogs } from "@/features/terminal/SessionDialogs";
 import { TerminalView } from "@/features/terminal/TerminalView";
-import { closeSessionTab, openLocalTerminal } from "@/features/terminal/connect";
 import { UnlockScreen } from "@/features/unlock/UnlockScreen";
 import { api } from "@/ipc/api";
 import { hostService } from "@/lib/hostServices";
 import type { SyncState } from "@/ipc/types";
 import { cx } from "@/lib/cx";
 import { applyZoom } from "@/lib/zoom";
+import { closeSessionTab, openLocalTerminal } from "@/session/connect";
+import { startForwardListeners } from "@/session/forwards";
 import { ClosePrompt, useTrayMenu } from "./ClosePrompt";
 import { ContextMenuHost } from "./ContextMenu";
 import { ResizeHandles } from "./ResizeHandles";
@@ -101,6 +103,7 @@ export function App() {
       {locked && <UnlockScreen />}
       {!locked && settingsOpen && <SettingsWindow onClose={() => useApp.getState().openSettings(false)} />}
       {!locked && <SessionDialogs />}
+      <EditDialogs locked={locked} />
       <EditFilesHost />
       <ConfirmHost />
       <ClosePrompt />
@@ -197,11 +200,22 @@ function HomePage({ page }: { page: Page }) {
     case "host-edit":
       return (
         <HostEditPage
-          key={page.hostId ?? `new:${page.prefill ? JSON.stringify(page.prefill) : ""}`}
+          key={page.hostId ?? `new:${page.prefill ? JSON.stringify(page.prefill) : ""}${page.draft ? ":draft" : ""}`}
           hostId={page.hostId}
           groupId={page.groupId}
           back={page.back}
           prefill={page.prefill}
+          draft={page.draft}
+        />
+      );
+    case "telnet-edit":
+      return (
+        <TelnetEditPage
+          key={page.hostId ?? `new-telnet${page.draft ? ":draft" : ""}`}
+          hostId={page.hostId}
+          groupId={page.groupId}
+          back={page.back}
+          draft={page.draft}
         />
       );
     case "keys":

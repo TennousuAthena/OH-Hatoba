@@ -327,6 +327,15 @@
       "signature": "id: string",
       "result": "HostView"
     },
+    "hostsArrange": {
+      "command": "hosts_arrange",
+      "parameters": [
+        "order"
+      ],
+      "channels": [],
+      "signature": "order: string[]",
+      "result": "null"
+    },
     "hostSetFavorite": {
       "command": "host_set_favorite",
       "parameters": [
@@ -652,6 +661,15 @@
       "signature": "sessionId: string, statsId: number",
       "result": "void"
     },
+    "sshSuggestions": {
+      "command": "ssh_suggestions",
+      "parameters": [
+        "sessionId"
+      ],
+      "channels": [],
+      "signature": "sessionId: string",
+      "result": "{\n\t/**  The shell's own history, newest first, each command once: the login shell's history first. */\n\thistory: string[],\n\t/**  The names of the executables on its `PATH`, sorted, each once. */\n\tcommands: string[],\n} | null"
+    },
     "sshTest": {
       "command": "ssh_test",
       "parameters": [
@@ -714,6 +732,126 @@
     },
     "localClose": {
       "command": "local_close",
+      "parameters": [
+        "sessionId"
+      ],
+      "channels": [],
+      "signature": "sessionId: string",
+      "result": "null"
+    },
+    "telnetHostsList": {
+      "command": "telnet_hosts_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "TelnetHostView[]"
+    },
+    "telnetHostSave": {
+      "command": "telnet_host_save",
+      "parameters": [
+        "input"
+      ],
+      "channels": [],
+      "signature": "input: TelnetHostInput",
+      "result": "TelnetHostView"
+    },
+    "telnetHostDelete": {
+      "command": "telnet_host_delete",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "null"
+    },
+    "telnetHostDuplicate": {
+      "command": "telnet_host_duplicate",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "TelnetHostView"
+    },
+    "telnetHostSetFavorite": {
+      "command": "telnet_host_set_favorite",
+      "parameters": [
+        "id",
+        "favorite"
+      ],
+      "channels": [],
+      "signature": "id: string, favorite: boolean",
+      "result": "null"
+    },
+    "telnetHostCopyPassword": {
+      "command": "telnet_host_copy_password",
+      "parameters": [
+        "id"
+      ],
+      "channels": [],
+      "signature": "id: string",
+      "result": "null"
+    },
+    "telnetOpen": {
+      "command": "telnet_open",
+      "parameters": [
+        "hostId",
+        "options",
+        "channel"
+      ],
+      "channels": [
+        2
+      ],
+      "signature": "hostId: string, options: LocalOpenOptions, channel: Channel<TermFrame>",
+      "result": "string"
+    },
+    "telnetOpenTarget": {
+      "command": "telnet_open_target",
+      "parameters": [
+        "address",
+        "port",
+        "options",
+        "channel"
+      ],
+      "channels": [
+        3
+      ],
+      "signature": "address: string, port: number, options: LocalOpenOptions, channel: Channel<TermFrame>",
+      "result": "string"
+    },
+    "telnetWrite": {
+      "command": "telnet_write",
+      "parameters": [
+        "sessionId",
+        "data"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, data: string",
+      "result": "null"
+    },
+    "telnetWriteBytes": {
+      "command": "telnet_write_bytes",
+      "parameters": [
+        "sessionId",
+        "data"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, data: number[]",
+      "result": "null"
+    },
+    "telnetResize": {
+      "command": "telnet_resize",
+      "parameters": [
+        "sessionId",
+        "cols",
+        "rows"
+      ],
+      "channels": [],
+      "signature": "sessionId: string, cols: number, rows: number",
+      "result": "null"
+    },
+    "telnetClose": {
+      "command": "telnet_close",
       "parameters": [
         "sessionId"
       ],
@@ -874,6 +1012,88 @@
       ],
       "channels": [],
       "signature": "transferId: string",
+      "result": "void"
+    },
+    "sftpEditOpen": {
+      "command": "sftp_edit_open",
+      "parameters": [
+        "tabId",
+        "sessionId",
+        "path"
+      ],
+      "channels": [],
+      "signature": "tabId: string, sessionId: string, path: string",
+      "result": "RemoteEditView"
+    },
+    "sftpEditReopen": {
+      "command": "sftp_edit_reopen",
+      "parameters": [
+        "editId"
+      ],
+      "channels": [],
+      "signature": "editId: string",
+      "result": "null"
+    },
+    "sftpEditSession": {
+      "command": "sftp_edit_session",
+      "parameters": [
+        "tabId",
+        "sessionId"
+      ],
+      "channels": [],
+      "signature": "tabId: string, sessionId: string | null",
+      "result": "void"
+    },
+    "sftpEditUpload": {
+      "command": "sftp_edit_upload",
+      "parameters": [
+        "editId",
+        "overwrite"
+      ],
+      "channels": [],
+      "signature": "editId: string, overwrite: boolean",
+      "result": "null"
+    },
+    "sftpEditDiscard": {
+      "command": "sftp_edit_discard",
+      "parameters": [
+        "editId"
+      ],
+      "channels": [],
+      "signature": "editId: string",
+      "result": "null"
+    },
+    "sftpEditStop": {
+      "command": "sftp_edit_stop",
+      "parameters": [
+        "editId",
+        "upload"
+      ],
+      "channels": [],
+      "signature": "editId: string, upload: boolean",
+      "result": "boolean"
+    },
+    "sftpEditChanged": {
+      "command": "sftp_edit_changed",
+      "parameters": [
+        "editId"
+      ],
+      "channels": [],
+      "signature": "editId: string",
+      "result": "boolean"
+    },
+    "sftpEditList": {
+      "command": "sftp_edit_list",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "RemoteEditView[]"
+    },
+    "sftpEditQuit": {
+      "command": "sftp_edit_quit",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
       "result": "void"
     },
     "syncStatus": {
@@ -1143,6 +1363,42 @@
     },
     "starPromptDone": {
       "command": "star_prompt_done",
+      "parameters": [],
+      "channels": [],
+      "signature": "",
+      "result": "null"
+    },
+    "commandHistoryList": {
+      "command": "command_history_list",
+      "parameters": [
+        "owner"
+      ],
+      "channels": [],
+      "signature": "owner: string",
+      "result": "string[]"
+    },
+    "commandHistoryAdd": {
+      "command": "command_history_add",
+      "parameters": [
+        "owner",
+        "command"
+      ],
+      "channels": [],
+      "signature": "owner: string, command: string",
+      "result": "null"
+    },
+    "commandHistoryRemove": {
+      "command": "command_history_remove",
+      "parameters": [
+        "owner",
+        "command"
+      ],
+      "channels": [],
+      "signature": "owner: string, command: string",
+      "result": "null"
+    },
+    "commandHistoryClear": {
+      "command": "command_history_clear",
       "parameters": [],
       "channels": [],
       "signature": "",
@@ -1848,18 +2104,22 @@
     "sync://status": "SyncStatus",
     "ssh://hostkey-prompt": "HostKeyPrompt",
     "ssh://auth-prompt": "AuthPrompt",
+    "ssh://auth-banner": "AuthBanner",
+    "ssh://auth-prompt-closed": "AuthPromptClosed",
     "ssh://state": "SessionStateEvent",
     "transfer://progress": "TransferProgressEvent",
+    "sftp://edit": "RemoteEditEvent",
+    "sftp://quit": "RemoteEditQuitEvent",
     "ssh://connections": "ConnectionsEvent",
     "ssh://forwards-lost": "ForwardsLostEvent",
     "ai://mcp-status": "McpServerStatus",
     "window://chrome": "WindowChromeEvent",
     "window://zoom": "ZoomView",
-    "app://launch": "null",
-    "window://close-prompt": "null",
+    "app://launch": "LaunchEvent",
+    "window://close-prompt": "ClosePromptEvent",
     "app://notification-click": "NotificationTarget",
-    "tray://update": "null",
-    "cli://activity": "{ entries: CliActivity[] }"
+    "tray://update": "TrayUpdateEvent",
+    "cli://activity": "CliActivityEvent"
   },
   "dtos": {
     "AiAllowance": "ca75f9da53e4ffa466d4b87074f68368fb65e7b41ed4e5b06fc95a8110181db3",
@@ -1911,15 +2171,17 @@
     "AiToolResultInput": "0062c3d78b414d27ea9c8a18496e31e19547f132fd88f2770d81659574267f05",
     "AiToolRun": "cfd52d633b4909fa0ad7e791a1ec57f2dfde77c0713b2d8120148e39fdcf04ec",
     "AiToolStatus": "c76f1c5800568f2ce52799a30b312f0997aa92fab17cd4c89ad2770e2d17b869",
-    "AiTurnContext": "15faf357f4baa043e530be879ec9757c53358cf8643c9dd7251ecb27ce802b0e",
+    "AiTurnContext": "e73069013619d593a992af521b64f873b4a35bcf40b053ccd780377fb1c85327",
     "AiTurnEndReason": "88d2a584997511f40c563f13c08247f4466139b3322caf360445d2f660da2375",
     "AiTurnEvent": "a23b65b323af248c20994c987937a597d1e2bcd57a3b64c13aaab6b99a846f76",
     "AiUsage": "cda5bf08509d394372b6fc1cfa4f8f7873d3fd0e0b7240afba32418cc7231116",
     "AppError": "7c0b77c39383a76c15342af2cfe3ad34d285cc85f1557fc57f580e1cbab78393",
     "AppInfo": "8fb2f0fa097c2504934ee329a10389960c17ce18c88ff16d578c65a878f85da2",
     "Appearance": "459d3b2fbea432ae470fa2bc126e6e274a3b68c420d092dcf559b321a5da6615",
+    "AuthBanner": "39bd68986be026edc35aaee52d5e894cae0cafe5718e998cf4b1c2a688872c36",
     "AuthKind": "59bdfab037e7f058382d22d77671402ea88380b0021fff7d93eaba0b986e0bf7",
-    "AuthPrompt": "0df1dc165047510fbee13650a59d1581dc5b7558dc0428475a7630352eb14154",
+    "AuthPrompt": "721dc147a6f7a6a6cf67025614fe01969242ff8ceb5e442d6759b16efb629103",
+    "AuthPromptClosed": "df512e3c2c49d5d96b659cc8064b74bf2056c8fcc884ffd2e68fb01c5df9ddeb",
     "AuthPromptField": "2da6d12ad85ba2b23ba7c496076dd5832ec1d0a30321fbd165cda4357c4369de",
     "AvailableUpdate": "13b8b681209ea19b72f831cbdca8ab6dd284e8d071e03c165ac4ca2fe178d265",
     "BuiltinSkillView": "040ea2f11d96bbcf64ea3b850b4584e9ae7b75c36b5d763445f9a2a380de3433",
@@ -1955,7 +2217,7 @@
     "DeviceView": "70a50db7765ac19e467f171e00ea7d3e0aecd56cc7540918bdeac41fc32c5729",
     "DroppedFile": "639f29369275b4a82029e8011b8cefa5470bd7ebca815f4c9faf88ad92066eac",
     "DroppedFileRefusal": "e0e08dee71ba4874709425af07ace3a2001bbd3156bc8d4be8ce23908c305ecf",
-    "ErrorCode": "e48e9829f29698c4f19321425c0ffd969be774d95d3f3990e8201127787d2e1f",
+    "ErrorCode": "46cb6e1f3e1e105fa286f5b897207336d40f9e3d8b4e4efbd44138f390c70efa",
     "FailedForwardView": "252f5686df00397e0d283705847f07e08b6fea37c0ce749e62682e2167cfbd6d",
     "FileEntry": "e3006b586ed029962c6670d1c663437d53340986262cfd5f72a5ee4f1a4a60f9",
     "ForwardInput": "fc432185d3049767a3feb2a2b3f12f881445b974bb7ec964b4fd5323f15d3b65",
@@ -1971,22 +2233,23 @@
     "HostInput": "f297b87a31b7a4e8ffd2a7faf15ba3d32861d8db104da6dd6c09e375afad4a9e",
     "HostKeyPrompt": "21aadd6bdae36ff3c6afafdefce85072e67828591c88253bf57b5e0634d21874",
     "HostKeyPromptKind": "bb461a54da27b64047d5431b6a21e128a34206e0af62efad67228412b88e09c0",
-    "HostView": "8e8965a84aa2676a1a349db9dca3fc663d7e984f6180a3316102e076a8cc2343",
+    "HostView": "49f8201d1eac3ae59ead57f69ae2da76289a6035a2aace5c2c54416322e95d40",
+    "HostsSort": "c5864a853faf9e848187e67d5ba5a47b38fda0a39ae9889a13927b9690fd8106",
     "HostsView": "8333176e11d7a1451b57d0afd2b51b24bde3e0639a6721336ba0248d4ea972c2",
     "ImportCandidate": "e2d00e71ee51de58c09446d70b3c3362dac31a16545fb6263b1000ab5300138c",
     "ImportPreview": "26c952c07be22cba36b051f1ddd8256096d16816b14bae1f7d792315c9067957",
     "ImportResult": "3ce6c08938be54b90f92380112b6212f93252c49909433bfe1aaf1e027a8375c",
     "ImportSource": "1834e175571dccaf1b42177c82d356a528f89b3c9bfd190b760d61702501d662",
-    "ItemType": "76725be1ec4358d14e3f2ab6edbff9396cc35b6ae8e38a14e69f83d114004b7f",
+    "ItemType": "9f018ef52a1e1fa1a8de128c1bbcf4e92de22d18a052f8e137cb1453e3dd54ff",
     "KeyAlgorithm": "81ffa5115d78700f9d787d3daae7b4d27144ad85fc9e7933866f3f9fbc6fe1a0",
     "KeyGenerateInput": "683fba6ab30ae93d4ccf697cb8c165f72bbb3bd328d3c3cfddd9a8b47d822a9a",
     "KeyImportInput": "590e6cf5d8b6a4352e945745be00110c05fed0247a627015d6fe2169acce9e22",
     "KeyParseErrorKind": "947079b9db7e5158f926e6e09fb775ddb81a87f831a922e7b855bab5c19d950f",
     "KeyView": "4fa8c753a6f898a4163cb31bb33526dc4823e5a152f0ed9c59f7da2364de1ee5",
-    "Language": "257b75b2f21614d835f97887f517ca39fe5c2277ba1366ad40b73c8cd495d5b3",
+    "Language": "a355c19f6c57d52d6a5114e69004042ba04678655f4d51aaeb2f7393ead6e7c6",
     "LaunchEvent": "9ae0e8c72434ccaf3d67e46e24278ffbec4ca3642bb39090c60edec704a1c7dd",
     "LocalOpenOptions": "5f5ba9ae2d82a61db50f15be00481a6224bac700f4560344a9665f8c3461316d",
-    "LocalPrefs": "ed1208b09dc7cc856c0c3f4884e624339d8c081cb20bdd1c2a95cc747f2d6723",
+    "LocalPrefs": "52909ca28adc719a38cb60890d87aa09c81dc3ee140925599c650a148bd547eb",
     "LocalShellKind": "58ff8a4b92881aa5102eea0953df87d49624c4e2a25bf8b4eebd122b8288315a",
     "LocalShellView": "6f106d7af5ca87bd8c1e2d781b510b680e11ba74017802a045a6890c221fb70c",
     "LockReason": "82d017280f2f9743a0adc01bae0fa928f7510ad01504df44c7c9c047d4e14348",
@@ -2019,12 +2282,17 @@
     "ProxyMode": "ccb2d62ac1b3c8d9ad78014188485f5918aa9b577700af0aed68de0d9729532e",
     "ProxyView": "a18b9622b4df036571e655120c07ee081777c0fd99f36382309e6850b86c9508",
     "QuickTarget": "2e114965da10a6e0d6fbd7a9394b7d0f2c2da53e51ff71bc3989aed7bb1d497e",
+    "RemoteEditEvent": "bdf9ad53e1115f7942655855a40c57423f5b5009b729ffbe94d0479038a42177",
+    "RemoteEditQuitEvent": "1da2700c686c7ed41cd7c2d36619c96728b241bddffff82233e448d4e5355419",
+    "RemoteEditState": "acf984493193f32a04e0a6bb10e67d0385d3358450f4be788336c614a71e5909",
+    "RemoteEditView": "dd9069a2784c6f4009a74ca790659d28d74487edf88160ebd3d4192b410ed169",
     "RightClick": "a1654ed32d9379f11c9c83a256276e5100321619da7dd56d9107190db7dde8a5",
     "RunningForwardView": "893505bc56a0094f607b095a4057271d0abcbead20d1e7e873e79afd1edc911e",
     "SearchKind": "01b529ae52506250176bb9fe9a047aa412d75e9e0b784bd6708dbc93d7ed7322",
     "SearchProviderInput": "d1005a9b8f3ba26f31870f1721fce29a71eb1eb7821b8c847b37f40e856b0ea0",
     "SearchProviderView": "c7f3b47d5d8f633b5801e76d33fd25e3c886bc971ee80c08b4a6b747bc0a9c9e",
     "ServerStatsView": "be5c2d5ef0d70404d98f92652986d2e139e6b3864f3f018a33dd52201320b2a3",
+    "ServerSuggestionsView": "b99a1e20ecff40dc321b3f0c49e947eb6a40c012469a5f11074b9090bc522006",
     "SessionState": "589c3cbb0524623bfc7b5c224b3d74934787df2e8ed2307287fba9517a99e889",
     "SessionStateEvent": "c045dd7cc8fd894b349ef7a2b95d1ce079b1124e51ffb6c1ffbd334c4968ebb4",
     "SettingsPatch": "d6ebfad9bc0980fbd9b8d7370e426a61017a86209e517ce64fbeec29a4d3da53",
@@ -2045,9 +2313,11 @@
     "SyncStatus": "2f869fd871bd47ae9a8b6b8975a6ac061c5af99f843c51d2a2b81e2af1fef619",
     "SyncTestResult": "e250b945eb07cc040012fa0de3d16af4451c9de6c51f855eff02bb61c0d04976",
     "TagCount": "033b346dba13ce1dec3fe382b70bb701f800eeaed3b16239b8f050a7e9f9de30",
+    "TelnetHostInput": "6894288d95cb11fd7999e269e62f112283f0eb3f94a08bfb234f84069f0705f6",
+    "TelnetHostView": "8cf8f57c6efa5bdb0f96569e8bb3f51ceffba4af492254ced4cc7c8357aea8f5",
     "TermFrame": "42f25fe46d93e6ee46219bd69ff2210db8f30ef279939c0ca284f89affefe0d9",
-    "TerminalSettings": "66a4e8daa2fbf9ca10a7b5e50a578a3965c794a66d2dbb65b59ef918b921d710",
-    "TerminalSettingsPatch": "710cc89effde6c68bc3c57d18dfff7aee1fd4556f6cf8457cdd39d3e5196e6a0",
+    "TerminalSettings": "06cf5e614f87f1ae0cac5b22428b83bfb6e2d83b29c83de1d282a82b428ce250",
+    "TerminalSettingsPatch": "ff0d83c3954e6a919efd39e63b4be6113a41167ae491204f5918fdde45ce92b9",
     "TestResult": "215de86a3f352fe22984dbde1982d3ad6c691e03fcbfa42963438b072b183cbf",
     "ThemeChoice": "7c252f0583c07daab4d595470f207e7d3d696b0b3ab223f2a90b1e2e6679e75a",
     "TooLargeItem": "a5bd4f8e6e2b8f794ee323d8d62e847afae0909eb024df7418e62f2cac4348b6",

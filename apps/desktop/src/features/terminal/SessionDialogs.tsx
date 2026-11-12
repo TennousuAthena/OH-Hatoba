@@ -1,14 +1,22 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Button, Icon, TextField } from "@/components/controls";
-import { Modal } from "@/components/overlay";
-import { ErrorText } from "@/components/patterns";
+import { Button, ErrorText, Icon, Modal, Spinner, TextField } from "@hatoba/ui";
 import { useT } from "@/i18n";
+import { openExternal } from "@/lib/clipboard";
 import { cx } from "@/lib/cx";
-import { startSessionListeners } from "./listeners";
-import { answerAuth, answerHostKey, answerSecret, answerUsername, usePrompts, type PromptItem } from "./prompts";
+import { firstLink, messageParts } from "@/session/banner";
+import { startSessionListeners } from "@/session/listeners";
+import {
+  answerAuth,
+  answerBanner,
+  answerHostKey,
+  answerSecret,
+  answerUsername,
+  usePrompts,
+  type PromptItem,
+} from "@/session/prompts";
 import s from "./SessionDialogs.module.css";
 
-/** Global host-key / keyboard-interactive / one-off secret dialogs (mounted once by App). */
+/** Global host-key / keyboard-interactive / server message / one-off secret dialogs (mounted once by App). */
 export function SessionDialogs() {
   const item = usePrompts((st) => st.items[0]);
   // Backend events are wired once, after boot, and stay wired while the vault is locked.
@@ -23,6 +31,8 @@ export function SessionDialogs() {
       );
     case "auth":
       return <AuthPromptDialog key={item.key} item={item} />;
+    case "banner":
+      return <BannerDialog key={item.key} item={item} />;
     case "secret":
       return <SecretDialog key={item.key} item={item} />;
     case "username":
@@ -176,42 +186,107 @@ function AuthPromptDialog({ item }: { item: PromptItem & { kind: "auth" } }) {
   );
 }
 
-/** SSH-03 / key passphrase: a secret used once and never stored. */
+/**
+ * A message the server sent while signing in, shown while the server holds the login, as Tailscale SSH's
+ * check mode does until the user signs in at its link. It closes when the server goes on; **Cancel** stops
+ * connecting.
+ */
+function BannerDialog({ item }: { item: PromptItem & { kind: "banner" } }) {
+  const t = useT();
+  const b = item.banner;
+  const link = firstLink(b.text);
+  const cancel = useCallback(() => answerBanner(item), [item]);
+  return (
+    <Modal center onClose={cancel} closeOnBackdrop={false}>
+      <div role="dialog" aria-modal aria-labelledby="banner-title" className={s.card}>
+        <div className={s.head}>
+          <Icon name="chat-text" size={20} color="var(--accent)" />
+          <div id="banner-title" className={s.title}>
+            {t("terminal.banner.title", { target: b.target })}
+          </div>
+        </div>
+        <div className={cx(s.message, "selectable")}>
+          {messageParts(b.text).map(({ text, href }, i) =>
+            href ? (
+              <a
+                key={i}
+                href={href}
+                onClick={(e) => {
+                  e.preventDefault();
+                  void openExternal(href);
+                }}
+              >
+                {text}
+              </a>
+            ) : (
+              text
+            ),
+          )}
+        </div>
+        <div className={s.actions}>
+          <div className={s.waiting} role="status">
+            <Spinner size={14} />
+            {t("terminal.banner.waiting")}
+          </div>
+          <Button onClick={cancel}>{t("btn.cancel")}</Button>
+          {link && (
+            <Button variant="primary" autoFocus onClick={() => void openExternal(link)}>
+              {t("terminal.banner.open")}
+            </Button>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** SSH-03 / key passphrase: a secret used once and never stored; or a sudo password (HOST-15). */
 function SecretDialog({ item }: { item: PromptItem & { kind: "secret" } }) {
   const t = useT();
   const r = item.request;
   const [value, setValue] = useState("");
-  const isPassword = r.kind === "password";
+  const isPassword = r.kind !== "passphrase";
   const cancel = useCallback(() => answerSecret(item, null), [item]);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (value) answerSecret(item, value);
   };
+  const title =
+    r.kind === "sudo"
+      ? t("terminal.sudo.title", { name: r.hostName })
+      : isPassword
+        ? t("terminal.password.title", { name: r.hostName })
+        : t("terminal.passphrase.title");
+  const body =
+    r.kind === "sudo"
+      ? t("terminal.sudo.body", { target: r.target })
+      : isPassword
+        ? !r.oneOff && t("terminal.password.body", { target: r.target })
+        : t("terminal.passphrase.body", { name: r.hostName });
+  const label = isPassword ? t("terminal.password.label") : t("terminal.passphrase.label");
   return (
     <Modal center onClose={cancel} closeOnBackdrop={false}>
       <form role="dialog" aria-modal aria-labelledby="secret-title" className={s.card} onSubmit={submit}>
         <div className={s.head}>
           <Icon name={isPassword ? "lock-key" : "key"} size={20} color="var(--accent)" />
           <div id="secret-title" className={s.title}>
-            {isPassword ? t("terminal.password.title", { name: r.hostName }) : t("terminal.passphrase.title")}
+            {title}
           </div>
         </div>
-        {!(isPassword && r.oneOff) && (
-          <div className={s.body}>
-            {isPassword
-              ? t("terminal.password.body", { target: r.target })
-              : t("terminal.passphrase.body", { name: r.hostName })}
-          </div>
+        {body && <div className={s.body}>{body}</div>}
+        {r.wrong && (
+          <ErrorText className={s.wrong}>
+            {r.kind === "sudo" ? t("terminal.sudo.wrong") : t("terminal.passphrase.wrong")}
+          </ErrorText>
         )}
-        {r.wrong && <ErrorText className={s.wrong}>{t("terminal.passphrase.wrong")}</ErrorText>}
         <div className={s.fields}>
           <TextField
             secret
             large
             mono
             autoFocus
-            aria-label={isPassword ? t("terminal.password.label") : t("terminal.passphrase.label")}
-            placeholder={isPassword ? t("terminal.password.label") : t("terminal.passphrase.label")}
+            aria-label={label}
+            placeholder={label}
             value={value}
             onChange={(e) => setValue(e.target.value)}
           />
@@ -219,7 +294,7 @@ function SecretDialog({ item }: { item: PromptItem & { kind: "secret" } }) {
         <div className={s.actions}>
           <Button onClick={cancel}>{t("btn.cancel")}</Button>
           <Button variant="primary" type="submit" disabled={!value}>
-            {t("terminal.connect")}
+            {r.kind === "sudo" ? t("btn.continue") : t("terminal.connect")}
           </Button>
         </div>
       </form>

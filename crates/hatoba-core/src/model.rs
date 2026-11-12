@@ -81,7 +81,6 @@ fn default_ssh_port() -> u16 {
     22
 }
 
-/// An SSH host.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Zeroize)]
 #[serde(default)]
 pub struct Host {
@@ -91,23 +90,22 @@ pub struct Host {
     pub address: String,
     /// TCP port, default 22.
     pub port: u16,
-    /// Login user.
     pub username: String,
-    /// Authentication method.
     pub auth: HostAuth,
     /// Containing [`Group`], if any.
     pub group_id: Option<String>,
-    /// Free-form tags.
     pub tags: Vec<String>,
-    /// Favourite flag.
     pub favorite: bool,
+    /// Place in the custom order of the hosts page (HOST-16), which Telnet hosts share: lower
+    /// comes first. 0 until the host is placed, and then absent.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub sort: i64,
     /// ProxyJump host (P1).
     pub jump_host_id: Option<String>,
     /// SOCKS5 or HTTP proxy for the TCP connection (SSH-13). With a jump host, the jump host's
     /// own choice applies instead. Absent while it is the device's default.
     #[serde(skip_serializing_if = "HostProxy::is_device_default")]
     pub proxy: HostProxy,
-    /// Free-form note.
     pub note: String,
     /// What the AI assistant is told about this host in its system prompt (AI-37), at most
     /// [`MAX_HOST_AI_NOTES_BYTES`] bytes of UTF-8. Absent while empty.
@@ -163,7 +161,6 @@ pub enum EnvVarError {
     /// More than [`MAX_HOST_ENV_VARS`].
     #[error("a host can have at most {MAX_HOST_ENV_VARS} environment variables")]
     TooMany,
-    /// The name is empty.
     #[error("an environment variable needs a name")]
     NameMissing,
     /// The name has a character other than ASCII letters, digits and `_`, or starts with a digit.
@@ -252,6 +249,7 @@ impl Default for Host {
             group_id: None,
             tags: Vec::new(),
             favorite: false,
+            sort: 0,
             jump_host_id: None,
             proxy: HostProxy::DeviceDefault,
             note: String::new(),
@@ -259,6 +257,94 @@ impl Default for Host {
             updated_at: 0,
             env: Vec::new(),
         }
+    }
+}
+
+/// A Telnet host (TELNET-01): a switch, router or embedded device that offers Telnet. It is an
+/// item type of its own rather than a [`Host`] with a protocol, so an app without Telnet skips it
+/// instead of reading it as an SSH host and dropping the protocol when it saves it. The password
+/// is wiped on drop and never printed.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Zeroize)]
+#[serde(default)]
+pub struct TelnetHost {
+    /// Display name, e.g. `core-switch-1`.
+    pub name: String,
+    /// Domain name or IP address.
+    pub address: String,
+    /// TCP port, default 23.
+    pub port: u16,
+    /// The user name typed at the server's login prompt (TELNET-03); empty to type it by hand.
+    pub username: String,
+    /// The password typed at the server's password prompt (secret); empty to type it by hand.
+    /// Never sent to the front-end. Absent while empty.
+    #[serde(skip_serializing_if = "zeroizing_is_empty")]
+    pub password: Zeroizing<String>,
+    /// Containing [`Group`], if any.
+    pub group_id: Option<String>,
+    pub tags: Vec<String>,
+    pub favorite: bool,
+    /// Place in the custom order of the hosts page, as for SSH hosts (HOST-16).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub sort: i64,
+    /// SOCKS5 or HTTP proxy for the TCP connection, as for SSH hosts (SSH-13). Absent while it is
+    /// the device's default.
+    #[serde(skip_serializing_if = "HostProxy::is_device_default")]
+    pub proxy: HostProxy,
+    pub note: String,
+    /// What the AI assistant is told about this host (AI-37), at most
+    /// [`MAX_HOST_AI_NOTES_BYTES`] bytes of UTF-8. Absent while empty.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub ai_notes: String,
+    /// Last modification, Unix ms.
+    pub updated_at: i64,
+}
+
+pub const TELNET_PORT: u16 = 23;
+
+fn zeroizing_is_empty(s: &Zeroizing<String>) -> bool {
+    s.is_empty()
+}
+
+fn is_zero(n: &i64) -> bool {
+    *n == 0
+}
+
+impl Default for TelnetHost {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            address: String::new(),
+            port: TELNET_PORT,
+            username: String::new(),
+            password: Zeroizing::default(),
+            group_id: None,
+            tags: Vec::new(),
+            favorite: false,
+            sort: 0,
+            proxy: HostProxy::DeviceDefault,
+            note: String::new(),
+            ai_notes: String::new(),
+            updated_at: 0,
+        }
+    }
+}
+
+impl fmt::Debug for TelnetHost {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TelnetHost")
+            .field("name", &self.name)
+            .field("address", &self.address)
+            .field("port", &self.port)
+            .field("username", &self.username)
+            .field("password", &"<redacted>")
+            .field("group_id", &self.group_id)
+            .field("tags", &self.tags)
+            .field("favorite", &self.favorite)
+            .field("proxy", &self.proxy)
+            .field("note", &self.note)
+            .field("ai_notes", &self.ai_notes)
+            .field("updated_at", &self.updated_at)
+            .finish()
     }
 }
 
@@ -272,7 +358,6 @@ pub enum HostProxy {
     DeviceDefault,
     /// No proxy, whatever the device default is.
     Direct,
-    /// A saved [`Proxy`].
     Proxy {
         /// Id of the [`Proxy`] item.
         proxy_id: String,
@@ -325,7 +410,6 @@ impl ProxyKind {
 pub struct Proxy {
     /// Display name, e.g. `Office SOCKS`.
     pub name: String,
-    /// Protocol.
     #[zeroize(skip)]
     pub kind: ProxyKind,
     /// Domain name or IP address of the proxy.
@@ -372,11 +456,8 @@ impl fmt::Debug for Proxy {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Zeroize)]
 #[serde(default)]
 pub struct Group {
-    /// Display name.
     pub name: String,
-    /// Parent group.
     pub parent_id: Option<String>,
-    /// Sort position.
     pub sort: i64,
     /// Last modification, Unix ms.
     pub updated_at: i64,
@@ -386,12 +467,9 @@ pub struct Group {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum KeyAlgorithm {
-    /// Ed25519.
     #[default]
     Ed25519,
-    /// ECDSA.
     Ecdsa,
-    /// RSA.
     Rsa,
 }
 
@@ -399,9 +477,7 @@ pub enum KeyAlgorithm {
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Zeroize)]
 #[serde(default)]
 pub struct SshKey {
-    /// Display name.
     pub name: String,
-    /// Key algorithm.
     #[zeroize(skip)]
     pub algorithm: KeyAlgorithm,
     /// Private key in OpenSSH format (secret).
@@ -412,7 +488,6 @@ pub struct SshKey {
     pub public_key: String,
     /// `SHA256:...` fingerprint.
     pub fingerprint: String,
-    /// Key comment.
     pub comment: String,
     /// Creation time, Unix ms.
     pub created_at: i64,
@@ -458,11 +533,9 @@ impl fmt::Debug for SshKey {
 pub struct KnownHost {
     /// Host name or address the key was seen on.
     pub host: String,
-    /// Port.
     pub port: u16,
     /// Key type, e.g. `ssh-ed25519`.
     pub key_type: String,
-    /// Public key.
     pub public_key: String,
     /// `SHA256:...` fingerprint.
     pub fingerprint: String,
@@ -493,12 +566,9 @@ pub struct PortForward {
     pub host_id: String,
     /// What the forward is for; empty when it has none, and it is named by its rule.
     pub name: String,
-    /// Direction.
     #[zeroize(skip)]
     pub kind: ForwardKind,
-    /// Address to bind.
     pub bind_address: String,
-    /// Port to bind.
     pub bind_port: u16,
     /// Destination host (`None` for dynamic).
     pub dest_host: Option<String>,
@@ -514,11 +584,8 @@ pub struct PortForward {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Zeroize)]
 #[serde(default)]
 pub struct Snippet {
-    /// Display name.
     pub name: String,
-    /// The command text.
     pub command: String,
-    /// Tags.
     pub tags: Vec<String>,
     /// Last modification, Unix ms.
     pub updated_at: i64,
@@ -660,7 +727,6 @@ mod effort_serde {
 pub struct AiModel {
     /// Model id sent in requests.
     pub id: String,
-    /// Display name.
     pub name: String,
     /// Context window in tokens, `None` when unknown.
     pub context_window: Option<u64>,
@@ -685,9 +751,7 @@ pub struct AiModel {
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize, Zeroize)]
 #[serde(default)]
 pub struct AiProvider {
-    /// Display name.
     pub name: String,
-    /// Wire protocol.
     #[zeroize(skip)]
     pub protocol: AiProtocol,
     /// Base URL, e.g. `https://api.openai.com/v1` or `https://api.anthropic.com`.
@@ -754,7 +818,6 @@ pub enum SearchKind {
     /// Brave Search API.
     #[default]
     Brave,
-    /// Tavily.
     Tavily,
     /// A SearXNG instance.
     Searxng,
@@ -777,7 +840,6 @@ impl SearchKind {
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize, Zeroize)]
 #[serde(default)]
 pub struct SearchProvider {
-    /// Search service.
     #[zeroize(skip)]
     pub kind: SearchKind,
     /// The instance URL for SearXNG, `None` otherwise.
@@ -851,7 +913,6 @@ pub struct AiQuickTarget {
     pub username: String,
     /// DNS name or IP address, in lowercase, IPv6 without brackets.
     pub address: String,
-    /// The SSH port.
     pub port: u16,
 }
 
@@ -981,7 +1042,6 @@ pub enum McpTransport {
         /// Executable, looked up on `PATH`.
         #[serde(default)]
         command: String,
-        /// Arguments.
         #[serde(default)]
         args: Vec<String>,
         /// Environment variables (values are secrets).
@@ -990,7 +1050,6 @@ pub enum McpTransport {
     },
     /// A Streamable HTTP endpoint.
     Http {
-        /// Endpoint URL.
         #[serde(default)]
         url: String,
         /// Request headers (values are secrets).
@@ -1072,7 +1131,6 @@ impl fmt::Debug for McpTransport {
 pub struct McpServer {
     /// Display name; used in tool names.
     pub name: String,
-    /// How to reach it.
     pub transport: McpTransport,
     /// Ask before every call, even in bypass mode (AI-31).
     pub always_ask: bool,
@@ -1084,9 +1142,7 @@ pub struct McpServer {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ThemeMode {
-    /// Light.
     Light,
-    /// Dark.
     Dark,
     /// Follow the OS. Also what an unknown future value decodes to (`serde(other)` must be last).
     #[default]
@@ -1100,7 +1156,6 @@ pub enum ThemeMode {
 pub enum CursorStyle {
     /// Vertical bar.
     Bar,
-    /// Underline.
     Underline,
     /// Filled block. Also what an unknown future value decodes to.
     #[default]
@@ -1141,11 +1196,9 @@ impl RightClick {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Zeroize)]
 #[serde(default)]
 pub struct TerminalSettings {
-    /// Font family.
     pub font_family: String,
     /// Font size in points.
     pub font_size: u16,
-    /// Colour theme.
     #[zeroize(skip)]
     pub theme: ThemeMode,
     /// Id of the colour scheme used while the terminal is dark. `None` until one is picked,
@@ -1156,7 +1209,6 @@ pub struct TerminalSettings {
     /// Id of the colour scheme used while the terminal is light, like [`Self::dark_scheme`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub light_scheme: Option<String>,
-    /// Cursor shape.
     #[zeroize(skip)]
     pub cursor_style: CursorStyle,
     /// Scrollback lines.
@@ -1171,6 +1223,10 @@ pub struct TerminalSettings {
     /// [`Self::confirm_multiline_paste`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub confirm_multiline_paste: Option<bool>,
+    /// Show the rest of a matching command dimmed after the cursor at a shell prompt (TERM-14).
+    /// `None` until a value is recorded; read it with [`Self::suggest_commands`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggest_commands: Option<bool>,
 }
 
 /// The terminal font a new vault starts with. Cascadia Mono comes with Windows (WIN-02), and
@@ -1195,6 +1251,7 @@ impl Default for TerminalSettings {
             scrollback: 10_000,
             right_click: None,
             confirm_multiline_paste: None,
+            suggest_commands: None,
         }
     }
 }
@@ -1212,6 +1269,12 @@ impl TerminalSettings {
         self.confirm_multiline_paste.unwrap_or(true)
     }
 
+    /// Whether a matching command shows dimmed after the cursor; `true` while unset.
+    #[must_use]
+    pub fn suggest_commands(&self) -> bool {
+        self.suggest_commands.unwrap_or(true)
+    }
+
     /// Records the right-click behaviour. An unset field stays unset when `value` is the default.
     pub fn set_right_click(&mut self, value: RightClick) {
         record(&mut self.right_click, value, RightClick::platform_default());
@@ -1221,6 +1284,12 @@ impl TerminalSettings {
     /// is the default.
     pub fn set_confirm_multiline_paste(&mut self, value: bool) {
         record(&mut self.confirm_multiline_paste, value, true);
+    }
+
+    /// Records whether a matching command shows dimmed after the cursor. An unset field stays
+    /// unset when `value` is the default.
+    pub fn set_suggest_commands(&mut self, value: bool) {
+        record(&mut self.suggest_commands, value, true);
     }
 }
 
@@ -1317,47 +1386,38 @@ impl Default for AiSettings {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Zeroize)]
 #[serde(default)]
 pub struct Settings {
-    /// Terminal appearance.
     pub terminal: TerminalSettings,
-    /// AI assistant settings.
     pub ai: AiSettings,
     /// Last modification, Unix ms.
     pub updated_at: i64,
 }
 
-/// Any syncable item. Serialises with `"type": "host" | "group" | "key" | "known_host" |
-/// "forward" | "snippet" | "proxy" | "ai_provider" | "search_provider" | "ai_conversation" |
-/// "ai_message" | "skill" | "skill_file" | "mcp_server" | "ai_memory" | "settings"`.
+/// Any syncable item. Serialises with `"type": "host" | "telnet_host" | "group" | "key" |
+/// "known_host" | "forward" | "snippet" | "proxy" | "ai_provider" | "search_provider" |
+/// "ai_conversation" | "ai_message" | "skill" | "skill_file" | "mcp_server" | "ai_memory" |
+/// "settings"`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Zeroize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Item {
-    /// An SSH host.
     Host(Host),
-    /// A host group.
+    TelnetHost(TelnetHost),
     Group(Group),
     /// A private key.
     Key(SshKey),
     /// A trusted host key.
     KnownHost(KnownHost),
-    /// A saved port forward.
     Forward(PortForward),
-    /// A command snippet.
     Snippet(Snippet),
     /// A SOCKS5 or HTTP proxy.
     Proxy(Proxy),
-    /// An AI model provider.
     AiProvider(AiProvider),
-    /// The web search backend.
     SearchProvider(SearchProvider),
-    /// An AI conversation.
     AiConversation(AiConversation),
     /// One part of a conversation entry.
     AiMessage(AiMessage),
-    /// An assistant skill.
     Skill(Skill),
     /// A text file of a skill.
     SkillFile(SkillFile),
-    /// An MCP server.
     McpServer(McpServer),
     /// A memory of the AI assistant.
     AiMemory(AiMemory),
@@ -1371,6 +1431,7 @@ impl Item {
     pub fn kind_str(&self) -> &'static str {
         match self {
             Self::Host(_) => "host",
+            Self::TelnetHost(_) => "telnet_host",
             Self::Group(_) => "group",
             Self::Key(_) => "key",
             Self::KnownHost(_) => "known_host",
@@ -1394,6 +1455,7 @@ impl Item {
     pub fn updated_at(&self) -> i64 {
         match self {
             Self::Host(i) => i.updated_at,
+            Self::TelnetHost(i) => i.updated_at,
             Self::Group(i) => i.updated_at,
             Self::Key(i) => i.updated_at,
             Self::KnownHost(i) => i.updated_at,
@@ -1416,6 +1478,7 @@ impl Item {
     pub fn set_updated_at(&mut self, at: i64) {
         match self {
             Self::Host(i) => i.updated_at = at,
+            Self::TelnetHost(i) => i.updated_at = at,
             Self::Group(i) => i.updated_at = at,
             Self::Key(i) => i.updated_at = at,
             Self::KnownHost(i) => i.updated_at = at,
@@ -1439,6 +1502,7 @@ impl Item {
     pub fn display_name(&self) -> String {
         match self {
             Self::Host(i) => i.name.clone(),
+            Self::TelnetHost(i) => i.name.clone(),
             Self::Group(i) => i.name.clone(),
             Self::Key(i) => i.name.clone(),
             Self::KnownHost(i) => format!("{}:{}", i.host, i.port),
@@ -1468,6 +1532,16 @@ impl Item {
     #[must_use]
     pub fn as_host(&self) -> Option<&Host> {
         if let Self::Host(h) = self {
+            Some(h)
+        } else {
+            None
+        }
+    }
+
+    /// The Telnet host, if this is one.
+    #[must_use]
+    pub fn as_telnet_host(&self) -> Option<&TelnetHost> {
+        if let Self::TelnetHost(h) = self {
             Some(h)
         } else {
             None
@@ -1621,6 +1695,7 @@ impl Item {
         let mut copy = self.clone();
         match &mut copy {
             Self::Host(i) => i.name.push_str(suffix),
+            Self::TelnetHost(i) => i.name.push_str(suffix),
             Self::Group(i) => i.name.push_str(suffix),
             Self::Key(i) => i.name.push_str(suffix),
             Self::Snippet(i) => i.name.push_str(suffix),
@@ -1970,9 +2045,35 @@ mod tests {
     }
 
     #[test]
+    fn telnet_hosts_keep_their_password_out_of_debug_and_empty_fields_out_of_json() {
+        let host = TelnetHost {
+            name: "core-switch".into(),
+            address: "10.0.0.2".into(),
+            password: Zeroizing::new("hunter2".into()),
+            ..TelnetHost::default()
+        };
+        assert!(!format!("{host:?}").contains("hunter2"));
+        let value = serde_json::to_value(Item::TelnetHost(host.clone())).unwrap();
+        assert_eq!(value["port"], 23);
+        assert_eq!(value["password"], "hunter2");
+        assert!(value.get("proxy").is_none());
+        assert!(value.get("ai_notes").is_none());
+        let bare = TelnetHost {
+            password: Zeroizing::default(),
+            ..host
+        };
+        let value = serde_json::to_value(Item::TelnetHost(bare)).unwrap();
+        assert!(value.get("password").is_none());
+        // Missing fields take their defaults.
+        let read = Item::from_plaintext(br#"{"type":"telnet_host","address":"r1"}"#).unwrap();
+        assert_eq!(read.as_telnet_host().unwrap().port, 23);
+    }
+
+    #[test]
     fn every_type_tag_round_trips() {
         let items = [
             (Item::Host(Host::default()), "host"),
+            (Item::TelnetHost(TelnetHost::default()), "telnet_host"),
             (Item::Group(Group::default()), "group"),
             (Item::Key(SshKey::default()), "key"),
             (Item::KnownHost(KnownHost::default()), "known_host"),
@@ -2617,12 +2718,14 @@ mod tests {
         assert_eq!(s.terminal.scrollback, 10_000);
         assert_eq!(s.terminal.right_click(), RightClick::platform_default());
         assert!(s.terminal.confirm_multiline_paste());
+        assert!(s.terminal.suggest_commands());
         let value = serde_json::to_value(Item::Settings(s)).unwrap();
         assert_eq!(value["terminal"]["theme"], "dark");
         assert_eq!(value["terminal"]["cursor_style"], "block");
         // Unset fields are left out, as builds that kept them device-local wrote them.
         assert!(value["terminal"].get("right_click").is_none());
         assert!(value["terminal"].get("confirm_multiline_paste").is_none());
+        assert!(value["terminal"].get("suggest_commands").is_none());
         assert!(value["terminal"].get("dark_scheme").is_none());
         assert!(value["terminal"].get("light_scheme").is_none());
     }
@@ -2637,16 +2740,28 @@ mod tests {
         let unset = read(json!({"font_size": 14}));
         assert_eq!(unset.right_click, None);
         assert_eq!(unset.confirm_multiline_paste, None);
-        let set = read(json!({"right_click":"copy_paste","confirm_multiline_paste":true}));
+        assert_eq!(unset.suggest_commands, None);
+        let set = read(json!({
+            "right_click": "copy_paste",
+            "confirm_multiline_paste": true,
+            "suggest_commands": true
+        }));
         assert_eq!(set.right_click, Some(RightClick::CopyPaste));
         assert_eq!(set.right_click(), RightClick::CopyPaste);
         assert_eq!(set.confirm_multiline_paste, Some(true));
-        let set = read(json!({"right_click":"menu","confirm_multiline_paste":false}));
+        assert_eq!(set.suggest_commands, Some(true));
+        let set = read(json!({
+            "right_click": "menu",
+            "confirm_multiline_paste": false,
+            "suggest_commands": false
+        }));
         assert_eq!(set.right_click(), RightClick::Menu);
         assert!(!set.confirm_multiline_paste());
+        assert!(!set.suggest_commands());
         let value = serde_json::to_value(&set).unwrap();
         assert_eq!(value["right_click"], "menu");
         assert_eq!(value["confirm_multiline_paste"], false);
+        assert_eq!(value["suggest_commands"], false);
         // An unknown future value still counts as a choice the user made.
         assert_eq!(
             read(json!({"right_click":"middle_paste"})).right_click,
@@ -2681,21 +2796,28 @@ mod tests {
         let mut t = TerminalSettings::default();
         t.set_right_click(default);
         t.set_confirm_multiline_paste(true);
+        t.set_suggest_commands(true);
         assert_eq!(t.right_click, None);
         assert_eq!(t.right_click(), default);
         assert_eq!(t.confirm_multiline_paste, None);
+        assert_eq!(t.suggest_commands, None);
 
         t.set_right_click(other);
         t.set_confirm_multiline_paste(false);
+        t.set_suggest_commands(false);
         assert_eq!(t.right_click, Some(other));
         assert_eq!(t.right_click(), other);
         assert_eq!(t.confirm_multiline_paste, Some(false));
+        assert_eq!(t.suggest_commands, Some(false));
+        assert!(!t.suggest_commands());
 
         // Once set, changing back to the default is recorded too.
         t.set_right_click(default);
         t.set_confirm_multiline_paste(true);
+        t.set_suggest_commands(true);
         assert_eq!(t.right_click, Some(default));
         assert_eq!(t.confirm_multiline_paste, Some(true));
+        assert_eq!(t.suggest_commands, Some(true));
     }
 
     #[test]

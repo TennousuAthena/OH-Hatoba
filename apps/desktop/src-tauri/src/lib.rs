@@ -1,37 +1,40 @@
 //! Hatoba desktop shell: Tauri commands, events and channels on top of `hatoba-core` (vault,
-//! crypto, sync) and `hatoba-ssh` (sessions, SFTP). The WebView never receives secrets (spec §3.2).
+//! crypto, sync), `hatoba-ssh` (sessions, SFTP) and `hatoba-assistant` (the AI assistant). The
+//! WebView never receives secrets (spec §3.2).
 
-mod ai;
+mod app_proxy;
 mod cli_access;
 mod commands;
 mod connection;
 mod convert;
 mod dashboard;
 mod deploy;
-mod dropped;
 mod dto;
-mod error;
 mod host;
 mod import;
 mod launch;
 mod local;
 mod lock;
 mod logging;
-mod mcp;
 mod notification;
 mod platform;
+mod remote_edit;
 mod ssh;
 mod ssh_agent;
 mod state;
 mod sync;
+mod telnet;
 mod tray;
 mod update;
 
 use commands::{
     ai as ai_cmd, allowances, app, cli, dashboard as dashboard_cmd, deploy as deploy_cmd, forwards,
-    hosts, import as import_cmd, keys, local as local_cmd, mcp as mcp_cmd, memory as memory_cmd,
-    proxies, quick, settings, sftp, skills, ssh as ssh_cmd, sync as sync_cmd, vault,
+    history, hosts, import as import_cmd, keys, local as local_cmd, mcp as mcp_cmd,
+    memory as memory_cmd, proxies, quick, settings, sftp, skills, ssh as ssh_cmd, sync as sync_cmd,
+    telnet as telnet_cmd, vault,
 };
+// `crate::error`: `AppError`, which every command returns, is in a crate the assistant's shares.
+use hatoba_ipc::error;
 use tauri::Manager;
 use tauri_specta::{collect_commands, collect_events};
 
@@ -89,6 +92,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             hosts::host_save,
             hosts::host_delete,
             hosts::host_duplicate,
+            hosts::hosts_arrange,
             hosts::host_set_favorite,
             hosts::host_set_show_stats,
             hosts::dashboard_set_shown,
@@ -123,6 +127,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             ssh_cmd::ssh_disconnect,
             ssh_cmd::ssh_stats_start,
             ssh_cmd::ssh_stats_stop,
+            ssh_cmd::ssh_suggestions,
             ssh_cmd::ssh_test,
             local_cmd::local_shells,
             local_cmd::local_open,
@@ -130,6 +135,18 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             local_cmd::local_write_bytes,
             local_cmd::local_resize,
             local_cmd::local_close,
+            telnet_cmd::telnet_hosts_list,
+            telnet_cmd::telnet_host_save,
+            telnet_cmd::telnet_host_delete,
+            telnet_cmd::telnet_host_duplicate,
+            telnet_cmd::telnet_host_set_favorite,
+            telnet_cmd::telnet_host_copy_password,
+            telnet_cmd::telnet_open,
+            telnet_cmd::telnet_open_target,
+            telnet_cmd::telnet_write,
+            telnet_cmd::telnet_write_bytes,
+            telnet_cmd::telnet_resize,
+            telnet_cmd::telnet_close,
             ssh_cmd::hostkey_respond,
             ssh_cmd::auth_prompt_respond,
             forwards::forwards_list_all,
@@ -146,6 +163,15 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             sftp::sftp_remove,
             sftp::sftp_mkdir,
             sftp::transfer_cancel,
+            sftp::sftp_edit_open,
+            sftp::sftp_edit_reopen,
+            sftp::sftp_edit_session,
+            sftp::sftp_edit_upload,
+            sftp::sftp_edit_discard,
+            sftp::sftp_edit_stop,
+            sftp::sftp_edit_changed,
+            sftp::sftp_edit_list,
+            sftp::sftp_edit_quit,
             sync_cmd::sync_status,
             sync_cmd::sync_test,
             sync_cmd::sync_configure,
@@ -177,6 +203,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             settings::prefs_save,
             settings::star_prompt_get,
             settings::star_prompt_done,
+            history::command_history_list,
+            history::command_history_add,
+            history::command_history_remove,
+            history::command_history_clear,
             ai_cmd::ai_providers_list,
             ai_cmd::ai_provider_save,
             ai_cmd::ai_provider_delete,
@@ -257,11 +287,15 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             dto::SyncStatus,
             dto::HostKeyPrompt,
             dto::AuthPrompt,
+            dto::AuthBanner,
+            dto::AuthPromptClosed,
             dto::SessionStateEvent,
             dto::TransferProgressEvent,
+            dto::RemoteEditEvent,
+            dto::RemoteEditQuitEvent,
             dto::ConnectionsEvent,
             dto::ForwardsLostEvent,
-            dto::McpServerStatus,
+            dto::McpStatusEvent,
             dto::WindowChromeEvent,
             dto::ZoomView,
             dto::LaunchEvent,
@@ -315,6 +349,8 @@ pub fn run() {
             let vault = hatoba_core::vault::Vault::open(&data_dir.join("vault.db"))?;
             let (window, mica) = platform::window::create_main_window(&handle)?;
             app.manage(state::AppState::new(vault, mica));
+            // SFTP-05: copies of edited files that a crash left behind go.
+            app.state::<state::AppState>().edits.init(&data_dir);
             // TERM-13: the page opens at this device's zoom, before the window shows.
             let prefs = app.state::<state::AppState>().vault().local_prefs();
             let zoom = prefs
@@ -368,9 +404,12 @@ pub fn run() {
                     let _ = tauri_specta::Event::emit(&zoom, app);
                 }
             }
-            // AI-35: the AI panel may read the files of the last drop, and no others.
+            // AI-35: the AI panel may read the files of the last drop, and no others. Nothing
+            // takes drops behind the lock screen (SEC-03).
             tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) => {
-                if let Some(state) = window.app_handle().try_state::<state::AppState>() {
+                if let Some(state) = window.app_handle().try_state::<state::AppState>()
+                    && state.vault().is_unlocked()
+                {
                     state.dropped.record(paths);
                 }
             }
@@ -396,6 +435,18 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building Hatoba")
         .run(|app, event| match event {
+            // SFTP-05: saves of edited files that did not upload are asked about first. An update's
+            // restart cannot wait.
+            tauri::RunEvent::ExitRequested { api, code, .. }
+                if code != Some(tauri::RESTART_EXIT_CODE)
+                    && app
+                        .try_state::<state::AppState>()
+                        .is_some_and(|state| state.edits.holds_quit()) =>
+            {
+                api.prevent_exit();
+                platform::window::reopen_main(app);
+                let _ = tauri_specta::Event::emit(&dto::RemoteEditQuitEvent, app);
+            }
             tauri::RunEvent::Exit => {
                 if let Some(state) = app.try_state::<state::AppState>() {
                     // AI-32: MCP servers stop when the app quits.
@@ -404,6 +455,11 @@ pub fn run() {
                     for (_, live) in state.local.take_all() {
                         live.close();
                     }
+                    for live in state.telnet.take_all() {
+                        live.close();
+                    }
+                    // SFTP-05: and editing ends, deleting the copies.
+                    state.edits.shutdown();
                 }
             }
             // macOS: a Dock click shows the window again. Every click counts, including one while

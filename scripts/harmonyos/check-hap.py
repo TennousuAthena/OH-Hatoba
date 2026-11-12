@@ -9,6 +9,9 @@ from zipfile import ZipFile
 ROOT = Path(__file__).resolve().parents[2]
 hap = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "platform/harmonyos/entry/build/default/outputs/default/entry-default-unsigned.hap"
 expected = json.loads((ROOT / "platform/harmonyos/AppScope/app.json5").read_text())["app"]
+upstream = json.loads((ROOT / "platform/harmonyos/upstream.json").read_text())
+version = json.loads((ROOT / "package.json").read_text())["version"]
+assert expected["versionName"] == upstream["version"] == version, "HarmonyOS, upstream baseline and workspace versions differ"
 desktop = ROOT / "apps/desktop/src-tauri"
 product_name = json.loads((desktop / "tauri.conf.json").read_text())["productName"]
 strings = json.loads((ROOT / "platform/harmonyos/AppScope/resources/base/element/string.json").read_text())["string"]

@@ -100,6 +100,7 @@ struct Index {
             hilog.info(0x0000, 'OH-Hatoba', 'Network probe passed and rendered');
           }
           if (this.diagnostics && event?.message.getMessage() === 'OH-Hatoba Web SSH transport passed') hilog.info(0x0000, 'OH-Hatoba', 'Web SSH transport passed');
+          if (this.diagnostics && event?.message.getMessage() === 'OH-Hatoba Web Telnet transport passed') hilog.info(0x0000, 'OH-Hatoba', 'Web Telnet transport passed');
           if (this.diagnostics && event?.message.getMessage() === 'OH-Hatoba diagnostic failed') hilog.error(0x0000, 'OH-Hatoba', 'Diagnostic failed');
           if (event?.message.getMessageLevel() === MessageLevel.Error) {
             hilog.error(0x0000, 'OH-Hatoba', 'P0 Web console error at line %{public}d', event.message.getLineNumber());

@@ -1,4 +1,4 @@
-//! Reading the command line of `hatoba hosts`, `hatoba exec` and `hatoba cp`.
+//! Reading the command line of `hatoba hosts`, `hatoba exec`, `hatoba cp` and `hatoba memory`.
 
 use std::ffi::OsString;
 
@@ -9,25 +9,75 @@ pub const HELP: &str = "\
 hatoba: use the hosts saved in Hatoba from the command line
 
 Usage:
-  hatoba hosts [--json]                         List the saved hosts
+  hatoba hosts [--json]                         List the saved SSH hosts
   hatoba exec [options] <host> [--] <command>   Run a command on a host
-  hatoba cp [--no-prompt] <source> <target>     Copy a file to or from a host
-  hatoba <host> | hatoba [user@]<address>       Open a terminal in Hatoba
+  hatoba cp [options] <source> <target>         Copy a file to or from a host
+  hatoba memory [--host <host>] [--json]        List the AI assistant's memories
+  hatoba memory save [--host <host>] <name> [<text>]
+                                                Save a memory
+  hatoba memory delete [--host <host>] <name>   Delete a memory
+  hatoba <name> | hatoba [user@]<address>       Open a terminal in Hatoba
+  hatoba telnet <address> [<port>]              Open a Telnet terminal in Hatoba
 
-<host> is the name or id of a saved host, as hatoba hosts lists them.
+<host> is the name or id of a saved SSH host, as hatoba hosts --json lists
+them; <name> is the name of a saved SSH or Telnet host. Any other first word
+also opens Hatoba, but a word one letter off a command, such as exce, fails.
 In cp, one side is <host>:<path> and the other a local path. A remote path is
 from the home directory. A target that is a folder or ends with / gets the file
-under its own name.
+under its own name. A file already at the target is replaced; on the host, the
+new file belongs to the login user and keeps the permissions of the file it
+replaces, or gets the default ones. A copy that fails leaves the old file as it
+was.
 
 Options:
   --cwd <dir>    Start the command in <dir>, absolute or from the home directory
+  --sudo         Run the command, or read or write the file on the host, as root
+  --mode <mode>  Give the file copied to the host this octal mode, such as 600
   --no-prompt    Fail instead of asking in Hatoba for a host key, password or code
   --json         Print the hosts as JSON
 
-exec runs the command with the host's login shell, without a terminal, and with
-an empty stdin. It prints the command's stdout and stderr as they come and exits
-with the command's exit status, or with 255 when Hatoba could not run it. hosts
-and cp exit with 1 when they fail. Passwords and keys stay in Hatoba.
+exec runs the command with the host's login shell and without a terminal. A
+stdin from a pipe or a file is the command's, as with ssh, so a script or a
+file's content needs no quoting: hatoba exec db 'sh -s' < deploy.sh. From a
+terminal or /dev/null, the command's stdin is empty. exec prints the command's
+stdout and stderr as they come and exits with the command's exit status, or
+with 255 when Hatoba failed, which may be after the command started. Ending
+exec stops the command and what it started; on hosts without sh, such as
+Windows, it may keep running. A command that ends by itself leaves what it
+started in the background running. hosts and cp exit with 1 when they fail,
+and a command line hatoba can't read exits with 2.
+
+--sudo runs the command as root through sudo, which has to let the login user
+run sh as root. The command starts in the same directory with the same shell,
+but with the environment sudo sets, so ~ and $HOME in it are root's. cp --sudo
+copies the file as root, as sudo cp would: a file already at the target keeps
+its owner and permissions, a new one belongs to root, --mode sets the
+permissions of either, and a copy to the host that fails while writing can
+leave the file cut short. When sudo asks for a password, Hatoba tries the
+host's saved password, then asks in its window and remembers the answer until
+it locks or the host has had no --sudo for 15 minutes.
+
+A host key not trusted yet, or a password or code that isn't saved, is asked in
+the Hatoba window, and the command waits up to 10 minutes for the answer. A
+jump host can't ask for a password: it needs a saved one, a key or the SSH
+agent. Passwords and keys stay in Hatoba. A message the server sends while
+signing in goes to stderr. Without --no-prompt, the command waits while the
+server holds the login, as Tailscale SSH does until you sign in at the link it
+prints.
+
+memory reads and changes what Hatoba's AI assistant remembers between
+conversations: notes that it, the user and other programs save, such as a
+host's paths, services and quirks. The assistant starts its conversations with
+them, and Settings > AI > Memory lists them. Without --host, memory lists the
+global ones, which hold everywhere; with it, those and then the host's own.
+save keeps <text>, or its stdin when there is none, under <name>, in place of
+the memory of that name: as a global memory, or with --host as one of that
+host. delete removes one. Save what will still matter later and can't be found
+by looking: a correction or preference of the user, or a fact about their hosts
+and setup. Leave out what only matters to the task at hand, what the host's
+ai_notes already say, and passwords, keys or tokens. When a memory turns out
+wrong or out of date, save it again or delete it instead of adding another.
+Where a memory differs from a host's ai_notes, follow those.
 
 Hatoba has to be running and unlocked, with Settings > General >
 \"Let other programs use saved hosts\" on.
@@ -45,11 +95,29 @@ pub enum Command {
         command: String,
         cwd: Option<String>,
         prompt: bool,
+        sudo: bool,
     },
     Copy {
         source: Place,
         target: Place,
         prompt: bool,
+        sudo: bool,
+        /// The permission bits of the file a copy to the host writes.
+        mode: Option<u32>,
+    },
+    Memories {
+        host: Option<String>,
+        json: bool,
+    },
+    MemorySave {
+        host: Option<String>,
+        name: String,
+        /// `None` takes the text from stdin.
+        content: Option<String>,
+    },
+    MemoryDelete {
+        host: Option<String>,
+        name: String,
     },
     /// Anything else opens Hatoba with these arguments (HOST-13).
     Open(Vec<OsString>),
@@ -63,7 +131,16 @@ pub enum Place {
 }
 
 /// The words that are this command's own when they come first.
-pub const COMMANDS: &[&str] = &["hosts", "exec", "cp", "help", "-h", "--help", "--version"];
+pub const COMMANDS: &[&str] = &[
+    "hosts",
+    "exec",
+    "cp",
+    "memory",
+    "help",
+    "-h",
+    "--help",
+    "--version",
+];
 
 /// Reads the arguments after the program.
 pub fn parse(args: Vec<OsString>) -> Result<Command, String> {
@@ -71,6 +148,9 @@ pub fn parse(args: Vec<OsString>) -> Result<Command, String> {
         return Ok(Command::Open(args));
     };
     if !COMMANDS.contains(&first) {
+        if let Some(command) = misspelled(first) {
+            return Err(format!("{first} is not a command. Did you mean {command}?"));
+        }
         return Ok(Command::Open(args));
     }
     let rest = args[1..]
@@ -85,8 +165,34 @@ pub fn parse(args: Vec<OsString>) -> Result<Command, String> {
         "hosts" => hosts(&rest),
         "exec" => exec(rest),
         "cp" => copy(&rest),
+        "memory" => memory(rest),
         "--version" => Ok(Command::Version),
         _ => Ok(Command::Help),
+    }
+}
+
+/// The command `word` is one letter off, by a typo or two letters swapped, as `exce` is from
+/// `exec`. `cp` is left out: a two-letter host name is as likely as a typo of it.
+fn misspelled(word: &str) -> Option<&'static str> {
+    const LONG: [&str; 5] = ["hosts", "exec", "memory", "help", "telnet"];
+    let word = word.to_ascii_lowercase();
+    LONG.into_iter()
+        .find(|command| word != *command && one_letter_off(&word, command))
+}
+
+/// Whether `a` becomes `b` by adding, removing or changing one character, or swapping two that
+/// are next to each other.
+fn one_letter_off(a: &str, b: &str) -> bool {
+    let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
+    let start = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
+    let (a, b) = (&a[start..], &b[start..]);
+    match (a.len(), b.len()) {
+        (m, n) if m == n => {
+            a[1..] == b[1..] || (m >= 2 && a[0] == b[1] && a[1] == b[0] && a[2..] == b[2..])
+        }
+        (m, n) if m == n + 1 => a[1..] == *b,
+        (m, n) if m + 1 == n => *a == b[1..],
+        _ => false,
     }
 }
 
@@ -107,6 +213,7 @@ fn hosts(args: &[String]) -> Result<Command, String> {
 fn exec(args: Vec<String>) -> Result<Command, String> {
     let mut cwd = None;
     let mut prompt = true;
+    let mut sudo = false;
     let mut host = None;
     let mut args = args.into_iter();
     let mut command = Vec::new();
@@ -118,6 +225,7 @@ fn exec(args: Vec<String>) -> Result<Command, String> {
             }
             "--cwd" => cwd = Some(args.next().ok_or("--cwd needs a directory")?),
             "--no-prompt" => prompt = false,
+            "--sudo" => sudo = true,
             "-h" | "--help" => return Ok(Command::Help),
             a if a.starts_with("--cwd=") => cwd = Some(a["--cwd=".len()..].to_owned()),
             a if a.starts_with('-') && a != "-" => {
@@ -145,16 +253,26 @@ fn exec(args: Vec<String>) -> Result<Command, String> {
         command,
         cwd: cwd.filter(|d| !d.is_empty()),
         prompt,
+        sudo,
     })
 }
 
 fn copy(args: &[String]) -> Result<Command, String> {
     let mut prompt = true;
+    let mut sudo = false;
+    let mut mode = None;
     let mut paths = Vec::new();
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--no-prompt" => prompt = false,
+            "--sudo" => sudo = true,
+            "--mode" => {
+                mode = Some(octal(
+                    args.next().ok_or("--mode needs a mode, such as 600")?,
+                )?)
+            }
+            a if a.starts_with("--mode=") => mode = Some(octal(&a["--mode=".len()..])?),
             "-h" | "--help" => return Ok(Command::Help),
             "--" => {
                 paths.extend(args.by_ref().map(String::as_str));
@@ -173,17 +291,132 @@ fn copy(args: &[String]) -> Result<Command, String> {
     };
     let (source, target) = (place(source), place(target));
     match (&source, &target) {
+        (Place::Remote { .. }, Place::Local(_)) if mode.is_some() => {
+            Err("--mode is for a copy to a host".into())
+        }
         (Place::Local(_), Place::Remote { .. }) | (Place::Remote { .. }, Place::Local(_)) => {
             Ok(Command::Copy {
                 source,
                 target,
                 prompt,
+                sudo,
+                mode,
             })
         }
         _ => Err(
             "one of the source and the target has to be <host>:<path>, the other a local path"
                 .into(),
         ),
+    }
+}
+
+/// What `hatoba memory` does.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum MemoryAction {
+    List,
+    Save,
+    Delete,
+}
+
+/// `list` (or nothing), `save` or `delete`, then the name, then for a save its text, which starts
+/// at the first other argument after the name and takes the rest, joined with spaces. Options come
+/// anywhere before the text.
+fn memory(args: Vec<String>) -> Result<Command, String> {
+    use MemoryAction::{Delete, List, Save};
+    let mut host = None;
+    let mut json = false;
+    let mut action = None;
+    let mut name: Option<String> = None;
+    let mut text = Vec::new();
+    let mut options = true;
+    let mut args = args.into_iter();
+    while let Some(arg) = args.next() {
+        if options {
+            match arg.as_str() {
+                "--" => {
+                    options = false;
+                    continue;
+                }
+                "--host" => {
+                    host = Some(args.next().ok_or("--host needs a host")?);
+                    continue;
+                }
+                "--json" => {
+                    json = true;
+                    continue;
+                }
+                "-h" | "--help" => return Ok(Command::Help),
+                a if a.starts_with("--host=") => {
+                    host = Some(a["--host=".len()..].to_owned());
+                    continue;
+                }
+                a if a.starts_with('-') && a != "-" => {
+                    return Err(format!(
+                        "memory does not take {a}; put -- before a name or a text that starts \
+                         with -"
+                    ));
+                }
+                _ => {}
+            }
+        }
+        match action {
+            None => {
+                action = Some(match arg.as_str() {
+                    "list" => List,
+                    "save" => Save,
+                    "delete" => Delete,
+                    other => {
+                        return Err(format!("memory takes list, save or delete, not {other}"));
+                    }
+                });
+            }
+            Some(List) => return Err(format!("memory list does not take {arg}")),
+            Some(_) if name.is_none() => name = Some(arg),
+            Some(Save) => {
+                text.push(arg);
+                text.extend(args.by_ref());
+            }
+            Some(Delete) => {
+                return Err(format!(
+                    "delete takes one name; put quotes around a name with spaces, such as \
+                     \"{} {arg}\"",
+                    name.unwrap_or_default()
+                ));
+            }
+        }
+    }
+    if host.as_deref().is_some_and(|h: &str| h.trim().is_empty()) {
+        return Err("--host needs a host".into());
+    }
+    let action = action.unwrap_or(List);
+    if json && action != List {
+        return Err("--json is for listing memories".into());
+    }
+    match (action, name) {
+        (List, _) => Ok(Command::Memories { host, json }),
+        (Save, Some(name)) => Ok(Command::MemorySave {
+            host,
+            name,
+            content: (!text.is_empty()).then(|| text.join(" ")),
+        }),
+        (Save, None) => {
+            Err("save needs a name: hatoba memory save [--host <host>] <name> [<text>]".into())
+        }
+        (Delete, Some(name)) => Ok(Command::MemoryDelete { host, name }),
+        (Delete, None) => {
+            Err("delete needs a name: hatoba memory delete [--host <host>] <name>".into())
+        }
+    }
+}
+
+/// A mode in octal, as `chmod` takes it: three or four digits, such as 600 or 0755.
+fn octal(text: &str) -> Result<u32, String> {
+    let valid = (3..=4).contains(&text.len()) && text.bytes().all(|b| (b'0'..=b'7').contains(&b));
+    match u32::from_str_radix(text, 8) {
+        Ok(mode) if valid => Ok(mode),
+        _ => Err(format!(
+            "--mode takes three or four octal digits, such as 600 or 0755, not {text}"
+        )),
     }
 }
 
@@ -230,6 +463,34 @@ mod tests {
     }
 
     #[test]
+    fn a_misspelled_command_fails_instead_of_opening_hatoba() {
+        for (word, command) in [
+            ("exce", "exec"),
+            ("exe", "exec"),
+            ("exex", "exec"),
+            ("eexec", "exec"),
+            ("host", "hosts"),
+            ("hsots", "hosts"),
+            ("hlep", "help"),
+            ("telent", "telnet"),
+            ("memroy", "memory"),
+            ("memor", "memory"),
+        ] {
+            assert_eq!(
+                parse_words(&[word, "db", "ls"]),
+                Err(format!("{word} is not a command. Did you mean {command}?"))
+            );
+        }
+        // Host names that only look a little like a command.
+        for word in ["db", "cpp", "ghost", "web1", "exec.example.com", "Help"] {
+            assert!(
+                matches!(parse_words(&[word]), Ok(Command::Open(_))),
+                "{word}"
+            );
+        }
+    }
+
+    #[test]
     fn exec_takes_options_then_the_host_then_the_command() {
         let exec = |host: &str, command: &str, cwd: Option<&str>, prompt| {
             Ok(Command::Exec {
@@ -237,6 +498,7 @@ mod tests {
                 command: command.into(),
                 cwd: cwd.map(Into::into),
                 prompt,
+                sudo: false,
             })
         };
         assert_eq!(
@@ -263,6 +525,21 @@ mod tests {
             parse_words(&["exec", "db", "cd /app && make"]),
             exec("db", "cd /app && make", None, true)
         );
+        assert_eq!(
+            parse_words(&["exec", "--sudo", "db", "systemctl", "restart", "nginx"]),
+            Ok(Command::Exec {
+                host: "db".into(),
+                command: "systemctl restart nginx".into(),
+                cwd: None,
+                prompt: true,
+                sudo: true,
+            })
+        );
+        // Once the command starts, --sudo is the command's.
+        assert_eq!(
+            parse_words(&["exec", "db", "ls", "--sudo"]),
+            exec("db", "ls --sudo", None, true)
+        );
         assert!(parse_words(&["exec", "db"]).is_err());
         assert!(parse_words(&["exec"]).is_err());
         assert!(parse_words(&["exec", "db", "--cwd"]).is_err());
@@ -281,10 +558,18 @@ mod tests {
                     path: "/tmp/".into()
                 },
                 prompt: true,
+                sudo: false,
+                mode: None,
             })
         );
         assert_eq!(
-            parse_words(&["cp", "--no-prompt", "My Server:logs/a.log", "./a:b.log"]),
+            parse_words(&[
+                "cp",
+                "--no-prompt",
+                "My Server:logs/a.log",
+                "--sudo",
+                "./a:b.log"
+            ]),
             Ok(Command::Copy {
                 source: Place::Remote {
                     host: "My Server".into(),
@@ -292,6 +577,8 @@ mod tests {
                 },
                 target: Place::Local("./a:b.log".into()),
                 prompt: false,
+                sudo: true,
+                mode: None,
             })
         );
         assert_eq!(
@@ -303,8 +590,34 @@ mod tests {
                     path: String::new()
                 },
                 prompt: true,
+                sudo: false,
+                mode: None,
             })
         );
+        for words in [
+            &["cp", "--mode", "600", "wg0.conf", "db:/etc/wireguard/"][..],
+            &["cp", "wg0.conf", "--mode=0600", "db:/etc/wireguard/"],
+        ] {
+            assert!(
+                matches!(
+                    parse_words(words),
+                    Ok(Command::Copy {
+                        mode: Some(0o600),
+                        ..
+                    })
+                ),
+                "{words:?}"
+            );
+        }
+        for words in [
+            &["cp", "--mode", "rw", "a", "db:"][..],
+            &["cp", "--mode", "800", "a", "db:"],
+            &["cp", "--mode=60", "a", "db:"],
+            &["cp", "--mode", "600", "db:a", "a"],
+            &["cp", "a", "db:", "--mode"],
+        ] {
+            assert!(parse_words(words).is_err(), "{words:?}");
+        }
         assert!(parse_words(&["cp", "-report.txt", "db:"]).is_err());
         assert!(parse_words(&["cp", "a", "b"]).is_err());
         assert!(parse_words(&["cp", "db:a", "web:b"]).is_err());
@@ -312,6 +625,90 @@ mod tests {
         if cfg!(windows) {
             assert_eq!(place(r"C:\x\y"), Place::Local(r"C:\x\y".into()));
         }
+    }
+
+    #[test]
+    fn memory_lists_saves_and_deletes() {
+        let list = |host: Option<&str>, json| {
+            Ok(Command::Memories {
+                host: host.map(Into::into),
+                json,
+            })
+        };
+        assert_eq!(parse_words(&["memory"]), list(None, false));
+        assert_eq!(parse_words(&["memory", "list", "--json"]), list(None, true));
+        assert_eq!(
+            parse_words(&["memory", "--host", "My Server"]),
+            list(Some("My Server"), false)
+        );
+        assert_eq!(
+            parse_words(&["memory", "--json", "--host=db", "list"]),
+            list(Some("db"), true)
+        );
+
+        let save = |host: Option<&str>, name: &str, content: Option<&str>| {
+            Ok(Command::MemorySave {
+                host: host.map(Into::into),
+                name: name.into(),
+                content: content.map(Into::into),
+            })
+        };
+        // Without a text, it comes from stdin.
+        assert_eq!(
+            parse_words(&["memory", "save", "sudo"]),
+            save(None, "sudo", None)
+        );
+        assert_eq!(
+            parse_words(&["memory", "save", "--host", "db", "sudo use", "Uses doas."]),
+            save(Some("db"), "sudo use", Some("Uses doas."))
+        );
+        // Options come anywhere before the text, which takes the rest.
+        assert_eq!(
+            parse_words(&[
+                "memory",
+                "--host",
+                "db",
+                "save",
+                "logs",
+                "--host=web",
+                "in",
+                "--json"
+            ]),
+            save(Some("web"), "logs", Some("in --json"))
+        );
+        assert_eq!(
+            parse_words(&["memory", "save", "--", "-x", "--host"]),
+            save(None, "-x", Some("--host"))
+        );
+
+        assert_eq!(
+            parse_words(&["memory", "delete", "sudo use", "--host", "db"]),
+            Ok(Command::MemoryDelete {
+                host: Some("db".into()),
+                name: "sudo use".into(),
+            })
+        );
+
+        for words in [
+            &["memory", "sudo"][..],
+            &["memory", "list", "sudo"],
+            &["memory", "save"],
+            &["memory", "save", "--host", "db"],
+            &["memory", "save", "--json", "sudo", "x"],
+            &["memory", "save", "-x", "y"],
+            &["memory", "delete"],
+            &["memory", "delete", "sudo", "use"],
+            &["memory", "delete", "--json", "sudo"],
+            &["memory", "--host"],
+            &["memory", "--host", " "],
+            &["memory", "--host="],
+        ] {
+            assert!(parse_words(words).is_err(), "{words:?}");
+        }
+        assert_eq!(
+            parse_words(&["memory", "save", "--help"]),
+            Ok(Command::Help)
+        );
     }
 
     #[test]

@@ -18,7 +18,8 @@ use crate::commands::quick;
 use crate::connection;
 use crate::convert::stats_view;
 use crate::dto::{
-    ConnectOptions, HostInput, QuickTarget, SessionState, SessionStateEvent, StatsEvent, TestResult,
+    ConnectOptions, HostInput, QuickTarget, ServerSuggestionsView, SessionState, SessionStateEvent,
+    StatsEvent, TestResult,
 };
 use crate::error::{AppError, AppResult, SshErrorKind};
 use crate::ssh::{LiveSession, Overrides, build_config, connect_with, resolve_proxy};
@@ -26,7 +27,7 @@ use crate::state::AppState;
 
 pub(crate) const FRAME_DATA: u8 = 0;
 pub(crate) const FRAME_CLOSED: u8 = 1;
-const FRAME_ERROR: u8 = 2;
+pub(crate) const FRAME_ERROR: u8 = 2;
 /// The session id, sent before connecting: the tab can then answer the session's host-key and
 /// login prompts for itself if it closes while they are open.
 const FRAME_SESSION: u8 = 3;
@@ -403,6 +404,8 @@ pub async fn ssh_stats_start(
     session_id: String,
     channel: Channel<StatsEvent>,
 ) -> AppResult<u64> {
+    // SEC-03: nothing runs on the server behind the lock screen.
+    state.with_unlocked(|_| Ok(()))?;
     // Taken before the round trip to the server, so ids follow the order the starts arrived in.
     let id = NEXT_STATS_ID.fetch_add(1, Ordering::Relaxed);
     let live = state.ssh.get(&session_id)?;
@@ -433,6 +436,26 @@ pub fn ssh_stats_stop(state: State<'_, AppState>, session_id: String, stats_id: 
     if let Ok(live) = state.ssh.get(&session_id) {
         live.stop_stats(stats_id);
     }
+}
+
+/// Reads what command suggestions take from the server of an SSH tab (TERM-16): its shell's history
+/// and the command names on its `PATH`, over an exec channel of the tab's connection that closes
+/// once it has answered. `null` for a server whose identification string names FreeBSD, NetBSD or
+/// Windows (HOST-11), on which nothing is run; an error for one that refuses the channel.
+#[cfg_attr(feature = "desktop-host", tauri::command)]
+#[cfg_attr(feature = "desktop-host", specta::specta)]
+pub async fn ssh_suggestions(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> AppResult<Option<ServerSuggestionsView>> {
+    // SEC-03: nothing runs on the server behind the lock screen.
+    state.with_unlocked(|_| Ok(()))?;
+    let live = state.ssh.get(&session_id)?;
+    let found = live.session.suggestions().await?;
+    Ok(found.map(|s| ServerSuggestionsView {
+        history: s.history,
+        commands: s.commands,
+    }))
 }
 
 #[cfg_attr(feature = "desktop-host", tauri::command)]

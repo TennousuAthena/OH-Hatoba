@@ -1,0 +1,319 @@
+.md {
+  font-size: var(--text-md);
+  line-height: 1.6;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.md > :first-child {
+  margin-top: 0;
+}
+
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md p {
+  margin: 0 0 8px;
+}
+
+.md h1,
+.md h2,
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
+  margin: 14px 0 6px;
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.md h1 {
+  font-size: var(--text-xl);
+}
+
+.md h2 {
+  font-size: var(--text-lg);
+}
+
+.md ul,
+.md ol {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+
+.md li {
+  margin: 2px 0;
+}
+
+.md li > p {
+  margin: 0;
+}
+
+.md li input[type="checkbox"] {
+  margin: 0 6px 0 -2px;
+  vertical-align: -1px;
+}
+
+.md blockquote {
+  margin: 0 0 8px;
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid var(--line2);
+  color: var(--fg2);
+}
+
+.md hr {
+  height: 0.5px;
+  margin: 12px 0;
+  border: 0;
+  background: var(--line2);
+}
+
+.md a {
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.md :not(pre) > code {
+  padding: 1px 4px;
+  border-radius: var(--radius-xs);
+  background: var(--fill);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+.codeBlock {
+  position: relative;
+  margin: 0 0 8px;
+}
+
+.codeBlock pre {
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  background: var(--group);
+  box-shadow: inset 0 0 0 0.5px var(--line2);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.codeBlock pre code {
+  font-family: inherit;
+}
+
+/* Syntax colors (`highlight.ts`), after Atom One, darkened or lightened where a color was too faint
+   for small text on the panel. */
+.codeBlock {
+  --code-comment: #6f737b;
+  --code-keyword: #a626a4;
+  --code-string: #3b8638;
+  --code-number: #986801;
+  --code-function: #3a6fe0;
+  --code-type: #a36b00;
+  --code-tag: #d23f31;
+  --code-literal: #0b7fae;
+}
+
+:root[data-theme="dark"] .codeBlock {
+  --code-comment: #868b94;
+  --code-keyword: #c678dd;
+  --code-string: #98c379;
+  --code-number: #d19a66;
+  --code-function: #61afef;
+  --code-type: #e5c07b;
+  --code-tag: #e06c75;
+  --code-literal: #56b6c2;
+}
+
+.codeBlock :global(.hljs-comment),
+.codeBlock :global(.hljs-quote) {
+  color: var(--code-comment);
+}
+
+.codeBlock :global(.hljs-keyword),
+.codeBlock :global(.hljs-doctag),
+.codeBlock :global(.hljs-formula) {
+  color: var(--code-keyword);
+}
+
+.codeBlock :global(.hljs-string),
+.codeBlock :global(.hljs-regexp),
+.codeBlock :global(.hljs-addition),
+.codeBlock :global(.hljs-attribute),
+.codeBlock :global(.hljs-meta .hljs-string) {
+  color: var(--code-string);
+}
+
+.codeBlock :global(.hljs-number),
+.codeBlock :global(.hljs-attr),
+.codeBlock :global(.hljs-variable),
+.codeBlock :global(.hljs-template-variable),
+.codeBlock :global(.hljs-type),
+.codeBlock :global(.hljs-selector-class),
+.codeBlock :global(.hljs-selector-attr),
+.codeBlock :global(.hljs-selector-pseudo) {
+  color: var(--code-number);
+}
+
+.codeBlock :global(.hljs-title),
+.codeBlock :global(.hljs-symbol),
+.codeBlock :global(.hljs-bullet),
+.codeBlock :global(.hljs-link),
+.codeBlock :global(.hljs-meta),
+.codeBlock :global(.hljs-selector-id) {
+  color: var(--code-function);
+}
+
+.codeBlock :global(.hljs-built_in),
+.codeBlock :global(.hljs-title.class_),
+.codeBlock :global(.hljs-class .hljs-title) {
+  color: var(--code-type);
+}
+
+.codeBlock :global(.hljs-section),
+.codeBlock :global(.hljs-name),
+.codeBlock :global(.hljs-selector-tag),
+.codeBlock :global(.hljs-deletion),
+.codeBlock :global(.hljs-subst) {
+  color: var(--code-tag);
+}
+
+.codeBlock :global(.hljs-literal) {
+  color: var(--code-literal);
+}
+
+.codeBlock :global(.hljs-section),
+.codeBlock :global(.hljs-strong) {
+  font-weight: 600;
+}
+
+.codeBlock :global(.hljs-link) {
+  text-decoration: underline;
+}
+
+.copy {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 24px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: var(--btn);
+  box-shadow: var(--shadow-btn);
+  color: var(--fg2);
+  opacity: 0;
+  transition-property: opacity, background-color, color;
+  transition-duration: var(--motion-fade);
+  transition-timing-function: var(--ease-out);
+}
+
+.codeBlock:hover .copy,
+.copy:focus-visible {
+  opacity: 1;
+}
+
+/* Tables as Claude and ChatGPT draw them: a rounded hairline box, rules between rows only, and a
+   bold header over a stronger rule. A narrow table fills the width; a wide one scrolls. */
+.tableWrap {
+  margin: 0 0 8px;
+  overflow-x: auto;
+  border: 0.5px solid var(--line2);
+  border-radius: var(--radius-sm);
+}
+
+/* Cells wrap between words only, so a table too wide for the panel scrolls rather than breaking a
+   host name or an address in the middle. */
+.md table {
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  overflow-wrap: normal;
+}
+
+.md th,
+.md td {
+  padding: 6px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.md th {
+  border-bottom: 1px solid var(--line2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.md tbody tr + tr > td {
+  border-top: 0.5px solid var(--line);
+}
+
+.details {
+  margin: 0 0 8px;
+}
+
+.summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-height: 22px;
+  padding: 0 7px 0 5px;
+  margin-left: -5px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+}
+
+.summary:hover {
+  background: var(--fill);
+}
+
+.detailsBody {
+  margin-top: 4px;
+}
+
+.detailsBody > :last-child {
+  margin-bottom: 0;
+}
+
+.image {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.badLink {
+  text-decoration: underline dotted var(--fg3);
+}
+
+/* A caret after the last block while the response streams. */
+.streaming > :last-child::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 13px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  border-radius: var(--radius-hair);
+  background: var(--accent);
+  animation: blink 1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}

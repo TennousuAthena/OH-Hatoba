@@ -83,6 +83,10 @@ pub async fn lock_vault(app: &AppHandle, reason: LockReason) {
             state.connections.note_current(&vault);
         }
         vault.lock();
+        // TELNET-03: under the same guard, a Telnet tab kept open types no saved login behind
+        // the lock screen. A tab that connects later fails, as `telnet_open` checks the vault
+        // where it registers the session.
+        state.telnet.stop_logins();
         was
     };
     if was_unlocked {
@@ -90,6 +94,8 @@ pub async fn lock_vault(app: &AppHandle, reason: LockReason) {
         let _ = VaultLockedEvent { reason }.emit(app);
     }
     sync::stop(app);
+    // SEC-01: nor does the password of the proxy for Hatoba.
+    crate::app_proxy::forget(app);
     // DEPLOY-07: a deployment's tokens do not outlive the unlocked vault.
     state.deploy.clear();
     // HOST-14: the dashboard reads nothing behind the lock screen, and its connections close.
@@ -100,6 +106,11 @@ pub async fn lock_vault(app: &AppHandle, reason: LockReason) {
     // close.
     #[cfg(feature = "desktop-host")]
     state.cli.lock(app);
+    // SFTP-05: editing pauses, so nothing uploads behind the lock screen.
+    #[cfg(feature = "desktop-host")]
+    state.edits.lock();
+    // AI-35: files dropped before the lock cannot be read after the unlock.
+    state.dropped.clear();
     let disconnect = async {
         if disconnects_on_lock(&state) {
             // The sessions open now: one opened after an unlock in the meantime stays.
@@ -108,6 +119,10 @@ pub async fn lock_vault(app: &AppHandle, reason: LockReason) {
             let connections = state.connections.take_all();
             #[cfg(feature = "desktop-host")]
             let locals = state.local.take_all();
+            // Telnet tabs have no tool writes of the assistant to wait for.
+            for live in state.telnet.take_all() {
+                live.close();
+            }
             let ssh = futures::future::join_all(sessions.into_iter().map(|(id, live)| {
                 let ai = &state.ai;
                 async move {

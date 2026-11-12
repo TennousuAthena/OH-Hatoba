@@ -357,6 +357,14 @@ pub fn on_unlock(app: &AppHandle) {
     trigger(app, Trigger::Unlock);
 }
 
+/// Builds the backend again from the saved config and syncs, so that sync goes through the proxy
+/// set since (`app_proxy`). Does nothing while sync has no backend.
+pub fn reconnect(app: &AppHandle) {
+    if state(app).sync.backend().is_some() {
+        on_unlock(app);
+    }
+}
+
 /// Stops syncing (on lock), and the backend forgets its credentials. It is rebuilt from the
 /// credential store on the next unlock.
 pub fn stop(app: &AppHandle) {
@@ -437,7 +445,7 @@ pub fn status(app: &AppHandle) -> SyncStatus {
         let (mut hosts, mut keys, mut groups) = (0, 0, 0);
         for (_, item) in vault.items() {
             match item {
-                Item::Host(_) => hosts += 1,
+                Item::Host(_) | Item::TelnetHost(_) => hosts += 1,
                 Item::Key(_) => keys += 1,
                 Item::Group(_) => groups += 1,
                 _ => {}
@@ -500,13 +508,24 @@ pub fn emit_status(app: &AppHandle) {
 fn conflict_suffix(app: &AppHandle) -> &'static str {
     use crate::dto::Language;
     let lang = match crate::commands::settings::prefs_get(state(app)).map(|p| p.language) {
-        Ok(Language::ZhCn) => "zh".to_owned(),
+        Ok(Language::ZhCn) => "zh-cn".to_owned(),
+        Ok(Language::ZhTw) => "zh-tw".to_owned(),
         Ok(Language::Ja) => "ja".to_owned(),
         Ok(Language::En) => "en".to_owned(),
         _ => crate::platform::system::locale(),
     };
     if lang.starts_with("zh") {
-        "（冲突副本）"
+        // Traditional Chinese for Taiwan, Hong Kong and Macau, and wherever the script is named, as
+        // `detectLocale` in the frontend picks it.
+        let traditional = matches!(
+            lang.split(['-', '_', '.']).nth(1),
+            Some("hant" | "tw" | "hk" | "mo")
+        );
+        if traditional {
+            "（衝突副本）"
+        } else {
+            "（冲突副本）"
+        }
     } else if lang.starts_with("ja") {
         "（競合コピー）"
     } else {
@@ -566,10 +585,13 @@ pub async fn run_round(app: &AppHandle) -> AppResult<()> {
                 adopt_legacy_prefs(app);
                 // AI-52: a ChatGPT provider deleted on another device ends its session here.
                 if report.pulled > 0 {
-                    crate::ai::chatgpt::end_orphaned(&st);
+                    hatoba_assistant::ai::chatgpt::end_orphaned(&st.vault);
                     // FWD-05: a rule deleted on another device stops here, and one renamed there
                     // is renamed in the tray.
                     crate::connection::rules_changed(app);
+                    // SSH-13: the proxy of this device's own connections, edited or deleted on
+                    // another device.
+                    crate::app_proxy::refresh(app);
                 }
             }
             Ok(())

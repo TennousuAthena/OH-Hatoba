@@ -36,9 +36,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
-      - run: pnpm --filter @hatoba/desktop typecheck
-      - run: pnpm --filter @hatoba/desktop lint
-      - run: pnpm --filter @hatoba/desktop test
+      - run: pnpm --filter @hatoba/ui --filter @hatoba/desktop typecheck
+      - run: pnpm --filter @hatoba/ui --filter @hatoba/desktop lint
+      - run: pnpm --filter @hatoba/ui --filter @hatoba/desktop test
       - run: pnpm --filter @hatoba/desktop build
 
   worker:
@@ -81,8 +81,9 @@ jobs:
       # Includes checks that the app's version files agree, and that the Worker's do.
       - run: node --test "scripts/**/*.test.mjs"
 
-  # Pull requests that change nothing the Rust jobs build or check skip them. A job skipped by its
-  # `if` passes as a required check. Pushes and manual runs run them all.
+  # Pull requests that change nothing the Rust jobs build or check, apart from the release version,
+  # skip them. A job skipped by its `if` passes as a required check. Pushes and manual runs run them
+  # all.
   changes:
     name: Changes
     if: github.event_name == 'pull_request'
@@ -163,7 +164,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @hatoba/desktop build
-      - run: cargo test -p hatoba-core -p hatoba-ssh -p hatoba-ai -p hatoba-local -p hatoba-desktop
+      - run: cargo test -p hatoba-core -p hatoba-ssh -p hatoba-ai -p hatoba-local -p hatoba-telnet -p hatoba-ipc -p hatoba-assistant -p hatoba-cli -p hatoba-desktop
 
   windows-installer:
     name: Windows installer

@@ -8,6 +8,8 @@ export interface HostCapabilities {
   tray: boolean;
   updater: boolean;
   folderPicker: boolean;
+  externalEditor: boolean;
+  systemProxy: boolean;
 }
 const desktop: HostCapabilities = {
   localTerminal: true,
@@ -17,6 +19,8 @@ const desktop: HostCapabilities = {
   tray: true,
   updater: true,
   folderPicker: true,
+  externalEditor: true,
+  systemProxy: true,
 };
 const restricted: HostCapabilities = {
   localTerminal: false,
@@ -26,6 +30,8 @@ const restricted: HostCapabilities = {
   tray: false,
   updater: false,
   folderPicker: false,
+  externalEditor: false,
+  systemProxy: false,
 };
 let capabilities: HostCapabilities | undefined;
 let surfaceObserver: MutationObserver | undefined;

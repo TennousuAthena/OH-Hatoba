@@ -7,24 +7,28 @@ use std::time::Instant;
 use crate::host::{AppHandle, Manager};
 use hatoba_core::vault::Vault;
 
-use crate::ai::AiManager;
+use crate::app_proxy::AppProxy;
 #[cfg(feature = "desktop-host")]
 use crate::cli_access::CliAccess;
 use crate::connection::Connections;
 use crate::dashboard::Dashboard;
 use crate::deploy::Deployments;
-use crate::dropped::DroppedPaths;
 use crate::error::{AppError, AppResult};
 #[cfg(feature = "desktop-host")]
 use crate::local::LocalManager;
 use crate::lock::LockPolicy;
-use crate::mcp::McpManager;
 #[cfg(feature = "desktop-host")]
 use crate::platform::secrets::KeyringStore;
+#[cfg(feature = "desktop-host")]
+use crate::remote_edit::RemoteEdits;
 use crate::ssh::SshManager;
 use crate::sync::SyncController;
+use crate::telnet::TelnetManager;
 #[cfg(feature = "desktop-host")]
 use crate::update::Updates;
+use hatoba_assistant::ai::AiManager;
+use hatoba_assistant::dropped::DroppedPaths;
+use hatoba_assistant::mcp::McpManager;
 
 pub use hatoba_core::sync::SharedVault;
 
@@ -37,6 +41,10 @@ pub struct AppState {
     /// Local terminal tabs (§7.5).
     #[cfg(feature = "desktop-host")]
     pub local: LocalManager,
+    pub telnet: TelnetManager,
+    pub app_proxy: AppProxy,
+    #[cfg(feature = "desktop-host")]
+    pub edits: RemoteEdits,
     /// The dashboard's background connections and readers (HOST-14).
     pub dashboard: Dashboard,
     pub sync: SyncController,
@@ -74,10 +82,13 @@ impl AppState {
         mica: bool,
         secrets: Arc<dyn hatoba_core::platform::SecretStore>,
     ) -> Self {
+        #[cfg(feature = "desktop-host")]
+        hatoba_assistant::runtime::set(tauri::async_runtime::handle().inner().clone());
         let mcp = McpManager::default();
+        mcp.set_default_path(crate::platform::login_shell::default_path);
         let vault = Arc::new(Mutex::new(vault));
         // AI-52: this device's ChatGPT sessions live in the vault.
-        crate::ai::chatgpt::install(&vault);
+        hatoba_assistant::ai::chatgpt::install(&vault);
         Self {
             vault,
             secrets,
@@ -85,6 +96,10 @@ impl AppState {
             connections: Connections::default(),
             #[cfg(feature = "desktop-host")]
             local: LocalManager::default(),
+            telnet: TelnetManager::default(),
+            app_proxy: AppProxy::default(),
+            #[cfg(feature = "desktop-host")]
+            edits: RemoteEdits::default(),
             dashboard: Dashboard::default(),
             sync: SyncController::default(),
             deploy: Deployments::default(),

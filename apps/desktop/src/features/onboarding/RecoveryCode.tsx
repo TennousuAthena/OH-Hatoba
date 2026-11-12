@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { Checkbox, LinkButton, toast } from "@hatoba/ui";
 import { errorMessage } from "@/app/errors";
-import { Checkbox, LinkButton } from "@/components/controls";
-import { toast } from "@/components/overlay";
 import { formatDate, useT } from "@/i18n";
 import { api } from "@/ipc/api";
 import { copyText, pickSavePath } from "@/lib/native";
@@ -16,7 +15,7 @@ export function codeGroups(code: string): string[] {
 }
 
 /**
- * The recovery code as 8 groups with copy / save-as-text / print actions (design §05 step 3), plus the
+ * The recovery code as 8 groups with copy / save-as-text / print actions, plus the
  * VAULT-02 confirmation: tick "I've saved it". `onConfirmedChange` reports whether it is ticked.
  */
 export function RecoveryCodeSection({

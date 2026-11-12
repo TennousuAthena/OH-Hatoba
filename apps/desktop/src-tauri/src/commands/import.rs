@@ -51,6 +51,8 @@ fn unbracketed(address: &str) -> &str {
         .map_or(address, |(inner, _)| inner)
 }
 
+/// Reads `source` from `path`, a file or folder the user chose, or else from where the client keeps
+/// its sessions.
 #[cfg_attr(feature = "desktop-host", tauri::command)]
 #[cfg_attr(feature = "desktop-host", specta::specta)]
 pub async fn hosts_import_preview(
@@ -314,6 +316,7 @@ fn import_hosts(v: &mut Vault, prepared: Prepared) -> AppResult<ImportResult> {
             auth,
             proxy,
             note: entry.note,
+            sort: v.place_new_host(None)?,
             ..Host::default()
         };
         // As the host editor does while sync is on, a host too large to sync is not saved. Its
@@ -522,6 +525,7 @@ fn gateway_chain(
             Some((id, _)) => id,
             None => {
                 result.hosts_created += 1;
+                let sort = v.place_new_host(None)?;
                 v.put(
                     None,
                     Item::Host(Host {
@@ -531,6 +535,7 @@ fn gateway_chain(
                         username: gateway.username.clone().unwrap_or_else(default_user),
                         auth: HostAuth::Agent,
                         jump_host_id: previous.clone(),
+                        sort,
                         ..Host::default()
                     }),
                 )?

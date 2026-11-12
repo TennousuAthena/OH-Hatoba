@@ -1,17 +1,31 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Button, Icon, LinkButton, Switch, TextField } from "@/components/controls";
-import { Group, Row, RowValue, Section, StatusTile } from "@/components/layout";
-import { confirm, toast } from "@/components/overlay";
-import { Chip, ErrorText, ListRow } from "@/components/patterns";
+import {
+  Button,
+  Chip,
+  ErrorText,
+  Group,
+  Icon,
+  LinkButton,
+  ListRow,
+  PageHeader,
+  Row,
+  RowValue,
+  Section,
+  StatusTile,
+  Switch,
+  TextField,
+  confirm,
+  isImeEvent,
+  toast,
+} from "@hatoba/ui";
 import { errorMessage } from "@/app/errors";
 import { useApp } from "@/app/store";
 import { formatRelative, useT } from "@/i18n";
 import { api } from "@/ipc/api";
 import type { DeviceView, SyncStatus, TooLargeItem, WorkerUpdate } from "@/ipc/types";
 import { cx } from "@/lib/cx";
-import { isImeEvent } from "@/lib/ime";
-import { DEPLOY_GUIDE_URL, openExternal } from "./external";
 import { ChangePasswordDialog, NewRecoveryDialog, VerifyPasswordDialog } from "@/features/settings/dialogs";
+import { DEPLOY_GUIDE_URL, openExternal } from "@/lib/external";
 import { countsLine, deviceIcon, isStale, refreshSyncStatus, type T } from "./syncUtils";
 import { UpgradeDialog } from "./UpgradeDialog";
 import s from "./Sync.module.css";
@@ -101,6 +115,16 @@ export function SyncStatusView({ status, onReview }: { status: SyncStatus; onRev
 
   return (
     <div className={s.page}>
+      <PageHeader title={t("rail.sync")}>
+        <Button
+          icon="arrows-clockwise"
+          busy={syncing}
+          disabled={status.state === "auth_failed"}
+          onClick={() => void syncNow()}
+        >
+          {t("sync.syncNow")}
+        </Button>
+      </PageHeader>
       <div className={s.scroll}>
         <div className={s.column}>
           <div className={s.header}>
@@ -111,14 +135,6 @@ export function SyncStatusView({ status, onReview }: { status: SyncStatus; onRev
               <div className={s.title}>{view.title}</div>
               <div className={s.sub}>{view.sub}</div>
             </div>
-            <Button
-              icon="arrows-clockwise"
-              busy={syncing}
-              disabled={status.state === "auth_failed"}
-              onClick={() => void syncNow()}
-            >
-              {t("sync.syncNow")}
-            </Button>
           </div>
 
           {status.state === "auth_failed" && <ReloginForm />}
@@ -217,10 +233,11 @@ function TooLargeNotice({ item }: { item: TooLargeItem }) {
 
   let text: string;
   let action: ReactNode = null;
-  if (item.item_type === "host") {
+  if (item.item_type === "host" || item.item_type === "telnet_host") {
+    const kind = item.item_type === "host" ? "host-edit" : "telnet-edit";
     text = t("sync.tooLarge.host", { name: item.item_name });
     action = (
-      <LinkButton onClick={() => navigate({ kind: "host-edit", hostId: item.item_id, groupId: null, back: null })}>
+      <LinkButton onClick={() => navigate({ kind, hostId: item.item_id, groupId: null, back: null })}>
         {t("hosts.editHost")}
       </LinkButton>
     );

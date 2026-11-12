@@ -10,6 +10,8 @@ import type {
   ZoomView,
 } from "@/ipc/types";
 import { detectLocale, setLocale, type Locale } from "@/i18n";
+import type { HostDraft } from "@/features/hosts/ProtocolRow";
+import { setWindowTheme } from "@/lib/native";
 import { applyZoom } from "@/lib/zoom";
 
 /** What the "home" tab shows. Session tabs are tracked in `tabs.ts`. */
@@ -24,6 +26,17 @@ export type Page =
       back: string | null;
       /** A new host starts from this quick-connect target (HOST-12). */
       prefill?: QuickTarget;
+      /** A new host starts from what the Telnet editor's form had when its protocol was switched. */
+      draft?: HostDraft;
+    }
+  /** A Telnet host's editor (TELNET-01); a new one may start from the SSH editor's form. */
+  | {
+      kind: "telnet-edit";
+      hostId: string | null;
+      groupId: string | null;
+      /** The group whose hosts Back and Save return to, or null for every host. */
+      back: string | null;
+      draft?: HostDraft;
     }
   | { kind: "keys" }
   | { kind: "sync" }
@@ -49,11 +62,13 @@ export const DEFAULT_PREFS: LocalPrefs = {
   ai_panel_open: false,
   ai_panel_width: 380,
   default_proxy_id: null,
+  app_proxy_id: null,
   auto_lock_minutes: 15,
   lock_on_sleep: true,
   lock_disconnects_sessions: false,
   clipboard_clear_secs: 90,
   hosts_view: "list",
+  hosts_sort: "recent",
   hosts_stats: false,
   dashboard_hidden_columns: [],
   dashboard_interval_secs: 3,
@@ -62,6 +77,7 @@ export const DEFAULT_PREFS: LocalPrefs = {
   dashboard_disk_alert: 90,
   close_action: "ask",
   local_shell: null,
+  sftp_editor: null,
 };
 
 interface AppState {
@@ -167,6 +183,8 @@ export function applyPrefs(prefs: LocalPrefs) {
     void document.body?.offsetHeight;
     delete root.dataset.themeSwitch;
   }
+  // Mica follows the window's theme, not the page's: a dark page on a light system would sit on light Mica.
+  if (root.dataset.material === "mica") void setWindowTheme(prefs.appearance === "system" ? null : theme);
   root.dataset.density = prefs.density;
   setLocale(resolveLocale(prefs));
 }

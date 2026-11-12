@@ -73,7 +73,6 @@ pub mod meta {
 /// One row of the `items` table.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ItemRow {
-    /// Item id.
     pub id: String,
     /// Envelope JSON; `None` for a tombstone.
     pub envelope: Option<String>,
@@ -104,9 +103,7 @@ pub struct ConflictRow {
     pub local_deleted: bool,
     /// Whether the remote side was a deletion.
     pub remote_deleted: bool,
-    /// Local `updated_at`.
     pub local_updated_at: Option<i64>,
-    /// Remote `updated_at`.
     pub remote_updated_at: Option<i64>,
     /// When the conflict was resolved, Unix ms.
     pub created_at: i64,
@@ -119,19 +116,14 @@ pub struct ConflictRow {
 pub struct NewConflict {
     /// The item the conflict was about.
     pub item_id: String,
-    /// Resolution name.
     pub resolution: String,
     /// Local envelope (encrypted).
     pub local_envelope: Option<String>,
     /// Remote envelope (encrypted).
     pub remote_envelope: Option<String>,
-    /// Local side deleted.
     pub local_deleted: bool,
-    /// Remote side deleted.
     pub remote_deleted: bool,
-    /// Local `updated_at`.
     pub local_updated_at: Option<i64>,
-    /// Remote `updated_at`.
     pub remote_updated_at: Option<i64>,
     /// Resolution time, Unix ms.
     pub created_at: i64,
@@ -194,7 +186,13 @@ const LOCAL_COLUMNS: &[(&str, &str, &str)] = &[
 /// revert it (spec AI-41): `meta` and `content` are envelopes sealed under the vault key, and
 /// `content` is NULL once the change was reverted or dropped ([`SnapshotState`]). `size` is the
 /// bytes `content` holds in plaintext, which the snapshots' total is capped by.
-const LOCAL_TABLES: &[&str] = &["CREATE TABLE IF NOT EXISTS ai_file_snapshots (
+///
+/// `command_history` keeps the commands typed in each saved host's terminals and each local
+/// shell (spec TERM-15), one row per host or shell: `owner` is the host's item id, or `local:`
+/// and the shell's id, and `commands` an envelope sealed under the vault key. A tombstone of the
+/// host deletes its row ([`StoreOps::upsert_item_row`]).
+const LOCAL_TABLES: &[&str] = &[
+    "CREATE TABLE IF NOT EXISTS ai_file_snapshots (
         conversation_id TEXT NOT NULL,
         response_id     TEXT NOT NULL,
         tool_call_id    TEXT NOT NULL,
@@ -204,7 +202,13 @@ const LOCAL_TABLES: &[&str] = &["CREATE TABLE IF NOT EXISTS ai_file_snapshots (
         state           TEXT NOT NULL,
         created_at      INTEGER NOT NULL,
         PRIMARY KEY (conversation_id, response_id, tool_call_id)
-     )"];
+     )",
+    "CREATE TABLE IF NOT EXISTS command_history (
+        owner      TEXT PRIMARY KEY,
+        commands   TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+     )",
+];
 
 /// Where the change of a file snapshot stands (spec AI-41).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -256,7 +260,6 @@ pub struct SnapshotRow {
     pub conversation_id: String,
     /// The entry id of the response that made the call.
     pub response_id: String,
-    /// The call's id.
     pub tool_call_id: String,
     /// Envelope JSON of the snapshot's description.
     pub meta: String,
@@ -285,6 +288,34 @@ impl std::fmt::Debug for SnapshotRow {
 
 const SNAPSHOT_COLUMNS: &str = "conversation_id, response_id, tool_call_id, meta, content, size, \
      state, created_at";
+
+/// A row of the device-local `command_history` table (see [`LOCAL_TABLES`]).
+#[derive(Clone, PartialEq, Eq)]
+pub struct CommandHistoryRow {
+    /// The saved host's item id, or `local:` and the local shell's id.
+    pub owner: String,
+    /// Envelope JSON of the commands.
+    pub commands: String,
+    /// When the history last changed, Unix ms.
+    pub updated_at: i64,
+}
+
+impl std::fmt::Debug for CommandHistoryRow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CommandHistoryRow")
+            .field("owner", &self.owner)
+            .field("updated_at", &self.updated_at)
+            .finish_non_exhaustive()
+    }
+}
+
+fn row_to_command_history(row: &rusqlite::Row<'_>) -> rusqlite::Result<CommandHistoryRow> {
+    Ok(CommandHistoryRow {
+        owner: row.get(0)?,
+        commands: row.get(1)?,
+        updated_at: row.get(2)?,
+    })
+}
 
 fn row_to_snapshot(row: &rusqlite::Row<'_>) -> rusqlite::Result<SnapshotRow> {
     Ok(SnapshotRow {
@@ -333,10 +364,8 @@ fn row_to_conflict(row: &rusqlite::Row<'_>) -> rusqlite::Result<ConflictRow> {
 
 /// Row-level operations, shared by [`Store`] and [`StoreTx`].
 pub trait StoreOps {
-    /// The underlying connection.
     fn conn(&self) -> &Connection;
 
-    /// Reads a `meta` value.
     fn get_meta(&self, key: &str) -> Result<Option<String>> {
         Ok(self
             .conn()
@@ -344,7 +373,6 @@ pub trait StoreOps {
             .optional()?)
     }
 
-    /// Writes a `meta` value.
     fn set_meta(&self, key: &str, value: &str) -> Result<()> {
         self.conn().execute(
             "INSERT INTO meta (key, value) VALUES (?1, ?2) \
@@ -354,7 +382,6 @@ pub trait StoreOps {
         Ok(())
     }
 
-    /// Removes a `meta` value.
     fn delete_meta(&self, key: &str) -> Result<()> {
         self.conn()
             .execute("DELETE FROM meta WHERE key = ?1", [key])?;
@@ -366,7 +393,6 @@ pub trait StoreOps {
         Ok(self.get_meta(key)?.and_then(|v| v.parse().ok()))
     }
 
-    /// One item row.
     fn item_row(&self, id: &str) -> Result<Option<ItemRow>> {
         Ok(self
             .conn()
@@ -411,6 +437,10 @@ pub trait StoreOps {
     }
 
     /// Inserts or replaces a whole row.
+    ///
+    /// A tombstone also deletes the item's command history (TERM-15). Every deletion, made on
+    /// this device or pulled by sync, writes its tombstone here, so a deleted host's history goes
+    /// in the same transaction.
     fn upsert_item_row(&self, row: &ItemRow) -> Result<()> {
         self.conn().execute(
             "INSERT INTO items (id, envelope, revision, deleted, dirty, updated_at) \
@@ -419,6 +449,9 @@ pub trait StoreOps {
                deleted = excluded.deleted, dirty = excluded.dirty, updated_at = excluded.updated_at",
             params![row.id, row.envelope, to_i64(row.revision), row.deleted, row.dirty, row.updated_at],
         )?;
+        if row.deleted {
+            self.delete_command_history(&row.id)?;
+        }
         Ok(())
     }
 
@@ -458,14 +491,13 @@ pub trait StoreOps {
         Ok(n as u64)
     }
 
-    /// Deletes an item row outright, leaving no tombstone.
+    /// Deletes an item row outright, leaving no tombstone, and the item's command history.
     fn delete_item_row(&self, id: &str) -> Result<()> {
         self.conn()
             .execute("DELETE FROM items WHERE id = ?1", [id])?;
-        Ok(())
+        self.delete_command_history(id)
     }
 
-    /// Empties the conflict log.
     fn clear_conflicts(&self) -> Result<()> {
         self.conn().execute("DELETE FROM conflict_log", [])?;
         Ok(())
@@ -514,7 +546,6 @@ pub trait StoreOps {
         Ok(rows)
     }
 
-    /// One conflict log entry.
     fn conflict(&self, id: i64) -> Result<Option<ConflictRow>> {
         Ok(self
             .conn()
@@ -660,7 +691,6 @@ pub trait StoreOps {
         Ok(())
     }
 
-    /// One file snapshot.
     fn snapshot(
         &self,
         conversation_id: &str,
@@ -728,7 +758,6 @@ pub trait StoreOps {
         )? > 0)
     }
 
-    /// Deletes one file snapshot.
     fn delete_snapshot(
         &self,
         conversation_id: &str,
@@ -779,6 +808,51 @@ pub trait StoreOps {
             }
             dropped += 1;
         }
+    }
+
+    /// The command history of a host or local shell (device-local, never synced).
+    fn command_history(&self, owner: &str) -> Result<Option<CommandHistoryRow>> {
+        Ok(self
+            .conn()
+            .query_row(
+                "SELECT owner, commands, updated_at FROM command_history WHERE owner = ?1",
+                [owner],
+                row_to_command_history,
+            )
+            .optional()?)
+    }
+
+    /// Every command history, by owner.
+    fn command_history_rows(&self) -> Result<Vec<CommandHistoryRow>> {
+        let mut stmt = self
+            .conn()
+            .prepare("SELECT owner, commands, updated_at FROM command_history ORDER BY owner")?;
+        let rows = stmt
+            .query_map([], row_to_command_history)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// Stores a command history, replacing the one its owner has.
+    fn put_command_history(&self, row: &CommandHistoryRow) -> Result<()> {
+        self.conn().execute(
+            "INSERT OR REPLACE INTO command_history (owner, commands, updated_at) \
+             VALUES (?1, ?2, ?3)",
+            params![row.owner, row.commands, row.updated_at],
+        )?;
+        Ok(())
+    }
+
+    fn delete_command_history(&self, owner: &str) -> Result<()> {
+        self.conn()
+            .execute("DELETE FROM command_history WHERE owner = ?1", [owner])?;
+        Ok(())
+    }
+
+    /// Deletes every command history.
+    fn clear_command_history(&self) -> Result<()> {
+        self.conn().execute("DELETE FROM command_history", [])?;
+        Ok(())
     }
 }
 
