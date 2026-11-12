@@ -28,8 +28,9 @@ v0.8.5 的同一签名包已在 API26 平板与 MateBook Pro（2in1）完成安�
 同步与 AI 默认直连；可在设置中选择已保存的 HTTP/SOCKS5 代理。鸿蒙当前不自动读取系统代理，
 界面会按本机能力显示这一区别。
 
-当前产物为开发调试 HAP。API20 基线设备、触控/中文 IME、真实文件选择器、生物识别和系统恢复
-仍需完成人工验收；用户目前选择暂停投屏，不将这些项目记作通过。
+发布产物为未签名 release HAP，需自行签名后安装；开发调试默认使用 debug 模式，并按本地配置签名。
+API20 基线设备、触控/中文 IME、真实文件选择器、生物识别和系统恢复仍需完成人工验收；
+用户目前选择暂停投屏，不将这些项目记作通过。
 
 ## 构建
 
@@ -43,7 +44,8 @@ pnpm ohos:build
 
 默认使用 macOS `/Applications/DevEco-Studio.app/Contents`，其他安装位置设置
 `HATOBA_DEVECO_HOME`；独立 Native SDK 可设置 `HATOBA_OHOS_NDK`。脚本明确使用当前安装 SDK，
-不下载或升级 SDK。没有本地签名配置时输出未签名开发 HAP：
+不下载或升级 SDK。`pnpm ohos:build` 默认采用 debug 模式，有本地签名配置时自动签名；
+没有本地签名配置时输出未签名开发 HAP：
 `platform/harmonyos/entry/build/default/outputs/default/entry-default-unsigned.hap`。
 
 真机调试使用当前包名 `moe.kiwi.ohhatoba` 的专用 profile。在 DevEco 生成调试签名后执行
@@ -52,12 +54,29 @@ Hvigor只在内存中载入该配置，后续构建无需把凭据写回受版�
 存在本地配置时，构建同时生成并检查 `entry-default-signed.hap`，签名未生效时直接失败。
 签名配置不适用于其他开发者或未纳入该 profile 的设备，需要各自生成。
 
+导出未签名的 release HAP：
+
+```sh
+scripts/harmonyos/build-hap.sh --release --unsigned
+```
+
+`--release` 同时选择 Rust 的 release profile、CMake 的 Release 模式和 Hvigor/ArkTS 的
+release 构建。`--unsigned` 在内存中清除签名配置关联，并跳过读取本地签名材料，保留本地配置文件。
+输出仍为上述 `entry-default-unsigned.hap`；每次构建都会清理旧的签名与未签名产物，再检查本轮输出。
+未签名 HAP 不能直接安装，需要自行使用匹配 `moe.kiwi.ohhatoba` 且适用于目标设备的证书和
+profile 签名。发布使用独立 tag `ohos-v0.8.5`，并标为预发布；release 产物的实际设备验证
+另行记录于[验证记录](platform/harmonyos/docs/validation.md)。
+
 安装签名包后可重复运行真机检查（仅重启此应用）：
 
 ```sh
 python3 scripts/harmonyos/check-device.py --target <hdc-target>
 python3 scripts/harmonyos/check-device.py --target <hdc-target> --app
 ```
+
+release 应用受设备 hilog 级别过滤；若设备只记录 W 以上日志，需临时执行
+`hdc -t <hdc-target> shell hilog -b I -T OH-Hatoba` 后再验证，并在测试结束后恢复原有效日志级别。
+仅调整应用 tag，不需要改变全局日志级别。
 
 首次验证可加 `--install-hap <signed.hap>`：先核对包结构再安装，并在成功证据中记录
 本次实际安装文件的 SHA-256，避免把另一次重建的摘要误记为设备上的产物。

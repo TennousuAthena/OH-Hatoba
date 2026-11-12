@@ -1,0 +1,95 @@
+{
+  "verifiedAt": "2026-11-12T18:35:53.227353+00:00",
+  "version": "0.8.5",
+  "upstreamCommit": "951de88b40523b0b4a5cb0344c2bc26015899057",
+  "bundleName": "moe.kiwi.ohhatoba",
+  "releaseTag": "ohos-v0.8.5",
+  "build": {
+    "command": "scripts/harmonyos/build-hap.sh --release --unsigned",
+    "rustProfile": "release",
+    "rustVersion": "1.97.0",
+    "rustOptions": {
+      "codegen-units": 1,
+      "lto": true,
+      "opt-level": "s",
+      "panic": "abort",
+      "strip": true
+    },
+    "cmakeBuildType": "Release",
+    "cppOptimization": "-O2 -DNDEBUG",
+    "nativeArchive": "target/aarch64-unknown-linux-ohos/release/libhatoba_ohos.a",
+    "hvigorBuildMode": "release",
+    "packagedDebug": false,
+    "nativeSdk": "26.0.0.105",
+    "sdkNodeRuntime": "24.14.1",
+    "minimumApi": 20,
+    "targetApi": 26,
+    "architecture": "arm64-v8a",
+    "deviceTypes": [
+      "2in1",
+      "tablet"
+    ],
+    "unsignedExportSkipsLocalSigningRead": true
+  },
+  "artifact": {
+    "name": "Hatoba_0.8.5_harmonyos-arm64-release-unsigned.hap",
+    "sha256": "649f03da46f60a7dda74a202b401f99dc2ad49bc4dd74303b60dd0b0e84cbd83",
+    "bytes": 30354950,
+    "signed": false
+  },
+  "signedTestCopy": {
+    "sha256": "1f4f2175bd0d1fd566ff93cc80ff8977da3b57db949dc76b96285fd9c447476c",
+    "bytes": 30564270,
+    "published": false,
+    "payloadComparison": {
+      "identicalUnsignedEntries": 45,
+      "extraSignedEntries": [
+        ".pages.info"
+      ],
+      "allUnsignedEntryContentsIdentical": true
+    }
+  },
+  "checks": {
+    "unsignedZipWithoutSigningBlock": true,
+    "releaseMetadata": true,
+    "arm64MinApiDeviceTypesVersionAndBranding": true,
+    "harmonyosScriptTestsPassed": 14,
+    "unsignedHapCheckerTestsPassed": 5
+  },
+  "devices": [
+    {
+      "device": "HUAWEI MateBook Pro (2in1)",
+      "system": "HarmonyOS 7 / API26",
+      "e2eEvidence": "2026-11-13-2in1-release-085-e2e.json",
+      "startupEvidence": "2026-11-13-2in1-release-085-startup.json",
+      "passed": true
+    },
+    {
+      "device": "HUAWEI MatePad Pro (tablet)",
+      "system": "HarmonyOS 7 / API26",
+      "e2eEvidence": "2026-11-13-tablet-release-085-e2e.json",
+      "startupEvidence": "2026-11-13-tablet-release-085-startup.json",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "API20 devices have not been tested; current device evidence is API26 only.",
+    "No projection or manual UI, touch, IME, real picker, biometric or lifecycle recovery acceptance.",
+    "External account sign-in and real remote services are not covered by generated-data fixtures.",
+    "Previously recorded five upstream host/environment test failures remain unresolved; see 2026-11-13-upstream-085-validation.json."
+  ],
+  "diagnosticLogging": {
+    "observedGlobalLevelBefore": "W",
+    "temporaryTag": "OH-Hatoba",
+    "levelDuringValidation": "I",
+    "levelAfterValidation": "W",
+    "globalLevelChanged": false,
+    "temporaryOverrideClearsOnDeviceReboot": true,
+    "initialMissingInfoLogsNotCountedAsPass": true
+  },
+  "cleanup": {
+    "normalEntryRestoredOnBothDevices": true,
+    "temporaryPortMappingsRemoved": true,
+    "generatedDataFixturesStopped": true
+  }
+}

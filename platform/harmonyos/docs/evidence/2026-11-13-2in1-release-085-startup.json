@@ -1,0 +1,10 @@
+{
+  "verifiedAt": "2026-11-12T18:34:07.413927+00:00",
+  "device": "HUAWEI MateBook Pro (2in1)",
+  "validationRun": "4fc2db8e8d6d40c6b06d369340fa0f0b",
+  "system": "HarmonyOS 7 / API26",
+  "normalApplicationBoot": true,
+  "reactRendered": true,
+  "scope": "Normal application entry loads its real native runtime, host capabilities, vault status and React application. No projection or UI interaction; does not prove layout, IME, touch or biometric usability.",
+  "nativeWindowSurfaceSynchronized": true
+}

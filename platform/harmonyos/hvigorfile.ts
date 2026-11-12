@@ -25,6 +25,16 @@ hvigor.getRootNode().afterNodeEvaluate(() => {
 // Only local signing material is merged, in memory. SDK/device policy stays in tracked config.
 // Apply before child modules construct their signing tasks and capture the product.
 hvigor.getRootNode().afterNodeEvaluate(() => {
+  // Unsigned exports must not read local material or inherit a cached product's signing link.
+  if (process.env.HATOBA_UNSIGNED === '1') {
+    const context = hvigor.getRootNode().getContext(OhosPluginId.OHOS_APP_PLUGIN) as OhosAppContext;
+    const profile = context.getBuildProfileOpt();
+    delete profile.app.signingConfigs;
+    for (const product of profile.app.products ?? []) delete product.signingConfig;
+    context.setBuildProfileOpt(profile);
+    console.log('OH-Hatoba: unsigned export; local signing skipped');
+    return;
+  }
   // Hvigor bundles this script into its cache; __dirname is not the project directory.
   const localPath = path.join(hvigor.getRootNode().getNodePath(), 'build-profile.local.json5');
   if (!fs.existsSync(localPath)) return;

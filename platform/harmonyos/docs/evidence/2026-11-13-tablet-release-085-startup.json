@@ -1,0 +1,10 @@
+{
+  "verifiedAt": "2026-11-12T18:34:17.434878+00:00",
+  "device": "HUAWEI MatePad Pro (tablet)",
+  "validationRun": "e4bb82f9f6334222a20bcba5f2900ad2",
+  "system": "HarmonyOS 7 / API26",
+  "normalApplicationBoot": true,
+  "reactRendered": true,
+  "scope": "Normal application entry loads its real native runtime, host capabilities, vault status and React application. No projection or UI interaction; does not prove layout, IME, touch or biometric usability.",
+  "nativeWindowSurfaceSynchronized": true
+}

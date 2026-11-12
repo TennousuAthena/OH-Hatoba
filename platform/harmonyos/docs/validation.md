@@ -12,6 +12,34 @@
 
 ## 构建及本机回归
 
+### 2026-11-13 / 未签名 release 导出
+
+- 使用 `scripts/harmonyos/build-hap.sh --release --unsigned` 导出 ARM64 release HAP，
+  包名 `moe.kiwi.ohhatoba`，版本 `0.8.5`/`80500`，min API20、target API26，支持 `2in1` 与 `tablet`。
+  Rust、CMake 和 ArkTS 均采用 release 模式；实际 CMake 编译包含 `-O2`、`NDEBUG`，并链接
+  release Rust 静态库。14 项构建/合约/签名脚本检查及 5 项 HAP 校验测试通过，详见
+  [release 构建审计](evidence/2026-11-13-release-085-export.json)。
+- 发布的未签名 HAP 大小为 30,354,950 字节，SHA-256 为
+  `649f03da46f60a7dda74a202b401f99dc2ad49bc4dd74303b60dd0b0e84cbd83`。
+  本地真机测试使用签名 release 包，大小为 30,564,270 字节，SHA-256 为
+  `1f4f2175bd0d1fd566ff93cc80ff8977da3b57db949dc76b96285fd9c447476c`；该签名包仅供本地验证。
+  ZIP 内容比对确认未签名包的 45 个条目与签名包对应条目的解压字节全部一致，
+  签名包仅多出 `.pages.info` 条目。未签名包需自行签名后安装。
+- 两类 API26 真机均安装上述签名 release 包并通过独立端到端复验：
+  [MateBook Pro（2in1）](evidence/2026-11-13-2in1-release-085-e2e.json)、
+  [MatePad Pro（平板）](evidence/2026-11-13-tablet-release-085-e2e.json)。
+  15 项原生网络/文件检查、隔离保险库及主机/历史 CRUD、SSH/Telnet 各 768 KiB 逐字节回显与
+  xterm 消费额度回收、AI 发送/保存/取消生命周期均通过，安装摘要与本次签名 release 包一致。
+- 两台设备的普通入口也已复验：
+  [2in1](evidence/2026-11-13-2in1-release-085-startup.json)、
+  [平板](evidence/2026-11-13-tablet-release-085-startup.json)均确认原生初始化、React 渲染和窗口背景同步。
+- 首次日志采集时，两台设备的全局 hilog 级别均为 W，INFO 成功标记未被收集。
+  仅将本应用日志 tag 临时设为 I 后重新验证通过，没有修改安装包或全局日志级别。
+  完成后将该 tag 设回 W，与测试前观察到的全局有效等级一致；此临时覆盖在设备重启后失效。
+  两台设备已回到普通入口，临时端口映射和生成数据服务均已清理。
+  本次没有投屏；API20 实际运行及触控/IME、真实选择器、生物识别、外部账号、系统恢复等人工验收
+  仍未完成。下方记录的 5 项上游环境依赖断言失败保持原结论，不计为通过。
+
 ### 2026-11-13 / MateBook Pro（2in1）端到端加严复验
 
 - 在 MateBook Pro/API26 安装与平板加严复验**完全相同的 v0.8.5 签名包**，SHA-256 为
