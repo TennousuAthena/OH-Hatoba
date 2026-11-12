@@ -10,6 +10,10 @@ export default class EntryAbility extends UIAbility {
   private destroyed: boolean = false;
   private screen?: commonEventManager.CommonEventSubscriber;
   onCreate(want: Want): void {
+    const validationRun = want.parameters?.['ohhatoba.validationRun'];
+    if (typeof validationRun === 'string' && /^[a-f0-9]{32}$/.test(validationRun)) {
+      hilog.info(0x0000, 'OH-Hatoba', 'Validation run started: %{public}s', validationRun);
+    }
     AppStorage.setOrCreate('OH_HATOBA_DIAGNOSTICS', want.parameters?.['ohhatoba.diagnostics'] === true);
     AppStorage.setOrCreate('OH_HATOBA_NETWORK_TESTS', want.parameters?.['ohhatoba.networkTests'] === true);
     hilog.info(0x0000, 'OH-Hatoba', 'Diagnostic mode: %{public}s', String(want.parameters?.['ohhatoba.diagnostics'] === true));

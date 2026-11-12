@@ -5,6 +5,7 @@ import "./probe.css";
 import { connectHost } from "./bridge";
 import { createHarmonyApi } from "./api";
 import { FRAME_DATA } from "../types";
+import { probeAiTransport } from "./probe-ai";
 
 const report = document.querySelector<HTMLPreElement>("#report")!;
 const button = document.querySelector<HTMLButtonElement>("#probe")!;
@@ -88,8 +89,18 @@ void connectHost().then((bridge) => {
         const unauth = await api.listen("ssh://auth-prompt", (prompt) => {
           void api.auth_prompt_respond(prompt.request_id, prompt.prompts.map(() => "generated-diagnostic-only"));
         });
-        const expected = new TextEncoder().encode("generated 中文 🌊\r\n".repeat(4096));
-        const bytes: number[] = [];
+        // Eight separate calls stay below the JSON limit while crossing the native channel's
+        // 512 KiB credit window. Without consumption ACKs the final blocks cannot arrive.
+        const blockBytes = 96 * 1024;
+        const blocks = 8;
+        const sshUnit = new TextEncoder().encode("generated 中文 🌊\r\n");
+        const sshBlock = new Uint8Array(blockBytes);
+        for (let i = 0; i < sshBlock.length; i++) sshBlock[i] = sshUnit[i % sshUnit.length];
+        const expected = new Uint8Array(blockBytes * blocks);
+        for (let i = 0; i < blocks; i++) expected.set(sshBlock, i * blockBytes);
+        const bytes = new Uint8Array(expected.length);
+        let receivedBytes = 0;
+        let overflow = false;
         let parsed = 0;
         let finish: (() => void) | undefined;
         const received = new Promise<void>((resolve) => { finish = resolve; });
@@ -98,18 +109,22 @@ void connectHost().then((bridge) => {
           sid = await api.ssh_connect_target({ address: "127.0.0.1", port: 22222, username: "fixture" },
             { cols: 80, rows: 24, password: null, passphrase: null }, (frame) => {
               if (frame[0] !== FRAME_DATA) return;
-              bytes.push(...frame.subarray(1));
-              return new Promise<void>((resolve) => terminal.write(frame.subarray(1), () => {
+              const data = frame.subarray(1);
+              if (receivedBytes + data.length > bytes.length) overflow = true;
+              else bytes.set(data, receivedBytes);
+              receivedBytes += data.length;
+              return new Promise<void>((resolve) => terminal.write(data, () => {
                 parsed += frame.length - 1;
                 resolve(); if (parsed >= expected.length) finish?.();
               }));
             });
-          await api.ssh_write_bytes(sid, Array.from(expected));
+          for (let i = 0; i < blocks; i++) await api.ssh_write_bytes(sid, Array.from(sshBlock));
           let timer: ReturnType<typeof setTimeout> | undefined;
           try {
             await Promise.race([received, new Promise<void>((_, reject) => { timer = setTimeout(() => reject(new Error("Terminal fixture timed out")), 10000); })]);
           } finally { clearTimeout(timer); }
-          assert(bytes.length === expected.length && bytes.every((byte, i) => byte === expected[i]));
+          assert(!overflow && receivedBytes === expected.length && parsed === expected.length);
+          assert(bytes.every((byte, i) => byte === expected[i]));
           assert((await api.sftp_list(sid, "/")).some((file) => file.name === "fixture.bin"));
           await api.ssh_resize(sid, 132, 40);
           console.info("OH-Hatoba Web SSH transport passed");
@@ -121,9 +136,13 @@ void connectHost().then((bridge) => {
         // for the marker avoids sending while the client still uses local echo or line editing.
         const marker = new TextEncoder().encode("OH-Hatoba Telnet fixture ready\r\n");
         const unit = new Uint8Array([...new TextEncoder().encode("generated Telnet 中文 🌊\r\n"), 255]);
-        const telnetExpected = new Uint8Array(96 * 1024);
-        for (let i = 0; i < telnetExpected.length; i++) telnetExpected[i] = unit[i % unit.length];
-        const telnetBytes: number[] = [];
+        const telnetBlock = new Uint8Array(blockBytes);
+        for (let i = 0; i < telnetBlock.length; i++) telnetBlock[i] = unit[i % unit.length];
+        const telnetExpected = new Uint8Array(blockBytes * blocks);
+        for (let i = 0; i < blocks; i++) telnetExpected.set(telnetBlock, i * blockBytes);
+        const telnetBytes = new Uint8Array(marker.length + telnetExpected.length);
+        let telnetReceived = 0;
+        let telnetOverflow = false;
         let telnetParsed = 0;
         let markReady: (() => void) | undefined;
         let markEchoed: (() => void) | undefined;
@@ -142,8 +161,11 @@ void connectHost().then((bridge) => {
           telnetSid = await api.telnet_open_target("127.0.0.1", 22323, { cols: 80, rows: 24 }, (frame) => {
             if (frame[0] !== FRAME_DATA) return;
             // Capture raw bytes before xterm decodes them, including Telnet's escaped IAC byte.
-            for (const byte of frame.subarray(1)) telnetBytes.push(byte);
-            return new Promise<void>((resolve) => terminal.write(frame.subarray(1), () => {
+            const data = frame.subarray(1);
+            if (telnetReceived + data.length > telnetBytes.length) telnetOverflow = true;
+            else telnetBytes.set(data, telnetReceived);
+            telnetReceived += data.length;
+            return new Promise<void>((resolve) => terminal.write(data, () => {
               telnetParsed += frame.length - 1;
               resolve();
               if (telnetParsed >= marker.length) markReady?.();
@@ -151,10 +173,10 @@ void connectHost().then((bridge) => {
             }));
           });
           await waitForTelnet(ready);
-          assert(telnetBytes.length === marker.length && marker.every((byte, i) => byte === telnetBytes[i]));
-          await api.telnet_write_bytes(telnetSid, Array.from(telnetExpected));
+          assert(telnetReceived === marker.length && marker.every((byte, i) => byte === telnetBytes[i]));
+          for (let i = 0; i < blocks; i++) await api.telnet_write_bytes(telnetSid, Array.from(telnetBlock));
           await waitForTelnet(echoed);
-          assert(telnetBytes.length === marker.length + telnetExpected.length);
+          assert(!telnetOverflow && telnetReceived === telnetBytes.length && telnetParsed === telnetBytes.length);
           assert(telnetExpected.every((byte, i) => byte === telnetBytes[marker.length + i]));
           await api.telnet_resize(telnetSid, 132, 40);
           await api.telnet_close(telnetSid);
@@ -163,6 +185,9 @@ void connectHost().then((bridge) => {
         } finally {
           if (telnetSid) await api.telnet_close(telnetSid);
         }
+        console.info("OH-Hatoba Web flow-control budget recovered");
+        await probeAiTransport(api);
+        console.info("OH-Hatoba Web AI assistant lifecycle passed");
         console.info("OH-Hatoba network probe rendered");
       }
     } catch {

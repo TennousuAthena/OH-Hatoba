@@ -19,6 +19,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: node scripts/harmonyos/contracts.mjs --check
       - run: node --test scripts/harmonyos/*.test.mjs
+      - run: python3 scripts/harmonyos/check-device.test.py
       - run: pnpm --filter @hatoba/ui --filter @hatoba/desktop typecheck
       - run: pnpm --filter @hatoba/desktop exec vitest run src/ipc/tauri.test.ts src/ipc/harmonyos
       - run: pnpm --filter @hatoba/desktop exec vite build --mode harmonyos --config vite.harmonyos.config.ts

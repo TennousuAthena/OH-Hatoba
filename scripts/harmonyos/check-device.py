@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import subprocess
 import time
+import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 bundle = json.loads((ROOT / "platform/harmonyos/AppScope/app.json5").read_text())["app"]["bundleName"]
@@ -52,7 +53,9 @@ def command(*parts):
 
 if "successfully" not in command("shell", "aa", "force-stop", bundle):
     raise RuntimeError("Could not stop the app")
-launch = ["shell", "aa", "start", "-a", ability, "-b", bundle]
+run_id = uuid.uuid4().hex
+run_marker = "Validation run started: " + run_id
+launch = ["shell", "aa", "start", "-a", ability, "-b", bundle, "--ps", "ohhatoba.validationRun", run_id]
 if not args.app:
     launch += ["--pb", "ohhatoba.diagnostics", "true"]
 if args.network:
@@ -67,16 +70,30 @@ network = None
 network_rendered = False
 web_terminal = False
 web_telnet = False
+flow_control = False
+ai_lifecycle = False
 diagnostic_failed = False
 app_boot = False
 app_rendered = False
 window_surface = False
 console_error = False
+validation_pid = None
 deadline = time.monotonic() + (80 if args.network else 30)
 while time.monotonic() < deadline:
     pid = command("shell", "pidof", bundle).strip()
     if pid.isdigit():
+        if validation_pid is not None and pid != validation_pid:
+            raise RuntimeError("Application process changed during this validation run")
         log = command("shell", "hilog", "-x", "-P", pid, "-T", "OH-Hatoba")
+        # A fresh per-launch marker excludes historical successes even when a PID is reused.
+        _, matched, current = log.partition(run_marker)
+        if matched:
+            validation_pid = pid
+            log = current
+        elif validation_pid is None:
+            log = ""
+        # After observing the marker, the same process's newer logs remain valid when the
+        # device's ring buffer evicts that marker during a longer transfer.
         for line in log.splitlines():
             app_boot |= "Application boot completed" in line
             app_rendered |= "Application rendered" in line
@@ -97,8 +114,14 @@ while time.monotonic() < deadline:
                 web_terminal = True
             if "Web Telnet transport passed" in line:
                 web_telnet = True
+            if "Web flow-control budget recovered" in line:
+                flow_control = True
+            if "Web AI assistant lifecycle passed" in line:
+                ai_lifecycle = True
             if "Diagnostic failed" in line:
                 diagnostic_failed = True
+        if diagnostic_failed or console_error:
+            break
         if args.app and app_boot and app_rendered and (not args.window_surface or window_surface):
             break
         if report is not None and rendered and business and (not args.network or (network is not None and (network_rendered or diagnostic_failed))):
@@ -108,6 +131,7 @@ if args.app:
     assert app_boot and app_rendered and not console_error, "Normal application boot/render check failed"
     assert not args.window_surface or window_surface, "Native window background was not synchronized"
     evidence = {"verifiedAt": datetime.now(timezone.utc).isoformat(), "device": args.device_label,
+                "validationRun": run_id,
                 "system": args.system_label, "normalApplicationBoot": app_boot, "reactRendered": app_rendered,
                 "scope": "Normal application entry loads its real native runtime, host capabilities, vault status and React application. No projection or UI interaction; does not prove layout, IME, touch or biometric usability."}
     if args.window_surface:
@@ -122,6 +146,7 @@ if args.app:
     raise SystemExit(0)
 if report is None or not rendered or not business:
     raise RuntimeError("Did not observe both the native report and Web rendering confirmation; device validation failed")
+assert not diagnostic_failed and not console_error, "Current diagnostic run reported an error"
 baseline = json.loads((ROOT / "platform/harmonyos/upstream.json").read_text())
 assert report["host_protocol"] == baseline["hostProtocol"], "Host protocol mismatch"
 assert report["upstream_commit"] == baseline["commit"], "Installed app is not the recorded upstream baseline"
@@ -138,9 +163,12 @@ if args.network:
     assert network_rendered, "Network report did not render"
     assert web_terminal, "Web SSH terminal transport did not pass"
     assert web_telnet, "Web Telnet terminal transport did not pass"
+    assert flow_control, "Web SSH/Telnet did not recover their binary channel budgets"
+    assert ai_lifecycle, "Web AI assistant send/stream/persist/cancel lifecycle did not pass"
 # Rebuild a narrow output schema rather than persisting raw application logs.
 evidence = {
     "verifiedAt": datetime.now(timezone.utc).isoformat(),
+    "validationRun": run_id,
     "device": args.device_label,
     "system": args.system_label,
     "webReceivedAndRendered": rendered,
@@ -153,7 +181,10 @@ if args.network:
     evidence["networkChecks"] = network["checks"]
     evidence["webSshTerminalTransport"] = web_terminal
     evidence["webTelnetTerminalTransport"] = web_telnet
-    evidence["scope"] = "Real OHOS native TLS trust/rejection, SSH authentication/host-key rejection/exec/PTY binary Unicode/resize, SFTP upload/download through descriptor grants with byte comparison and cancellation, local/remote/dynamic forwards, AI streaming and cancellation, HTTP MCP, OAuth PKCE/state callback and cancellation, descriptor-based config/skill imports and grant revocation, Web SSH/Telnet binary echo through xterm with consumption ACK/resize/close, plus shared business IPC smoke including Telnet hosts and command history. Controlled generated-data fixtures; does not validate actual picker interaction, UI/IME, external account sign-in, or lifecycle recovery."
+    evidence["webFlowControlBudgetRecovered"] = flow_control
+    evidence["terminalBytesPerProtocol"] = 8 * 96 * 1024
+    evidence["webAiAssistantLifecycle"] = ai_lifecycle
+    evidence["scope"] = "Real OHOS native TLS trust/rejection, SSH authentication/host-key rejection/exec/PTY binary Unicode/resize, SFTP upload/download through descriptor grants with byte comparison and cancellation, local/remote/dynamic forwards, AI streaming and cancellation, HTTP MCP, OAuth PKCE/state callback and cancellation, descriptor-based config/skill imports and grant revocation, Web SSH/Telnet each transfer 768 KiB through xterm with consumption ACK/budget recovery/resize/close, typed-facade AI assistant send/Unicode stream/persistence/stop/cleanup, plus shared business IPC smoke including Telnet hosts and command history. Controlled generated-data fixtures; does not validate actual picker interaction, UI/IME, external account sign-in, or lifecycle recovery."
 if artifact:
     evidence["installedArtifact"] = artifact
 encoded = json.dumps(evidence, ensure_ascii=False, indent=2) + "\n"

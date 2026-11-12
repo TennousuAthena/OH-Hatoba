@@ -1,0 +1,67 @@
+{
+  "verifiedAt": "2026-11-12T18:05:05.095415+00:00",
+  "validationRun": "c4a8b64a627643948bd95b0eb0145914",
+  "device": "HUAWEI MatePad Pro (tablet)",
+  "system": "HarmonyOS 7 / API26",
+  "webReceivedAndRendered": true,
+  "sharedBusinessSmoke": true,
+  "native": {
+    "host_protocol": 1,
+    "upstream_version": "0.8.5",
+    "upstream_commit": "951de88b40523b0b4a5cb0344c2bc26015899057",
+    "architecture": "aarch64",
+    "target_os": "linux",
+    "target_env": "ohos"
+  },
+  "checks": [
+    {
+      "name": "random_aead_and_tamper_rejection",
+      "passed": true
+    },
+    {
+      "name": "sqlite_schema",
+      "passed": true
+    },
+    {
+      "name": "ssh_ed25519_roundtrip",
+      "passed": true
+    },
+    {
+      "name": "tokio_runtime",
+      "passed": true
+    },
+    {
+      "name": "ai_provider_url_validation",
+      "passed": true
+    }
+  ],
+  "scope": "Real OHOS native TLS trust/rejection, SSH authentication/host-key rejection/exec/PTY binary Unicode/resize, SFTP upload/download through descriptor grants with byte comparison and cancellation, local/remote/dynamic forwards, AI streaming and cancellation, HTTP MCP, OAuth PKCE/state callback and cancellation, descriptor-based config/skill imports and grant revocation, Web SSH/Telnet each transfer 768 KiB through xterm with consumption ACK/budget recovery/resize/close, typed-facade AI assistant send/Unicode stream/persistence/stop/cleanup, plus shared business IPC smoke including Telnet hosts and command history. Controlled generated-data fixtures; does not validate actual picker interaction, UI/IME, external account sign-in, or lifecycle recovery.",
+  "networkChecks": {
+    "aiHttpModels": true,
+    "aiStreamingUnicodeAndCancellation": true,
+    "documentConfigSkillZipFolderAndGrantRevocation": true,
+    "dynamicForward": true,
+    "localForward": true,
+    "mcpHttpInitializeListCallAndShutdown": true,
+    "oauthPkceStateCallbackAndCancellation": true,
+    "ptyBinaryUnicodeAndResize": true,
+    "remoteForward": true,
+    "sftpUploadDownloadDocumentGrantsAndCancel": true,
+    "sshExec": true,
+    "sshHandshakeAndAuthentication": true,
+    "sshHostKeyRejection": true,
+    "systemCaHttps": true,
+    "untrustedCertificateRejected": true
+  },
+  "webSshTerminalTransport": true,
+  "webTelnetTerminalTransport": true,
+  "webFlowControlBudgetRecovered": true,
+  "terminalBytesPerProtocol": 786432,
+  "webAiAssistantLifecycle": true,
+  "installedArtifact": {
+    "name": "entry-default-signed.hap",
+    "sha256": "1ba632f307d274fb5caa629442cfc903601d0cdfb0d916b67e183a3e7b877731",
+    "bytes": 56579024,
+    "bundleName": "moe.kiwi.ohhatoba"
+  }
+}

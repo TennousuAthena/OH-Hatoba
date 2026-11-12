@@ -2,6 +2,7 @@
 """Loopback generated-data HTTP fixture. No host files, real accounts or request logs."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import time
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -20,7 +21,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/v1/models":
-            self.reply(200, {"object": "list", "data": [{"id": "generated-fixture", "object": "model"}]})
+            self.reply(200, {"object": "list", "data": [
+                {"id": "generated-fixture", "object": "model"},
+                {"id": "generated-fixture-cancel", "object": "model"},
+            ]})
         else:
             self.reply(405)
 
@@ -38,6 +42,23 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(400)
             return
         if self.path == "/v1/chat/completions":
+            if body.get("model") == "generated-fixture-cancel":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                chunk = {"id": "generated", "choices": [{"index": 0, "delta": {"role": "assistant", "content": "generated cancel ready"}, "finish_reason": None}]}
+                try:
+                    self.wfile.write(("data: " + json.dumps(chunk) + "\n\n").encode())
+                    self.wfile.flush()
+                    # A real assistant turn must cancel this unfinished stream itself.
+                    for _ in range(75):
+                        time.sleep(0.2)
+                        self.wfile.write(b": generated heartbeat\n\n")
+                        self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+                return
             chunks = [
                 {"id": "generated", "choices": [{"index": 0, "delta": {"role": "assistant", "content": "generated 中文 "}, "finish_reason": None}]},
                 {"id": "generated", "choices": [{"index": 0, "delta": {"content": "🌊"}, "finish_reason": None}]},

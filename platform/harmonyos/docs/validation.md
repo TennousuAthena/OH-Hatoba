@@ -12,6 +12,26 @@
 
 ## 构建及本机回归
 
+### 2026-11-13 / 平板端到端加严复验
+
+- 同一上游 v0.8.5 基线，重新构建并安装含加强诊断的签名包；
+  [本轮端到端证据](evidence/2026-11-13-tablet-upstream-085-e2e.json)记录实际安装摘要，
+  [本轮普通入口](evidence/2026-11-13-tablet-upstream-085-e2e-startup.json)记录相同设备的启动与背景同步。
+- SSH 与 Telnet 均通过真实 typed facade 分 8 次发送 96 KiB，共 **768 KiB/协议**，
+  超过单通道 512 KiB 额度。逐字节比对回显，并等待 xterm 消费完成，验证 ACK 后额度可继续使用。
+  同时完成 resize/close 调用；不把返回成功视为真实窗口尺寸的视觉验收。
+- AI 新增完整业务路径：在隔离诊断保险库内发现/保存生成模型 provider，调用 `ai_send`，
+  经共享 assistant 和 Web channel 验证 Unicode 响应、完成事件及会话持久化；
+  慢流收到首片段后调用 `ai_stop`，确认停止原因、空闲状态与已收文本保留，最后删除本次记录。
+  此项补足原有直接协议库的 streaming/cancel 检查，不使用真实账号。
+- 原有 15 项原生网络/文件检查、保险库与主机/历史 CRUD、普通入口、React 渲染、原生背景同步全部通过。
+- 每次启动携带独立验证标识，先观察本次标记再接受对应进程结果；拒绝旧成功日志、当前错误和中途换进程。
+  真机暴露的日志环形缓冲淘汰启动标记问题已修复：观察标记后，允许同一进程的后续日志继续完成验证。
+  新增 5 项生成日志回放测试覆盖上述判定，并加入 HarmonyOS CI。TypeScript、定向 lint、15 项 IPC、
+  6 项合约/签名脚本检查及签名 HAP 构建通过。此次变更仅加强诊断与结果采集，未更改生产业务协议。
+- 测试后回到普通应用入口，移除本轮四个测试映射并停止服务。没有投屏，触控/中文 IME、
+  真实选择器、生物识别、外部账号与生命周期恢复仍不在本次自动化验收范围内。
+
 ### 2026-11-13 / 上游 v0.8.5
 
 - 集成正式 tag `v0.8.5`（`951de88b40523b0b4a5cb0344c2bc26015899057`），保留上游提交历史。
@@ -92,6 +112,7 @@
 
 | 设备 | 证据 | 已验证的范围 |
 | --- | --- | --- |
+| MatePad Pro / tablet / API26 / v0.8.5 加严复验 | [端到端](evidence/2026-11-13-tablet-upstream-085-e2e.json)、[普通入口](evidence/2026-11-13-tablet-upstream-085-e2e-startup.json) | SSH/Telnet 各 768 KiB 与额度回收、真实 AI 业务发送/保存/取消、既有 15 项原生检查与业务检查 |
 | MatePad Pro / tablet / API26 / v0.8.5 | [网络与业务](evidence/2026-11-13-tablet-upstream-085-network.json)、[普通入口](evidence/2026-11-13-tablet-upstream-085-startup.json) | 最终签名包的 15 项原生检查、Web SSH/Telnet、主机/历史 CRUD、普通入口与背景同步 |
 | MateBook Pro / 2in1 / API26 | [业务 IPC](evidence/2026-10-22-2in1-business.json) | typed facade、保险库创建/重开、主机 CRUD、Agent 配置保留、锁事件、锁定拒读与解锁 |
 | MatePad Pro / tablet / API26 | [业务 IPC](evidence/2026-10-22-tablet-business.json) | 同上，使用隔离诊断保险库 |
