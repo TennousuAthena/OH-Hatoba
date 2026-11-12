@@ -1,6 +1,6 @@
 {
   "verifiedAt": "2026-10-24T08:17:00Z",
-  "environment": "macOS ARM64 / Rust 1.97.0 / DevEco Studio 26.0.0.851 / Native SDK 6.0.0.61",
+  "environment": "macOS ARM64 / Rust 1.97.0 / DevEco Studio 26.0.0.851 (Native SDK version not independently recorded)",
   "checks": {
     "upstreamCandidate": "v0.7.1 (e1c7d171f1a7ee85c08f3d3d01a7c12f8b4c3d22)",
     "workspaceTypecheck": true,

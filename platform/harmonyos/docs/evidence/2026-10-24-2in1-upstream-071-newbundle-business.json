@@ -1,0 +1,38 @@
+{
+  "verifiedAt": "2026-10-24T09:51:42.678739+00:00",
+  "device": "HUAWEI MateBook Pro (2in1)",
+  "system": "HarmonyOS 7 / API26",
+  "webReceivedAndRendered": true,
+  "sharedBusinessSmoke": true,
+  "native": {
+    "host_protocol": 1,
+    "upstream_version": "0.7.1",
+    "upstream_commit": "e1c7d171f1a7ee85c08f3d3d01a7c12f8b4c3d22",
+    "architecture": "aarch64",
+    "target_os": "linux",
+    "target_env": "ohos"
+  },
+  "checks": [
+    {
+      "name": "random_aead_and_tamper_rejection",
+      "passed": true
+    },
+    {
+      "name": "sqlite_schema",
+      "passed": true
+    },
+    {
+      "name": "ssh_ed25519_roundtrip",
+      "passed": true
+    },
+    {
+      "name": "tokio_runtime",
+      "passed": true
+    },
+    {
+      "name": "ai_provider_url_validation",
+      "passed": true
+    }
+  ],
+  "scope": "Native dependencies plus real typed-facade vault create/reopen, host CRUD, agent configuration preservation, lock event, denied locked read and unlock. Does not validate SSH networking, TLS, IME or lifecycle recovery."
+}

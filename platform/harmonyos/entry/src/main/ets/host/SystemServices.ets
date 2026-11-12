@@ -128,7 +128,7 @@ export class SystemServices {
         const target = JSON.stringify(args.target ?? {});
         if (target.length > 1024) throw new Error('Invalid notification target');
         const id = ++SystemServices.notificationId;
-        const agent = await wantAgent.getWantAgent({ wants: [{ bundleName: 'dev.ohhatoba.app', abilityName: 'EntryAbility', parameters: { 'ohhatoba.notification': target } }], actionType: wantAgent.OperationType.START_ABILITY, requestCode: id, actionFlags: [wantAgent.WantAgentFlags.UPDATE_PRESENT_FLAG] });
+        const agent = await wantAgent.getWantAgent({ wants: [{ bundleName: 'moe.kiwi.ohhatoba', abilityName: 'EntryAbility', parameters: { 'ohhatoba.notification': target } }], actionType: wantAgent.OperationType.START_ABILITY, requestCode: id, actionFlags: [wantAgent.WantAgentFlags.UPDATE_PRESENT_FLAG] });
         await notificationManager.publish({ id: id, wantAgent: agent, content: { notificationContentType: notificationManager.ContentType.NOTIFICATION_CONTENT_BASIC_TEXT, normal: { title: (args.title ?? '').slice(0, 200), text: (args.body ?? '').slice(0, 1000) } } });
         return null;
       }

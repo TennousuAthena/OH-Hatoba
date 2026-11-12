@@ -25,7 +25,7 @@ export class BackgroundLease {
     BackgroundLease.serial = BackgroundLease.serial.then(async () => {
       if (BackgroundLease.transfers.size && !BackgroundLease.active) {
         try {
-          const agent = await wantAgent.getWantAgent({ wants: [{ bundleName: 'dev.ohhatoba.app', abilityName: 'EntryAbility' }], actionType: wantAgent.OperationType.START_ABILITY, requestCode: 1, actionFlags: [wantAgent.WantAgentFlags.UPDATE_PRESENT_FLAG] });
+          const agent = await wantAgent.getWantAgent({ wants: [{ bundleName: 'moe.kiwi.ohhatoba', abilityName: 'EntryAbility' }], actionType: wantAgent.OperationType.START_ABILITY, requestCode: 1, actionFlags: [wantAgent.WantAgentFlags.UPDATE_PRESENT_FLAG] });
           await backgroundTaskManager.startBackgroundRunning(context, backgroundTaskManager.BackgroundMode.DATA_TRANSFER, agent);
           BackgroundLease.active = true;
         } catch (_) { /* Foreground transfers still run when the OS declines a background lease. */ }

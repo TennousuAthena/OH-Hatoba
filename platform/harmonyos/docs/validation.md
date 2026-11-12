@@ -30,8 +30,11 @@
   （本环境缺少其 shell fixture 路径）。两者均为未修改的上游测试；此前单独重跑的
   SOCKS 不可达断言通过。签名 OHOS HAP 构建和包结构检查通过，摘要见
   [升级验证记录](evidence/2026-10-24-upstream-071-validation.json)。
-- 两台 API26 真机尚未完成 v0.7.1 复验：保存的无线调试端口均已失效，重连失败且当前
-  没有 USB 目标。已完成的本机验证不能替代安装后的诊断与普通入口检查。
+- 新包名 `moe.kiwi.ohhatoba`、`0.7.1`/`70100` 的签名包已构建，并在 MateBook Pro 完成安装后
+  复验：业务 IPC 与普通入口启动均通过，普通入口同时确认 React 渲染和原生窗口背景同步，
+  记录见 [MateBook 业务链路](evidence/2026-10-24-2in1-upstream-071-newbundle-business.json)和
+  [MateBook 普通入口](evidence/2026-10-24-2in1-upstream-071-newbundle-startup.json)。
+- MatePad Pro 的旧无线调试端口已失效，仍待重新连接后完成同版本安装与业务/普通入口复验。
 
 ### 2026-10-22 / 初始基线
 

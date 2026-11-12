@@ -41,7 +41,7 @@ pnpm ohos:build
 不下载或升级 SDK。没有本地签名配置时输出未签名开发 HAP：
 `platform/harmonyos/entry/build/default/outputs/default/entry-default-unsigned.hap`。
 
-真机调试使用当前包名 `dev.ohhatoba.app` 的专用 profile。在 DevEco 生成调试签名后执行
+真机调试使用当前包名 `moe.kiwi.ohhatoba` 的专用 profile。在 DevEco 生成调试签名后执行
 `node scripts/harmonyos/local-signing.mjs capture`，把自动写入的凭据迁到忽略的本地配置；
 Hvigor只在内存中载入该配置，后续构建无需把凭据写回受版本控制的文件。
 存在本地配置时，构建同时生成并检查 `entry-default-signed.hap`，签名未生效时直接失败。
