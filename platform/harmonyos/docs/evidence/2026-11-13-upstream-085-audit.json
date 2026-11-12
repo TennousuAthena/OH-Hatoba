@@ -1,0 +1,83 @@
+{
+  "baseline": "e1c7d171f1a7ee85c08f3d3d01a7c12f8b4c3d22",
+  "candidate": "951de88b40523b0b4a5cb0344c2bc26015899057",
+  "version": "0.8.5",
+  "changes": {
+    "commands": {
+      "added": [
+        "hostsArrange",
+        "sshSuggestions",
+        "telnetHostsList",
+        "telnetHostSave",
+        "telnetHostDelete",
+        "telnetHostDuplicate",
+        "telnetHostSetFavorite",
+        "telnetHostCopyPassword",
+        "telnetOpen",
+        "telnetOpenTarget",
+        "telnetWrite",
+        "telnetWriteBytes",
+        "telnetResize",
+        "telnetClose",
+        "sftpEditOpen",
+        "sftpEditReopen",
+        "sftpEditSession",
+        "sftpEditUpload",
+        "sftpEditDiscard",
+        "sftpEditStop",
+        "sftpEditChanged",
+        "sftpEditList",
+        "sftpEditQuit",
+        "commandHistoryList",
+        "commandHistoryAdd",
+        "commandHistoryRemove",
+        "commandHistoryClear"
+      ],
+      "removed": [],
+      "changed": []
+    },
+    "events": {
+      "added": [
+        "ssh://auth-banner",
+        "ssh://auth-prompt-closed",
+        "sftp://edit",
+        "sftp://quit"
+      ],
+      "removed": [],
+      "changed": [
+        "app://launch",
+        "window://close-prompt",
+        "tray://update",
+        "cli://activity"
+      ]
+    },
+    "dtos": {
+      "added": [
+        "AuthBanner",
+        "AuthPromptClosed",
+        "HostsSort",
+        "RemoteEditEvent",
+        "RemoteEditQuitEvent",
+        "RemoteEditState",
+        "RemoteEditView",
+        "ServerSuggestionsView",
+        "TelnetHostInput",
+        "TelnetHostView"
+      ],
+      "removed": [],
+      "changed": [
+        "AiTurnContext",
+        "AuthPrompt",
+        "ErrorCode",
+        "HostView",
+        "ItemType",
+        "Language",
+        "LocalPrefs",
+        "TerminalSettings",
+        "TerminalSettingsPatch"
+      ]
+    }
+  },
+  "reviewFileCount": 617,
+  "scope": "Candidate compatibility audit only; validation is recorded separately."
+}

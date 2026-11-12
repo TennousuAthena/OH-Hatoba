@@ -1,0 +1,86 @@
+{
+  "verifiedAt": "2026-11-12T17:53:14.855862+00:00",
+  "upstream": {
+    "tag": "v0.8.5",
+    "commit": "951de88b40523b0b4a5cb0344c2bc26015899057",
+    "release": "https://github.com/scarletkc/Hatoba/releases/tag/v0.8.5"
+  },
+  "environment": {
+    "host": "macOS ARM64",
+    "rust": "1.97.0",
+    "nativeSdk": "26.0.0.105"
+  },
+  "checks": {
+    "contracts": 228,
+    "sharedNativeHandlers": 202,
+    "contractAndSigningScriptTests": 6,
+    "upstreamScriptTests": 88,
+    "desktopFrontendTests": 1193,
+    "sharedUiTests": 28,
+    "siteTests": 31,
+    "workerTests": 168,
+    "typescript": true,
+    "eslint": true,
+    "prettier": true,
+    "desktopBuild": true,
+    "portableRuntimeTests": 139,
+    "ohosHostLibraryTests": 6,
+    "portableAssistantTests": 170,
+    "desktopUnitTestsPassed": 205,
+    "telnetUnitTests": 46,
+    "rustWorkspaceClippy": true,
+    "rustPortableAssistantClippy": true,
+    "rustPortableHostClippy": true,
+    "rustfmt": true,
+    "rustCommentWidth": true,
+    "rustDocTests": true,
+    "desktopBindingsRegeneratedWithoutDrift": true,
+    "productionBoundary": true,
+    "signedHap": true
+  },
+  "rustTestExceptions": [
+    {
+      "test": "platform::login_shell::tests::shell::what_the_shell_started_is_killed_with_it",
+      "observation": "Generated child PID file missing; same failure when run alone. Upstream source unchanged."
+    },
+    {
+      "test": "stats::tests::the_script_reads_this_machine",
+      "observation": "Current host reports no uptime_secs. Upstream SSH source unchanged."
+    },
+    {
+      "test": "blackholed_address_times_out",
+      "observation": "The nominal TCP-blackhole target connects and times out during SSH handshake, contrary to the test premise."
+    },
+    {
+      "test": "tcp_probe_reports_reachability_only",
+      "observation": "A nominal unreachable target returns Some(1), contrary to the test premise."
+    },
+    {
+      "test": "probes_go_through_the_proxy_and_wait_for_the_server",
+      "observation": "Direct probe to the fixture hostname succeeds where the test expects None."
+    }
+  ],
+  "artifact": {
+    "name": "entry-default-signed.hap",
+    "sha256": "a971618bb99fc4e488a1316bb07786ff8e5dc27ff15cd9b0203eb2569da8e781",
+    "bytes": 56575779,
+    "bundleName": "moe.kiwi.ohhatoba",
+    "versionName": "0.8.5",
+    "versionCode": 80500,
+    "minimumApi": 20,
+    "targetApi": 26,
+    "architecture": "arm64-v8a",
+    "deviceTypes": [
+      "2in1",
+      "tablet"
+    ]
+  },
+  "deviceEvidence": {
+    "tabletNetwork": "2026-11-13-tablet-upstream-085-network.json",
+    "tabletStartup": "2026-11-13-tablet-upstream-085-startup.json",
+    "matebookCurrentVersionRevalidated": false,
+    "api20RuntimeValidated": false
+  },
+  "scope": "Final signed artifact installed and tested on the authorized API26 tablet without projection. Five unchanged upstream host/environment assertions failed and are recorded above; other executed Rust groups passed. OpenSSH live-integration and live Cloudflare account tests were not configured. Real picker, IME, touch, biometrics, lifecycle recovery and API20 runtime remain outside this automated validation. OHOS has no local process/stdio/desktop CLI/external editor/updater; application HTTP clients default to direct or an explicitly saved proxy, not automatic HarmonyOS system proxy discovery.",
+  "implementationCommit": "a79bb623ba570612869aee0e05630dd25d125567"
+}

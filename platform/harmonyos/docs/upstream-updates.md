@@ -10,7 +10,7 @@ SSH、保险库、同步、AI 或 React 页面实现。
 | Web API | 原 `tauri.ts` 中的 `createCommandApi` 接收 transport，桌面包装器保持原入口 | 上游命令映射修改只维护一次，两个宿主共用 |
 | 参数与类型 | 从 tauri-specta bindings AST 生成命令名、参数和 channel 位置；DTO 按无注释声明计算摘要 | 发现参数改名、返回值变化，以及名称未变但内部字段变化 |
 | Native | 独立 OHOS workspace member + C++ Node-API 薄桥 | 不链接 Tauri/GTK，不为了鸿蒙重写协议库 |
-| 业务运行层 | `hatoba-runtime` 通过 `#[path]` 编译原桌面业务源；桌面 `host` 转发 Tauri，鸿蒙注入自己的 host | 上游修改只维护同一函数，避免搬移或复制业务目录 |
+| 业务运行层 | AI 直接依赖上游 `hatoba-assistant`/`hatoba-ipc`；其余桌面业务源由 `hatoba-runtime` 通过 `#[path]` 编译，宿主接口注入 | 跟随上游拆包，避免搬移或复制业务目录 |
 | 系统能力 | 独立的原生 SystemServices 队列和本机 capability；Web 只有明确的服务白名单 | 系统 API 与平台差异集中处理，保留不可执行的同步配置 |
 | 应用名称与图标 | Hvigor 从桌面 `productName` 和原始 `icons/icon.png` 同步到 AppScope，包检查核对图标字节 | 构建与 IDE 调试沿用上游品牌，不维护自创图标 |
 | 版本 | `upstream.json` 是已完成验证的上游提交；hostProtocol 独立版本 | 不因上游发版就更改桥接协议，不跳过验证推进基线 |
@@ -24,7 +24,12 @@ SSH、保险库、同步、AI 或 React 页面实现。
 `crates/hatoba-runtime/build.rs` 读取实际命令函数的 Rust AST 和生成的 bindings 合约，
 生成参数反序列化、AppHandle/State 注入、channel 绑定及 async 调用。返回值和单位值由函数类型推导。
 命令不再维护第二份手写表。桌面命令宏使用 `desktop-host` 条件属性，原 Tauri 入口和测试保持可用。
-当前 184 个处理函数进入鸿蒙运行层；本地进程、CLI 等宿主专属命令明确不可用。
+当前 202 个处理函数进入鸿蒙运行层；本地进程、CLI、外部编辑器等宿主专属命令明确不可用。
+
+v0.8.5 的 AI 与 IPC 拆包直接沿用上游 crate。`local-processes` feature 在桌面开启，在鸿蒙关闭，
+不因提取共享模块而重新引入 `hatoba-local`。AI 的事件、通知与剪贴板通过上游 `AiEnv`/`EventSink`
+转发到宿主；新 Telnet 与 SSH 复用相同的消费确认和有界传输约束。界面能力由本机声明，
+外部编辑器配置可同步，但鸿蒙不显示选择本地程序或调用外部编辑器的入口。
 
 保险库格式、SSH 算法、同步协议、AI 工具执行和 React 页面均直接复用原实现。
 `hatoba-net` 只隔离 HTTP 客户端的系统信任根来源。`platform/harmonyos` 承担 Node-API、
@@ -53,7 +58,9 @@ node scripts/harmonyos/check-boundaries.mjs
 pnpm --filter @hatoba/desktop typecheck
 pnpm --filter @hatoba/desktop lint
 pnpm --filter @hatoba/desktop exec vitest run src/ipc/tauri.test.ts src/ipc/harmonyos/bridge.test.ts
-cargo test --workspace --locked
+cargo test --workspace --exclude hatoba-runtime --exclude hatoba-ohos --locked
+cargo test -p hatoba-runtime -p hatoba-ohos --lib --locked
+cargo test -p hatoba-assistant -p hatoba-ipc -p hatoba-telnet --no-default-features --lib --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo fmt --all --check
 node scripts/ci/comment-width.mjs
@@ -62,6 +69,9 @@ pnpm ohos:build
 
 `check-boundaries` 需要依赖已获取，可先运行 native build。新增依赖解析必须继续使用锁文件；
 协议、加密数据格式和云端 API 不得随平台适配自行分叉。
+
+桌面与鸿蒙测试分组执行：Cargo 会在同一次 workspace 构建中统一依赖 feature，桌面启用的
+`local-processes` 不能作为鸿蒙无本地进程能力的测试配置。生产 OHOS 依赖图仍由边界检查独立验证。
 
 ## 原生宿主协议 v1
 

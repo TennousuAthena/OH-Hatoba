@@ -1,16 +1,45 @@
 # 验证记录
 
-更新日期：2026-10-24。上游基线：`e1c7d171f1a7ee85c08f3d3d01a7c12f8b4c3d22`（0.7.1）。
+更新日期：2026-11-13。上游基线：`951de88b40523b0b4a5cb0344c2bc26015899057`（0.8.5）。
 目标：HarmonyOS 6/API20 起，ARM64，`2in1` 与 `tablet`。当前真机均为 HarmonyOS 7/API26。
 
 ## 实现状态
 
-默认入口为完整的上游 React 应用。184 个共享 Rust 处理函数通过生成分发器接入，
-前端共用上游 201 命令 facade；本地进程等宿主专属命令不提供。生产宿主缺失时明确失败，
+默认入口为完整的上游 React 应用。202 个共享 Rust 处理函数通过生成分发器接入，
+前端共用上游 228 命令 facade；本地进程等宿主专属命令不提供。生产宿主缺失时明确失败，
 不存在 mock 数据或桌面路径回退。保险库、SSH/SFTP、同步/部署、AI、Skills、HTTP MCP 和 OAuth
 复用上游源文件。系统能力实现与其人工验收状态分开记录。
 
 ## 构建及本机回归
+
+### 2026-11-13 / 上游 v0.8.5
+
+- 集成正式 tag `v0.8.5`（`951de88b40523b0b4a5cb0344c2bc26015899057`），保留上游提交历史。
+  [兼容审计](evidence/2026-11-13-upstream-085-audit.json)记录 27 个新增命令、4 个新增事件和 DTO 变化；
+  原有命令参数未改变。重新生成 228 命令合约，202 个处理函数进入共享运行层。
+- AI 与 IPC 直接使用上游新拆出的 `hatoba-assistant`、`hatoba-ipc`，不保留旧业务副本。
+  `local-processes` 仅在桌面启用；鸿蒙继续拒绝本地进程与 stdio MCP，并保留同步配置。
+  新 Telnet、终端历史/建议、SSH 登录消息和应用连接代理复用上游实现。
+- Telnet 和 SSH 共用二进制帧、消费完成 ACK、传输额度和页面销毁清理。诊断保险库新增
+  Telnet 主机 CRUD、按主机隔离的命令历史增查删清空、空格开头不入历史验证。
+  新回环服务只协商 Telnet 协议并回显生成字节，Web 侧核对 96 KiB Unicode/IAC 数据与 xterm 消费。
+- 外部程序编辑器在鸿蒙明确不可用，菜单与程序选择入口按本机能力隐藏，保存的配置不删除。
+  鸿蒙同步/AI 默认直连，可选择已保存 HTTP/SOCKS5 代理；不自动读取系统代理，界面已明确说明。
+- 应用名与图标保持上游 Hatoba，包名 `moe.kiwi.ohhatoba`，版本 `0.8.5`/`80500`。
+  HAP 检查同时核对应用、workspace 与上游基线版本，安装验证记录实际安装文件的摘要。
+- TypeScript、ESLint、Prettier、桌面构建通过；桌面 1193、共享 UI 28、站点 31、Worker 168、
+  上游脚本 88 项测试通过。独立鸿蒙运行层 139 项、无本地进程的 AI 共享层 170 项测试通过。
+  OHOS 库 6 项、Telnet 46 项、Rust 文档检查，以及 workspace/独立 AI/独立鸿蒙宿主三组
+  Clippy（`-D warnings`）、rustfmt、注释宽度、依赖边界检查通过。桌面 bindings 导出无漂移。
+- Rust 全量执行有 5 项未修改的上游环境依赖断言失败，不计为通过：子进程 PID 文件未生成、
+  本机 uptime 缺失，以及 TCP 黑洞/不可达探测/代理旁路三项测试在当前网络实际连通。
+  完整名称、观察结果和其余分组通过情况见 [本轮构建验证](evidence/2026-11-13-upstream-085-validation.json)。
+  未配置的 OpenSSH/live Worker 集成不会算作外部服务验收，也没有为通过检查放宽断言。
+- 最终签名 HAP 已安装至 MatePad Pro/API26，[端到端证据](evidence/2026-11-13-tablet-upstream-085-network.json)
+  覆盖 15 项原生检查、Web SSH/Telnet 数据与消费确认，以及隔离保险库业务；
+  [普通入口](evidence/2026-11-13-tablet-upstream-085-startup.json)确认 React 渲染和原生窗口背景同步。
+  安装包摘要与测试记录一致；本轮没有投屏，未将日志标记作为触控/IME/视觉验收。
+  MateBook 与 API20 设备未在本轮复验。测试完成后已移除四个反向端口并停止生成数据服务。
 
 ### 2026-10-24 / 上游 v0.7.1
 
@@ -63,6 +92,7 @@
 
 | 设备 | 证据 | 已验证的范围 |
 | --- | --- | --- |
+| MatePad Pro / tablet / API26 / v0.8.5 | [网络与业务](evidence/2026-11-13-tablet-upstream-085-network.json)、[普通入口](evidence/2026-11-13-tablet-upstream-085-startup.json) | 最终签名包的 15 项原生检查、Web SSH/Telnet、主机/历史 CRUD、普通入口与背景同步 |
 | MateBook Pro / 2in1 / API26 | [业务 IPC](evidence/2026-10-22-2in1-business.json) | typed facade、保险库创建/重开、主机 CRUD、Agent 配置保留、锁事件、锁定拒读与解锁 |
 | MatePad Pro / tablet / API26 | [业务 IPC](evidence/2026-10-22-tablet-business.json) | 同上，使用隔离诊断保险库 |
 | MateBook Pro / 2in1 / API26 | [网络及文件](evidence/2026-10-22-2in1-network.json) | 15项原生检查以及 Web SSH 二进制终端消费确认 |
